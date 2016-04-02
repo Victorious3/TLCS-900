@@ -256,4 +256,4 @@ Rregtable = [
 # TODO: Actually replace T with None and have a function instead of access to cctable
 cctable = ["F", "LT", "LE", "ULE", "PE/OV", "M", "Z", "C", "T", "GE", "GT", "UGT", "PO/NOV", "P", "NZ", "NC"]
 
-from tcls_900_optable import optable, optable_src, optable_dst, optable_reg 
+from tlcs_900_optable import optable, optable_src, optable_dst, optable_reg 
