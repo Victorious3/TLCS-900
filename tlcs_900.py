@@ -108,7 +108,7 @@ def popmem(insn):
         reg = (mem2 & 0xFE) * 4
         name = regname(Reg(True, LWORD, reg))
         if (mem & 0x1) == 0:
-            return Mem(reg - c, (str(c) if c > 1 else "") + "-" + name) # -r32
+            return Mem(reg - c, ("-" + name if c == 1 else name + "-" + str(c))) # -r32
         else:
             return Mem(reg + c, name + "+" + (str(c) if c > 1 else "")) # r32+
     else:
@@ -129,17 +129,17 @@ def popmem(insn):
             elif n == 1:
                 reg = (mem & 0xFE) * 4
                 name = regname(Reg(True, LWORD, reg))
-                return Reg(reg + offset, name + "+" + str(offset)) # r32 + d16
+                return Mem(reg + offset, name + "+" + str(offset)) # r32 + d16
             elif mem == 0x3:
                 reg1 = insn.pop() * 4
                 reg2 = insn.pop()
-                name = regname(Reg(True, LWORD, reg1) + "+" + Reg(True, BYTE, reg2))
-                return Reg(reg1 + reg2, name) # r32 + r8
+                name = regname(Reg(True, LWORD, reg1)) + "+" + regname(Reg(True, BYTE, reg2))
+                return Mem(reg1 + reg2, name) # r32 + r8
             else:
                 reg1 = insn.pop() * 4
                 reg2 = insn.pop() * 2
-                name = regname(Reg(True, LWORD, reg1) + "+" + Reg(True, WORD, reg2))
-                return Reg(reg1 + reg2, name) # r32 + r16
+                name = regname(Reg(True, LWORD, reg1)) + "+" + regname(Reg(True, WORD, reg2))
+                return Mem(reg1 + reg2, name) # r32 + r16
                 
 rrtable_8 = ["INVALID", "WA", "INVALID", "BC", "INVALID", "DE", "INVALID", "HL"]
 

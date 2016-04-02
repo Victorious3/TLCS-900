@@ -32,9 +32,9 @@ def LD_n_n(insn):
     else: #WORD
         return "LDW", insn.pop(), insn.popw()
         
-
-def LD_nn_m(insn): return
-
+def LD_nn_m(insn):
+    insn.pop()
+    return ("LDW" if insn.lastsize == WORD else "LD"), Mem(insn.popw()), insn.lastmem
 def LDB_mem_R(insn): 
     return "LD", insn.lastmem, popR(insn, '?', BYTE)
 def LDW_mem_R(insn): 
@@ -53,9 +53,11 @@ def LDW_n_nn(insn):
     insn.pop()
     return "LDW", insn.pop(), insn.popw()
 
-def LDB_m_nn(insn): return
-def LDW_m_nn(insn): return
-
+def LDB_m_nn(insn):
+    return "LD", insn.lastmem, Mem(insn.popw())
+def LDW_m_nn(insn):
+    return "LDW", insn.lastmem, Mem(insn.popw())
+    
 #PUSH
 def PUSH_F(insn):
     insn.pop()
@@ -138,7 +140,8 @@ def ADD_r_X(insn):
     return "ADD", insn.lastr, insn.popn(insn.lastsize)
 def ADD_R_mem(insn): 
     return "ADD", popR(insn, '?', insn.lastsize), insn.lastmem
-def ADD_mem_R(insn): return
+def ADD_mem_R(insn): 
+    return "ADD", insn.lastmem, popR(insn, '?', insn.lastsize)
 def ADD_mem_X(insn): return
 
 #ADC
@@ -146,8 +149,10 @@ def ADC_R_r(insn):
     dst = popR(insn, '?', insn.lastsize)
     return "ADC", dst, insn.lastr
 def ADC_r_X(insn): return
-def ADC_R_mem(insn): return
-def ADC_mem_R(insn): return
+def ADC_R_mem(insn):
+    return "ADC", popR(insn, '?', insn.lastsize), insn.lastmem
+def ADC_mem_R(insn):
+    return "ADC", insn.lastmem, popR(insn, '?', insn.lastsize)
 def ADC_mem_X(insn): return
 
 #SUB
@@ -157,16 +162,20 @@ def SUB_R_r(insn):
 def SUB_r_X(insn):
     insn.pop()
     return "SUB", insn.lastr, insn.popn(insn.lastsize)    
-def SUB_R_mem(insn): return
+def SUB_R_mem(insn):
+    return "SUB", popR(insn, '?', insn.lastsize), insn.lastmem
 def SUB_mem_R(insn): return
 def SUB_mem_X(insn):
     insn.pop()
     return ("SUBW" if insn.lastsize == WORD else "SUB"), insn.lastmem, insn.popn(insn.lastsize)
 
 #SBC
-def SBC_R_r(insn): return
+def SBC_R_r(insn):
+    dst = popR(insn, '?', insn.lastsize)
+    return "SBC", dst, insn.lastr
 def SBC_r_X(insn): return
-def SBC_R_mem(insn): return
+def SBC_R_mem(insn):
+    return "SBC", popR(insn, '?', insn.lastsize), insn.lastmem
 def SBC_mem_R(insn): 
     return "SBC", insn.lastmem, popR(insn, '?', insn.lastmem)
 def SBC_mem_X(insn): return
@@ -218,7 +227,8 @@ def DEC_X3_r(n):
 
 def DEC_X3_mem(n):
     def DEC_N_mem(insn):
-        return
+        insn.pop()
+        return ("DECW" if insn.lastsize == WORD else "DEC") , n, insn.lastmem
     return DEC_N_mem
 
 #NEG
@@ -313,8 +323,12 @@ def OR_R_r(insn):
 def OR_r_X(insn):
     insn.pop()
     return "OR", insn.lastr, insn.popn(insn.lastsize)
-def OR_R_mem(insn): return
-def OR_mem_R(insn): return
+def OR_R_mem(insn): 
+    reg = popR(insn, '?', insn.lastsize)
+    return "OR", reg, insn.lastmem
+def OR_mem_R(insn):
+    reg = popR(insn, '?', insn.lastsize)
+    return "OR", insn.lastmem, reg
 def OR_mem_X(insn): return
 
 #XOR
@@ -368,12 +382,15 @@ def ANDCF_X3_mem(n):
 def ANDCF_A_mem(insn): return
 
 #ORCF
-def ORCF_X_r(insn): return
+def ORCF_X_r(insn): 
+    insn.pop()
+    return "ORCF", insn.lastr, (insn.pop() & 0xF) 
 def ORCF_A_r(insn): return
 
 def ORCF_X3_mem(n):
     def ORCF_N_mem(insn):
-        return
+        insn.pop()
+        return "ORCF", n, insn.lastmem
     return ORCF_N_mem
     
 def ORCF_A_mem(insn): return
