@@ -23,10 +23,17 @@ class RReg(Reg):
     def __str__(self):
         return rregname(self)
 
-# General utility functions:
-# Converts argument x to str and wraps it in paranthesis
-def wrap(x):
-    return "(" + str(x) + ")"
+# Class that holds memory addresses
+class Mem:
+    def __init__(self, address, name = None):
+        if name is None:
+            self.name = str(address)
+        else:
+            self.name = name
+        self.address = address
+        
+    def __str__(self):
+        return "(" + self.name + ")"
 
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   
@@ -85,40 +92,54 @@ def popcc(insn):
 def popmem(insn):
     mem = insn.pop()
     if (mem & 0x40) == 0:
+        reg = (mem & 0x7)
+        name = Rregtable[LWORD][reg]
         if (mem & 0x8) == 0:
             # XWA to XSP
-            return 0xE0 + 4 * (mem & 0x7)
+            return Mem(0xE0 + 4 * reg, name)
         else:
             # XWA to XSP + d8
-            return (0xE0 + 4 * (mem & 0x7)) + insn.pop()
+            return Mem(0xE0 + 4 * reg + insn.pop(), name)
     elif (mem & 0x4) == 0x4:
         
         mem2 = insn.pop()
         c = (mem2 & 0x2)
         c = 1 if c == 0 else c * 2
+        reg = (mem2 & 0xFE) * 4
+        name = regname(Reg(True, LWORD, reg))
         if (mem & 0x1) == 0:
-            return (mem2 & 0xFE) * 4 - c # -r32
+            return Mem(reg - c, (str(c) if c > 1 else "") + "-" + name) # -r32
         else:
-            return (mem2 & 0xFE) * 4 + c # r32+
+            return Mem(reg + c, name + "+" + (str(c) if c > 1 else "")) # r32+
     else:
         n = mem & 0x3
         if n == 0: 
-            return insn.pop() # 8
+            return Mem(insn.pop()) # 8
         elif n == 1:
-            return insn.popw() # 16
+            return Mem(insn.popw()) # 16
         elif n == 2:
-            return insn.popw() | (insn.pop() >> 16) # 24
+            return Mem(insn.popw() | (insn.pop() >> 16)) # 24
         else:
             mem = insn.pop()
             n = mem & 0x3
             if n == 0:
-                return mem * 4 # r32
+                reg = (mem & 0xFE) * 4
+                name = regname(Reg(True, LWORD, reg))
+                return Mem(mem * 4, name) # r32
             elif n == 1:
-                return (mem & 0xFE) * 4 + insn.popw() # r32 + d16
+                reg = (mem & 0xFE) * 4
+                name = regname(Reg(True, LWORD, reg))
+                return Reg(reg + offset, name + "+" + str(offset)) # r32 + d16
             elif mem == 0x3:
-                return insn.pop() * 4 + insn.pop()
+                reg1 = insn.pop() * 4
+                reg2 = insn.pop()
+                name = regname(Reg(True, LWORD, reg1) + "+" + Reg(True, BYTE, reg2))
+                return Reg(reg1 + reg2, name) # r32 + r8
             else:
-                return insn.pop() * 4 + insn.pop() * 2
+                reg1 = insn.pop() * 4
+                reg2 = insn.pop() * 2
+                name = regname(Reg(True, LWORD, reg1) + "+" + Reg(True, WORD, reg2))
+                return Reg(reg1 + reg2, name) # r32 + r16
                 
 rrtable_8 = ["INVALID", "WA", "INVALID", "BC", "INVALID", "DE", "INVALID", "HL"]
 

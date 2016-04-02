@@ -24,34 +24,34 @@ def LD_XRR_nnnn(insn):
 def LD_r_X(insn): return
 
 def LD_R_mem(insn): 
-    return "LD", popR(insn, '?', insn.lastsize), wrap(insn.lastmem) 
+    return "LD", popR(insn, '?', insn.lastsize), insn.lastmem 
 
 def LD_n_n(insn):
     if (insn.pop() & 0x2) == 0: #BYTE
-        return "LD", wrap(insn.pop()), insn.pop()
+        return "LD", insn.pop(), insn.pop()
     else: #WORD
-        return "LDW", wrap(insn.pop()), insn.popw()
+        return "LDW", insn.pop(), insn.popw()
         
 
 def LD_nn_m(insn): return
 
 def LDB_mem_R(insn): 
-    return "LD", wrap(insn.lastmem), popR(insn, '?', BYTE)
+    return "LD", insn.lastmem, popR(insn, '?', BYTE)
 def LDW_mem_R(insn): 
-    return "LD", wrap(insn.lastmem), popR(insn, '?', WORD)
+    return "LD", insn.lastmem, popR(insn, '?', WORD)
 def LDL_mem_R(insn):
-    return "LD", wrap(insn.lastmem), popR(insn, '?', LWORD)
+    return "LD", insn.lastmem, popR(insn, '?', LWORD)
 
 def LDB_m_X(insn): 
     insn.pop()
-    return "LD", wrap(insn.lastmem), insn.pop()
+    return "LD", insn.lastmem, insn.pop()
 def LDW_m_X(insn): 
     insn.pop()
-    return "LDW", wrap(insn.lastmem), insn.popw()
+    return "LDW", insn.lastmem, insn.popw()
 
 def LDW_n_nn(insn):
     insn.pop()
-    return "LDW", wrap(insn.pop()), insn.popw()
+    return "LDW", insn.pop(), insn.popw()
 
 def LDB_m_nn(insn): return
 def LDW_m_nn(insn): return
@@ -106,7 +106,7 @@ def EX_F_F1(insn): return
 def EX_R_r(insn): 
     return "EX", popR(insn, '?', insn.lastsize), insn.lastr
 def EX_mem_R(insn): 
-    return "EX", wrap(insn.lastmem), popR(insn, '?', insn.lastsize)
+    return "EX", insn.lastmem, popR(insn, '?', insn.lastsize)
 
 #MIRR
 def MIRR(insn): return
@@ -137,7 +137,7 @@ def ADD_r_X(insn):
     insn.pop()
     return "ADD", insn.lastr, insn.popn(insn.lastsize)
 def ADD_R_mem(insn): 
-    return "ADD", popR(insn, '?', insn.lastsize), wrap(insn.lastmem)
+    return "ADD", popR(insn, '?', insn.lastsize), insn.lastmem
 def ADD_mem_R(insn): return
 def ADD_mem_X(insn): return
 
@@ -159,14 +159,16 @@ def SUB_r_X(insn):
     return "SUB", insn.lastr, insn.popn(insn.lastsize)    
 def SUB_R_mem(insn): return
 def SUB_mem_R(insn): return
-def SUB_mem_X(insn): return
+def SUB_mem_X(insn):
+    insn.pop()
+    return ("SUBW" if insn.lastsize == WORD else "SUB"), insn.lastmem, insn.popn(insn.lastsize)
 
 #SBC
 def SBC_R_r(insn): return
 def SBC_r_X(insn): return
 def SBC_R_mem(insn): return
 def SBC_mem_R(insn): 
-    return "SBC", wrap(insn.lastmem), popR(insn, '?', insn.lastmem)
+    return "SBC", insn.lastmem, popR(insn, '?', insn.lastmem)
 def SBC_mem_X(insn): return
 
 #CP
@@ -181,12 +183,12 @@ def CP_r_X(insn):
     insn.pop()
     return "CP", insn.lastr, insn.popn(insn.lastsize)
 def CP_R_mem(insn): 
-    return "CP", wrap(insn.lastmem), popR(insn, '?', insn.lastsize)
+    return "CP", popR(insn, '?', insn.lastsize), insn.lastmem
 def CP_mem_R(insn): 
-    return "CP", popR(insn, '?', insn.lastsize), wrap(insn.lastmem)
+    return "CP", insn.lastmem, popR(insn, '?', insn.lastsize)
 def CP_mem_X(insn): 
     insn.pop()
-    return ("CPW" if insn.lastsize == WORD else "CP"), wrap(insn.lastmem), insn.popn(insn.lastsize)
+    return ("CPW" if insn.lastsize == WORD else "CP"), insn.lastmem, insn.popn(insn.lastsize)
 
 #INC
 def INCF(insn): 
@@ -247,7 +249,7 @@ def MUL_rr_X(insn):
     insn.pop()
     return "MUL", RReg(insn.lastr), insn.popn(insn.lastsize)
 def MUL_RR_mem(insn):
-    return "MUL", RReg(popR(insn, '?', insn.lastsize)), wrap(insn.lastmem)
+    return "MUL", RReg(popR(insn, '?', insn.lastsize)), insn.lastmem
 
 #MULS
 def MULS_RR_r(insn):
@@ -256,7 +258,7 @@ def MULS_rr_X(insn):
     insn.pop()
     return "MULS", RReg(insn.lastr), insn.popn(insn.lastsize)
 def MULS_RR_mem(insn):
-    return "MULS", RReg(popR(insn, '?', insn.lastsize)), wrap(insn.lastmem)
+    return "MULS", RReg(popR(insn, '?', insn.lastsize)), insn.lastmem
 
 #DIV
 def DIV_RR_r(insn):
@@ -265,7 +267,7 @@ def DIV_rr_X(insn):
     insn.pop()
     return "DIV", RReg(insn.lastr), insn.popn(insn.lastsize)
 def DIV_RR_mem(insn):
-    return "DIV", RReg(popR(insn, '?', insn.lastsize)), wrap(insn.lastmem)
+    return "DIV", RReg(popR(insn, '?', insn.lastsize)), insn.lastmem
     
 #DIVS
 def DIVS_RR_r(insn):
@@ -274,7 +276,7 @@ def DIVS_rr_X(insn):
     insn.pop()
     return "DIVS", RReg(insn.lastr), insn.popn(insn.lastsize)
 def DIVS_RR_mem(insn):
-    return "DIVS", RReg(popR(insn, '?', insn.lastsize)), wrap(insn.lastmem)
+    return "DIVS", RReg(popR(insn, '?', insn.lastsize)), insn.lastmem
 
 #MULA
 def MULA(insn): return
@@ -302,7 +304,7 @@ def AND_r_X(insn):
 def AND_R_mem(insn): return
 def AND_mem_R(insn): 
     reg = popR(insn, '?', insn.lastsize)
-    return "AND", wrap(insn.lastmem), reg
+    return "AND", insn.lastmem, reg
 def AND_mem_X(insn): return
 
 #OR
@@ -400,7 +402,7 @@ def BIT_X_r(insn):
 def BIT_X3_mem(n):
     def BIT_N_mem(insn):
         insn.pop()
-        return "BIT", n, wrap(insn.lastmem)
+        return "BIT", n, insn.lastmem
     return BIT_N_mem
 
 #RES
@@ -410,7 +412,7 @@ def RES_X_r(insn):
 def RES_X3_mem(n):
     def RES_N_mem(insn):
         insn.pop()
-        return "RES", n, wrap(insn.lastmem)
+        return "RES", n, insn.lastmem
     return RES_N_mem
     
 #SET
@@ -420,7 +422,7 @@ def SET_X_r(insn):
 def SET_X3_mem(n):
     def SET_N_mem(insn):
         insn.pop()
-        return "SET", n, wrap(insn.lastmem)
+        return "SET", n, insn.lastmem
     return SET_N_mem
 
 #CHG
@@ -430,7 +432,7 @@ def CHG_X_r(insn):
 def CHG_X3_mem(n):
     def CHG_N_mem(insn):
         insn.pop()
-        return "CHG", n, wrap(insn.lastmem)
+        return "CHG", n, insn.lastmem
     return CHG_N_mem
 
 #TSET
@@ -440,7 +442,7 @@ def TSET_X_r(insn):
 def TSET_X3_mem(n):
     def TSET_N_mem(insn):
         insn.pop()
-        return "TSET", n, wrap(insn.lastmem)
+        return "TSET", n, insn.lastmem
     return TSET_N_mem
 
 #BS1
@@ -509,7 +511,7 @@ def RLC_X_r(insn):
     return "RLC", (insn.pop() & 0xF), insn.lastr
 def RLC_A_r(insn): return
 def RLC_mem(insn): 
-    return ("RLCW" if insn.lastsize == WORD else "RLC"), wrap(insn.lastmem)
+    return ("RLCW" if insn.lastsize == WORD else "RLC"), insn.lastmem
 
 #RRC
 def RRC_X_r(insn):
@@ -517,7 +519,7 @@ def RRC_X_r(insn):
     return "RRC", (insn.pop() & 0xF), insn.lastr
 def RRC_A_r(insn): return
 def RRC_mem(insn):
-    return ("RRCW" if insn.lastsize == WORD else "RRC"), wrap(insn.lastmem)
+    return ("RRCW" if insn.lastsize == WORD else "RRC"), insn.lastmem
 
 #RL
 def RL_X_r(insn): 
@@ -525,7 +527,7 @@ def RL_X_r(insn):
     return "RL", (insn.pop() & 0xF), insn.lastr
 def RL_A_r(insn): return
 def RL_mem(insn):
-    return ("RLW" if insn.lastsize == WORD else "RL"), wrap(insn.lastmem)
+    return ("RLW" if insn.lastsize == WORD else "RL"), insn.lastmem
 
 #RR
 def RR_X_r(insn): 
@@ -535,7 +537,7 @@ def RR_A_r(insn):
     insn.pop()
     return "RR", "A", insn.lastr
 def RR_mem(insn):
-    return ("RRW" if insn.lastsize == WORD else "RR"), wrap(insn.lastmem)
+    return ("RRW" if insn.lastsize == WORD else "RR"), insn.lastmem
 
 #SLA
 def SLA_X_r(insn): 
@@ -545,7 +547,7 @@ def SLA_A_r(insn):
     insn.pop()
     return "RR", "A", insn.lastr
 def SLA_mem(insn):
-    return ("SLAW" if insn.lastsize == WORD else "SLA"), wrap(insn.lastmem)
+    return ("SLAW" if insn.lastsize == WORD else "SLA"), insn.lastmem
 
 #SRA
 def SRA_X_r(insn):
@@ -555,7 +557,7 @@ def SRA_A_r(insn):
     insn.pop()
     return "SRA", "A", insn.lastr
 def SRA_mem(insn):
-    return ("SRAW" if insn.lastsize == WORD else "SRA"), wrap(insn.lastmem)
+    return ("SRAW" if insn.lastsize == WORD else "SRA"), insn.lastmem
 
 #SLL
 def SLL_X_r(insn):
@@ -565,7 +567,7 @@ def SLL_A_r(insn):
     insn.pop()
     return "SLL", "A", insn.lastr
 def SLL_mem(insn):
-    return ("SLLW" if insn.lastsize == WORD else "SLL"), wrap(insn.lastmem)
+    return ("SLLW" if insn.lastsize == WORD else "SLL"), insn.lastmem
 
 #SRL
 def SRL_X_r(insn):
@@ -575,15 +577,15 @@ def SRL_A_r(insn):
     insn.pop()
     return "SRL", "A", insn.lastr
 def SRL_mem(insn):
-    return ("SRLW" if insn.lastsize == WORD else "SRL"), wrap(insn.lastmem)
+    return ("SRLW" if insn.lastsize == WORD else "SRL"), insn.lastmem
 
 #RLD / RRD
 def RLD(insn):
     insn.pop()
-    return "RLD", "A", wrap(insn.lastmem)
+    return "RLD", "A", insn.lastmem
 def RRD(insn): 
     insn.pop()
-    return "RRD", "A", wrap(insn.lastmem)
+    return "RRD", "A", insn.lastmem
 
 # 9) Jump, call and return
 
