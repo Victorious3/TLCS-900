@@ -119,7 +119,7 @@ def popmem(insn):
             else:
                 return insn.pop() * 4 + insn.pop() * 2
                 
-rrtable_8 = ["WA", "BC", None, "DE" , "HL"]
+rrtable_8 = [None, "WA", None, "BC", None, "DE", None, "HL"]
 
 def rregname(register):
     ext = register.ext

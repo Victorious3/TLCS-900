@@ -172,7 +172,8 @@ def CP_R_r(insn):
     
 def CP_R_3X(n):
     def CP_R_N(insn):
-        return
+        insn.pop()
+        return "CP", insn.lastr, n
     return CP_R_N
 
 def CP_r_X(insn): 
@@ -180,7 +181,10 @@ def CP_r_X(insn):
     return "CP", insn.lastr, insn.popn(insn.lastsize)
 
 def CP_R_mem(insn): return
-def CP_mem_R(insn): return
+
+def CP_mem_R(insn): 
+    return "CP", wrap(insn.lastmem), popR(insn, '?', insn.lastsize)
+    
 def CP_mem_X(insn): return
 
 #INC
@@ -236,8 +240,9 @@ def PAA(insn): return
 #MUL
 def MUL_RR_r(insn): 
     return "MUL", RReg(popR(insn, '?', insn.lastsize)), insn.lastr
-    
-def MUL_rr_X(insn): return
+def MUL_rr_X(insn): 
+    insn.pop()
+    return "MUL", RReg(insn.lastr), insn.popn(insn.lastsize)
 def MUL_RR_mem(insn): return
 
 #MULS
@@ -393,21 +398,24 @@ def RES_X3_mem(n):
 def SET_X_r(insn):
     insn.pop()
     return "SET", (insn.pop() & 0xF), insn.lastr
-    
 def SET_X3_mem(n):
     def SET_N_mem(insn):
         return
     return SET_N_mem
 
 #CHG
-def CHG_X_r(insn): return
+def CHG_X_r(insn):
+    insn.pop()
+    return "CHG", (insn.pop() & 0xF), insn.lastr
 def CHG_X3_mem(n):
     def CHG_N_mem(insn):
         return
     return CHG_N_mem
 
 #TSET
-def TSET_X_r(insn): return
+def TSET_X_r(insn):
+    insn.pop()
+    return "TSET", (insn.pop() & 0xF), insn.lastr
 def TSET_X3_mem(n):
     def TSET_N_mem(insn):
         return
