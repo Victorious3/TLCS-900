@@ -8,21 +8,22 @@ LWORD = 2
 
 #LD
 def LD_R_r(insn): 
-    return "LD " + regname(popR(insn, '?', insn.lastsize)) + ", " + regname(insn.lastr)
+    return "LD", regname(popR(insn, '?', insn.lastsize)), regname(insn.lastr)
 def LD_r_R(insn):
-    return "LD " + regname(insn.lastr) + ", " + regname(popR(insn, '?', insn.lastsize))
+    return "LD", regname(insn.lastr), regname(popR(insn, '?', insn.lastsize))
     
 def LD_r_3X(n): 
     def LD_N(insn):
-        return
+        insn.pop()
+        return "LD", regname(insn.lastr), n
     return LD_N
 
 def LD_R_n(insn):
-    return "LD " + regname(popR(insn, 'zzz')) + ", " + str(insn.pop())
+    return "LD", regname(popR(insn, 'zzz')), insn.pop()
 def LD_RR_nn(insn):
-    return "LD " + regname(popR(insn, 'zzz')) + ", " + str(insn.popw())
+    return "LD", regname(popR(insn, 'zzz')), insn.popw()
 def LD_XRR_nnnn(insn): 
-    return "LD " + regname(popR(insn, 'zzz')) + ", " + str(insn.popl())
+    return "LD", regname(popR(insn, 'zzz')), insn.popl()
 
 def LD_r_X(insn): return
 def LD_R_mem(insn): return
@@ -36,7 +37,7 @@ def LDW_m_X(insn): return
 
 def LDW_n_nn(insn):
     insn.pop()
-    return "LDW (" + str(insn.pop()) + "), " + str(insn.popw())
+    return "LDW", wrap(insn.pop()), insn.popw()
 
 def LDB_m_nn(insn): return
 def LDW_m_nn(insn): return
@@ -46,7 +47,7 @@ def PUSH_F(insn): return
 def PUSH_A(insn): return
 
 def PUSH_RR(insn): 
-    return "PUSH " + regname(popR(insn, 's'))
+    return "PUSH", regname(popR(insn, 's'))
 
 def PUSH_r(insn): return
 def PUSH_n(insn): return
@@ -56,17 +57,21 @@ def PUSH_mem(insn): return
 #POP
 def POP_F(insn): return
 def POP_A(insn): return
-def POP_RR(insn): return
-def POP_XRR(insn): return
+def POP_RR(insn): 
+    return "POP", regname(popR(insn, '?', WORD))
+
+def POP_XRR(insn): 
+    return "POP", regname(popR(insn, '?', LWORD))
+
 def POP_r(insn): return
 def POPB_mem(insn): return
 def POPW_mem(insn): return
 
 #LDA
 def LDAW_R_mem(insn): 
-    return "LDA " + regname(popR(insn, '?', WORD)) + ", " + str(insn.lastmem)
+    return "LDA", regname(popR(insn, '?', WORD)), insn.lastmem
 def LDAL_R_mem(insn):
-    return "LDA " + regname(popR(insn, '?', LWORD)) + ", " + str(insn.lastmem)
+    return "LDA", regname(popR(insn, '?', LWORD)), insn.lastmem
     
 #LDAR
 def LDAR(insn): return
@@ -75,7 +80,8 @@ def LDAR(insn): return
 
 # EX
 def EX_F_F1(insn): return
-def EX_R_r(insn): return
+def EX_R_r(insn): 
+    return "EX", regname(popR(insn, '?', insn.lastsize)), regname(insn.lastr)
 def EX_mem_R(insn): return
 
 #MIRR
@@ -92,7 +98,7 @@ def LDDR(insn): return
 #CPXX
 def CPI(insn): 
     insn.pop()
-    return "CPI " + ("A" if insn.lastsize == WORD else "WA") + ", (" + regname(insn.lastr) + "+)"
+    return "CPI", ("A" if insn.lastsize == WORD else "WA"), "(" + regname(insn.lastr) + "+)"
     
 def CPIR(insn): return
 def CPD(insn): return
@@ -101,11 +107,15 @@ def CPDR(insn): return
 # 4) Arithmetic Operations
 
 #ADD
-def ADD_R_r(insn): return
-def ADD_r_X(insn): return
+def ADD_R_r(insn): 
+    return "ADD", regname(popR(insn, '?', insn.lastsize)), regname(insn.lastr)
+
+def ADD_r_X(insn):
+    insn.pop()
+    return "ADD", regname(insn.lastr), insn.popn(insn.lastsize)
 
 def ADD_R_mem(insn): 
-    return "ADD " + regname(popR(insn, '?', insn.lastsize)) + ", (" + str(insn.lastmem) + ")"
+    return "ADD", regname(popR(insn, '?', insn.lastsize)), wrap(insn.lastmem)
     
 def ADD_mem_R(insn): return
 def ADD_mem_X(insn): return
@@ -113,7 +123,7 @@ def ADD_mem_X(insn): return
 #ADC
 def ADC_R_r(insn): 
     dst = regname(popR(insn, '?', insn.lastsize))
-    return "ADC " + dst + ", " + regname(insn.lastr)
+    return "ADC", dst, regname(insn.lastr)
 def ADC_r_X(insn): return
 def ADC_R_mem(insn): return
 def ADC_mem_R(insn): return
@@ -122,9 +132,12 @@ def ADC_mem_X(insn): return
 #SUB
 def SUB_R_r(insn):
     dst = regname(popR(insn, '?', insn.lastsize))
-    return "SUB " + dst + ", " + regname(insn.lastr)
+    return "SUB", dst, regname(insn.lastr)
 
-def SUB_r_X(insn): return
+def SUB_r_X(insn):
+    insn.pop()
+    return "SUB", regname(insn.lastr), insn.popn(insn.lastsize)
+    
 def SUB_R_mem(insn): return
 def SUB_mem_R(insn): return
 def SUB_mem_X(insn): return
@@ -144,7 +157,10 @@ def CP_R_3X(n):
         return
     return CP_R_N
 
-def CP_r_X(insn): return
+def CP_r_X(insn): 
+    insn.pop()
+    return "CP", regname(insn.lastr), insn.popn(insn.lastsize)
+
 def CP_R_mem(insn): return
 def CP_mem_R(insn): return
 def CP_mem_X(insn): return
@@ -152,9 +168,11 @@ def CP_mem_X(insn): return
 #INC
 def INCF(insn): return
 
+# TODO: INC and DEC, replace constant INC 1, REG with INC REG
 def INC_X3_r(n):
     def INC_N_r(insn):
-        return
+        insn.pop()
+        return "INC", n, regname(insn.lastr)
     return INC_N_r
 
 def INC_X3_mem(n):
@@ -167,7 +185,8 @@ def DECF(insn): insn.pop(); return "DECF"
 
 def DEC_X3_r(n):
     def DEC_N_r(insn):
-        return
+        insn.pop()
+        return "DEC", n, regname(insn.lastr)
     return DEC_N_r
 
 def DEC_X3_mem(n):
@@ -190,25 +209,40 @@ def DAA(insn): return
 #PAA
 def PAA(insn): return
 
+rrtable_8 = ["WA", "BC", None, "DE" , "HL"]
+
+def rregname(arr):
+    [ext, size, reg] = arr
+    if not ext:
+        if size == BYTE:
+            return rrtable_8[reg]
+        elif size == WORD:
+            return Rregtable[LWORD][reg]
+        else: return str(reg)
+    else:
+        return regname(arr)
+
 #MUL
-def MUL_R_r(insn): return
+def MUL_RR_r(insn): 
+    return "MUL", rregname(popR(insn, '?', insn.lastsize)), regname(insn.lastr)
+    
 def MUL_rr_X(insn): return
-def MUL_R_mem(insn): return
+def MUL_RR_mem(insn): return
 
 #MULS
-def MULS_R_r(insn): return
+def MULS_RR_r(insn): return
 def MULS_rr_X(insn): return
-def MULS_R_mem(insn): return
+def MULS_RR_mem(insn): return
 
 #DIV
-def DIV_R_r(insn): return
+def DIV_RR_r(insn): return
 def DIV_rr_X(insn): return
-def DIV_R_mem(insn): return
+def DIV_RR_mem(insn): return
 
 #DIVS
-def DIVS_R_r(insn): return
+def DIVS_RR_r(insn): return
 def DIVS_rr_X(insn): return
-def DIVS_R_mem(insn): return
+def DIVS_RR_mem(insn): return
 
 #MULA
 def MULA(insn): return
@@ -229,27 +263,33 @@ def MDEC(n):
 
 #AND
 def AND_R_r(insn): return
-
 def AND_r_X(insn):
     insn.pop()
-    return "AND " + regname(insn.lastr) + ", " + str(insn.popn(insn.lastsize))
+    return "AND", regname(insn.lastr), insn.popn(insn.lastsize)
 
 def AND_R_mem(insn): return
 def AND_mem_R(insn): 
     reg = regname(popR(insn, '?', insn.lastsize))
-    return "AND (" + str(insn.lastmem) + "), " + reg
+    return "AND", wrap(insn.lastmem), reg
 def AND_mem_X(insn): return
 
 #OR
-def OR_R_r(insn): return
+def OR_R_r(insn): 
+    return "OR", regname(popR(insn, '?', insn.lastsize)), regname(insn.lastr)
+
 def OR_r_X(insn): return
 def OR_R_mem(insn): return
 def OR_mem_R(insn): return
 def OR_mem_X(insn): return
 
 #XOR
-def XOR_R_r(insn): return
-def XOR_r_X(insn): return
+def XOR_R_r(insn):
+    return "XOR", regname(popR(insn, '?', insn.lastsize)), regname(insn.lastr)
+    
+def XOR_r_X(insn): 
+    insn.pop()
+    return "XOR", regname(insn.lastr), insn.popn(insn.lastsize)
+    
 def XOR_R_mem(insn): return
 def XOR_mem_R(insn): return
 def XOR_mem_X(insn): return
@@ -323,7 +363,7 @@ def ZCF(insn): return
 #BIT
 def BIT_X_r(insn): 
     insn.pop()
-    return "BIT " + str(insn.pop() & 0xF) + ", " + regname(insn.lastr)
+    return "BIT", (insn.pop() & 0xF), regname(insn.lastr)
 
 def BIT_X3_mem(n):
     def BIT_N_mem(insn):
@@ -340,7 +380,7 @@ def RES_X3_mem(n):
 #SET
 def SET_X_r(insn):
     insn.pop()
-    return "SET " + str(insn.pop() & 0xF) + ", " + regname(insn.lastr)
+    return "SET", (insn.pop() & 0xF), regname(insn.lastr)
     
 def SET_X3_mem(n):
     def SET_N_mem(insn):
@@ -414,30 +454,40 @@ def UNLNK(insn): return
 def LDF_n(insn): return
 
 #SCC
-def SCC(cc): return
+def SCC(insn): 
+    return "SCC", cctable[popcc(insn)], regname(insn.lastr)
     
 # 9) Rotate and shift
 
 #RLC
 def RLC_X_r(insn):
     insn.pop()
-    return "RLC " + str(insn.pop() & 0xF) + ", " + regname(insn.lastr)
+    return "RLC", (insn.pop() & 0xF), regname(insn.lastr)
     
 def RLC_A_r(insn): return
 def RLC_mem(insn): return
 
 #RRC
-def RRC_X_r(insn): return
+def RRC_X_r(insn):
+    insn.pop()
+    return "RRC", (insn.pop() & 0xF), regname(insn.lastr)
+
 def RRC_A_r(insn): return
 def RRC_mem(insn): return
 
 #RL
-def RL_X_r(insn): return
+def RL_X_r(insn): 
+    insn.pop()
+    return "RL", (insn.pop() & 0xF), regname(insn.lastr)
+    
 def RL_A_r(insn): return
 def RL_mem(insn): return
 
 #RR
-def RR_X_r(insn): return
+def RR_X_r(insn): 
+    insn.pop()
+    return "RR", (insn.pop() & 0xF), regname(insn.lastr)
+    
 def RR_A_r(insn): return
 def RR_mem(insn): return
 
@@ -452,12 +502,18 @@ def SRA_A_r(insn): return
 def SRA_mem(insn): return
 
 #SLL
-def SLL_X_r(insn): return
+def SLL_X_r(insn):
+    insn.pop()
+    return "SLL", (insn.pop() & 0xF), regname(insn.lastr)
+    
 def SLL_A_r(insn): return
 def SLL_mem(insn): return
 
 #SRL
-def SRL_X_r(insn): return
+def SRL_X_r(insn):
+    insn.pop()
+    return "SRL", (insn.pop() & 0xF), regname(insn.lastr)
+    
 def SRL_A_r(insn): return
 def SRL_mem(insn): return
 
@@ -468,8 +524,13 @@ def RRD(insn): return
 # 9) Jump, call and return
 
 #JP
-def JP_nn(insn): return
-def JP_nnn(insn): return
+def JP_nn(insn): 
+    insn.pop()
+    return "JP", insn.popw()
+def JP_nnn(insn):
+    insn.pop()
+    return "JP", (insn.popw() | (insn.pop() << 16))
+
 def JP_cc_mem(insn): return
 
 def JR_cc(insn): 
@@ -477,7 +538,7 @@ def JR_cc(insn):
     cc = cctable[popcc(insn)]
     loc = insn.pop()
     
-    return "JR " + cc + ", " + str(pc + 2 + loc)
+    return "JR", cc, (pc + 2 + loc)
     return
 
 def JRL_cc(insn): 
@@ -485,16 +546,16 @@ def JRL_cc(insn):
     cc = cctable[popcc(insn)]
     loc = insn.popw()
     
-    return "JRL " + cc + ", " + str(pc + 3 + loc)
+    return "JRL", cc, (pc + 3 + loc)
 def JP_mem(insn): return
     
 #CALL
 def CALL_nn(insn):
     insn.pop()
-    return "CALL " + str(insn.popw())
+    return "CALL", insn.popw()
 def CALL_nnn(insn):
     insn.pop()
-    return "CALL " + str(insn.popw() | (insn.pop() << 16))
+    return "CALL", (insn.popw() | (insn.pop() << 16))
 
 def CALL_cc_mem(insn): return
 def CALR(insn): return
@@ -510,16 +571,25 @@ def RET_cc(insn): return
 def RETD(insn): return
 def RETI(insn): return
 
-# Two byte opcode reference
+# General utility functions:
+
+# Converts argument x to str and wraps it in paranthesis
+def wrap(x):
+    return "(" + str(x) + ")"
 
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   
     if opc is None:
         print str(insn.pc) + ":", hex(x), hex(y), "UNDEFINED"
-        return "UNDEFINED"
+        return ("UNDEFINED",)
     else:
         print str(insn.pc) + ":", hex(x), hex(y), opc.__name__
-        return(opc(insn))
+        asm = opc(insn)
+        if type(asm) is tuple: 
+            return asm
+        elif asm is None:
+            raise Exception("Not implemented") 
+        else: return (asm,)
 
 def src(insn):
     x, y = peekopc(insn)    
@@ -554,8 +624,13 @@ def reg(insn):
     
 def next_insn(insn, out):
     x, y = peekopc(insn)
-    asm = call_opc(insn, x, y, optable) + "\n"
-    print asm
+    opc = call_opc(insn, x, y, optable)
+    asm = str(opc[0]) + " "
+    for i in range(1, len(opc)):
+        if i != 1: asm += ", "
+        asm += str(opc[i])
+            
+    print ">>> " + asm + "\n"
     #out.write(asm)
     return
     
@@ -616,9 +691,9 @@ def regname(arr):
         return Rregtable[size][reg]
     
     if (size == WORD and reg & 1) != 0: 
-        return reg # Check if divisible by 2
+        return str(reg) # Check if divisible by 2
     elif (size == LWORD and reg & 0b11) != 0: 
-        return reg # Check if divisible by 4
+        return str(reg) # Check if divisible by 4
     
     rname = ""
     if reg <= 0x7F: # Normal banks
@@ -631,7 +706,7 @@ def regname(arr):
         elif size == LWORD:
             rname += lnames[(reg & 0b1100) >> 2]
         rname += str((reg & 0xF0) >> 4)
-    elif reg >= 0xD0 and reg <= 0xEC:
+    elif reg >= 0xD0 and reg <= 0xEF:
         if size == BYTE:
             if (reg & 0b0010) != 0: rname += "Q"
             rname += bnames[((reg & 0b1100) >> 1) | (reg & 1)]
@@ -643,8 +718,8 @@ def regname(arr):
         if reg <= 0xDC:
             rname += "'"
         elif reg <= 0xE0:
-            return reg
-    elif reg >= 0xF0 and reg <= 0xFC:
+            return str(reg)
+    elif reg >= 0xF0 and reg <= 0xFF:
         if size == BYTE:
             if (reg & 0b0010) != 0: rname += "Q"
         elif size == LWORD:
@@ -656,7 +731,7 @@ def regname(arr):
         if size == BYTE:
             rname += "H" if (reg & 0b0010) != 0 else "L"
     else:
-        return reg
+        return str(reg)
     
     return rname
     
@@ -720,7 +795,8 @@ Rregtable = [
     ["XWA", "XBC", "XDE", "XHL", "XIX", "XIY", "XIZ", "XSP"]
 ]
 
-cctable = ["F", "LT", "LE", "ULE", "PE/OV", "M/MI", "Z", "C", "(T)", "GE", "GT", "UGT", "PO/NOV", "P/PL", "NZ", "NC"]
+# TODO: Actually replace T with None and have a function instead of access to cctable
+cctable = ["F", "LT", "LE", "ULE", "PE/OV", "M", "Z", "C", "T", "GE", "GT", "UGT", "PO/NOV", "P", "NZ", "NC"]
 
 optable = [
     [NOP, NORMAL, PUSH_SR, POP_SR, MAX, HALT, EI, RETI, LD_n_n, PUSH_n, LDW_n_nn, PUSHW_nn, INCF, DECF, RET, RETD],
@@ -746,8 +822,8 @@ optable_reg = [
     [DAA, EXTZ, EXTS, PAA, None, MIRR, None, None, MULA, None, None, DJNZ, None, None, None],
     [ANDCF_X_r, ORCF_X_r, XORCF_X_r, LDCF_X_r, STCF_X_r, None, None, None, ANDCF_A_r, ORCF_A_r, XORCF_A_r, LDCF_A_r, STCF_A_r, None, LDC_cr_r, LDC_r_cr],
     [RES_X_r, SET_X_r, CHG_X_r, BIT_X_r, TSET_X_r, None, None, None, MINC(1), MINC(2), MINC(4), None, MDEC(1), MDEC(2), MDEC(4), None],
-    [MUL_R_r, MUL_R_r, MUL_R_r, MUL_R_r, MUL_R_r, MUL_R_r, MUL_R_r, MUL_R_r, MULS_R_r, MULS_R_r, MULS_R_r, MULS_R_r, MULS_R_r, MULS_R_r, MULS_R_r, MULS_R_r],
-    [DIV_R_r, DIV_R_r, DIV_R_r, DIV_R_r, DIV_R_r, DIV_R_r, DIV_R_r, DIV_R_r, DIVS_R_r, DIVS_R_r, DIVS_R_r, DIVS_R_r, DIVS_R_r, DIVS_R_r, DIVS_R_r, DIVS_R_r],
+    [MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r],
+    [DIV_RR_r, DIV_RR_r, DIV_RR_r, DIV_RR_r, DIV_RR_r, DIV_RR_r, DIV_RR_r, DIV_RR_r, DIVS_RR_r, DIVS_RR_r, DIVS_RR_r, DIVS_RR_r, DIVS_RR_r, DIVS_RR_r, DIVS_RR_r, DIVS_RR_r],
     [INC_X3_r(8), INC_X3_r(1), INC_X3_r(2), INC_X3_r(3), INC_X3_r(4), INC_X3_r(5), INC_X3_r(6), INC_X3_r(7), DEC_X3_r(8), DEC_X3_r(1), DEC_X3_r(2), DEC_X3_r(3), DEC_X3_r(4), DEC_X3_r(5), DEC_X3_r(6), DEC_X3_r(7)],
     [SCC, SCC, SCC, SCC, SCC, SCC, SCC, SCC, SCC, SCC, SCC, SCC, SCC, SCC, SCC, SCC],
     [ADD_R_r, ADD_R_r, ADD_R_r, ADD_R_r, ADD_R_r, ADD_R_r, ADD_R_r, ADD_R_r, LD_R_r, LD_R_r, LD_R_r, LD_R_r, LD_R_r, LD_R_r, LD_R_r, LD_R_r],
@@ -765,8 +841,8 @@ optable_src = [
     [LDI, LDIR, LDD, LDDR, CPI, CPIR, CPD, CPDR, None, LD_nn_m, None, None, None, None, None, None],
     [LD_R_mem, LD_R_mem, LD_R_mem, LD_R_mem, LD_R_mem, LD_R_mem, LD_R_mem, LD_R_mem, None, None, None, None, None, None, None, None],
     [EX_mem_R, EX_mem_R, EX_mem_R, EX_mem_R, EX_mem_R, EX_mem_R, EX_mem_R, EX_mem_R, ADD_mem_X, ADC_mem_X, SUB_mem_X, SBC_mem_X, AND_mem_X, XOR_mem_X, OR_mem_X, CP_mem_X],
-    [MUL_R_mem, MUL_R_mem, MUL_R_mem, MUL_R_mem, MUL_R_mem, MUL_R_mem, MUL_R_mem, MUL_R_mem, MULS_R_mem, MULS_R_mem, MULS_R_mem, MULS_R_mem, MULS_R_mem, MULS_R_mem, MULS_R_mem, MULS_R_mem],
-    [DIV_R_mem, DIV_R_mem, DIV_R_mem, DIV_R_mem, DIV_R_mem, DIV_R_mem, DIV_R_mem, DIV_R_mem, DIVS_R_mem, DIVS_R_mem, DIVS_R_mem, DIVS_R_mem, DIVS_R_mem, DIVS_R_mem, DIVS_R_mem, DIVS_R_mem],
+    [MUL_RR_mem, MUL_RR_mem, MUL_RR_mem, MUL_RR_mem, MUL_RR_mem, MUL_RR_mem, MUL_RR_mem, MUL_RR_mem, MULS_RR_mem, MULS_RR_mem, MULS_RR_mem, MULS_RR_mem, MULS_RR_mem, MULS_RR_mem, MULS_RR_mem, MULS_RR_mem],
+    [DIV_RR_mem, DIV_RR_mem, DIV_RR_mem, DIV_RR_mem, DIV_RR_mem, DIV_RR_mem, DIV_RR_mem, DIV_RR_mem, DIVS_RR_mem, DIVS_RR_mem, DIVS_RR_mem, DIVS_RR_mem, DIVS_RR_mem, DIVS_RR_mem, DIVS_RR_mem, DIVS_RR_mem],
     [INC_X3_mem(8), INC_X3_mem(1), INC_X3_mem(2), INC_X3_mem(3), INC_X3_mem(4), INC_X3_mem(5), INC_X3_mem(6), INC_X3_mem(7), INC_X3_mem(8), DEC_X3_mem(1), DEC_X3_mem(2), DEC_X3_mem(3), DEC_X3_mem(4), DEC_X3_mem(5), DEC_X3_mem(6), DEC_X3_mem(7)],
     [None, None, None, None, None, None, None, None, RLC_mem, RRC_mem, RL_mem, RR_mem, SLA_mem, SRA_mem, SLL_mem, SRL_mem],
     [ADD_R_mem, ADD_R_mem, ADD_R_mem, ADD_R_mem, ADD_R_mem, ADD_R_mem, ADD_R_mem, ADD_R_mem, ADD_mem_R, ADD_mem_R, ADD_mem_R, ADD_mem_R, ADD_mem_R, ADD_mem_R, ADD_mem_R, ADD_mem_R],
