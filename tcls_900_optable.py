@@ -21,7 +21,7 @@ optable = [
 
 optable_reg = [
     [None, None, None, LD_r_X, PUSH_r, POP_r, CPL_r, NEG_r, MUL_rr_X, MULS_rr_X, DIV_rr_X, DIVS_rr_X, LINK, UNLNK, BS1F, BS1B],
-    [DAA, EXTZ, EXTS, PAA, None, MIRR, None, None, MULA, None, None, DJNZ, None, None, None],
+    [DAA, None, EXTZ, EXTS, PAA, None, MIRR, None, None, MULA, None, None, DJNZ, None, None, None],
     [ANDCF_X_r, ORCF_X_r, XORCF_X_r, LDCF_X_r, STCF_X_r, None, None, None, ANDCF_A_r, ORCF_A_r, XORCF_A_r, LDCF_A_r, STCF_A_r, None, LDC_cr_r, LDC_r_cr],
     [RES_X_r, SET_X_r, CHG_X_r, BIT_X_r, TSET_X_r, None, None, None, MINC(1), MINC(2), MINC(4), None, MDEC(1), MDEC(2), MDEC(4), None],
     [MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MUL_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r, MULS_RR_r],

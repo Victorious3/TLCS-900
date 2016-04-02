@@ -31,10 +31,10 @@ def wrap(x):
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   
     if opc is None:
-        print str(insn.pc) + ":", hex(x), hex(y), "UNDEFINED"
+        print hex(insn.pc) + ":", hex(x), hex(y), "UNDEFINED"
         return ("UNDEFINED",)
     else:
-        print str(insn.pc) + ":", hex(x), hex(y), opc.__name__
+        print hex(insn.pc) + ":", hex(x), hex(y), opc.__name__
         asm = opc(insn)
         if type(asm) is tuple: 
             return asm

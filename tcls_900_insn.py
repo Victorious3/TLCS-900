@@ -22,14 +22,26 @@ def LD_XRR_nnnn(insn):
     return "LD", popR(insn, 'zzz'), insn.popl()
 
 def LD_r_X(insn): return
-def LD_R_mem(insn): return
+
+def LD_R_mem(insn): 
+    return "LD", popR(insn, '?', insn.lastsize), wrap(insn.lastmem) 
+
 def LD_n_n(insn): return
 def LD_nn_m(insn): return
-def LDB_mem_R(insn): return
-def LDW_mem_R(insn): return
+
+def LDB_mem_R(insn): 
+    return "LD", wrap(insn.lastmem), popR(insn, '?', BYTE)
+def LDW_mem_R(insn): 
+    return "LDW", wrap(insn.lastmem), popR(insn, '?', WORD)
+
 def LDL_mem_R(insn): return
-def LDB_m_X(insn): return
-def LDW_m_X(insn): return
+
+def LDB_m_X(insn): 
+    insn.pop()
+    return "LD", wrap(insn.lastmem), insn.pop()
+def LDW_m_X(insn): 
+    insn.pop()
+    return "LDW", wrap(insn.lastmem), insn.popw()
 
 def LDW_n_nn(insn):
     insn.pop()
@@ -39,20 +51,29 @@ def LDB_m_nn(insn): return
 def LDW_m_nn(insn): return
 
 #PUSH
-def PUSH_F(insn): return
-def PUSH_A(insn): return
-
+def PUSH_F(insn):
+    insn.pop()
+    return "PUSH", "F"
+def PUSH_A(insn):
+    insn.pop()
+    return "PUSH", "A"
 def PUSH_RR(insn): 
     return "PUSH", popR(insn, 's')
-
-def PUSH_r(insn): return
+def PUSH_r(insn): 
+    return "PUSH", popr(insn, 'zz')
 def PUSH_n(insn): return
 def PUSHW_nn(insn): return
 def PUSH_mem(insn): return
 
 #POP
-def POP_F(insn): return
-def POP_A(insn): return
+def POP_F(insn):
+    insn.pop()
+    return "POP", "F"
+    
+def POP_A(insn):
+    insn.pop()
+    return "POP", "A"
+
 def POP_RR(insn): 
     return "POP", popR(insn, '?', WORD)
 
@@ -146,8 +167,9 @@ def SBC_mem_R(insn): return
 def SBC_mem_X(insn): return
 
 #CP
-def CP_R_r(insn): return
-
+def CP_R_r(insn):
+    return "CP", popR(insn, '?', insn.lastsize), insn.lastr
+    
 def CP_R_3X(n):
     def CP_R_N(insn):
         return
@@ -191,13 +213,19 @@ def DEC_X3_mem(n):
     return DEC_N_mem
 
 #NEG
-def NEG_r(insn): return
+def NEG_r(insn): 
+    insn.pop()
+    return "NEG", insn.lastr 
 
 #EXTZ
-def EXTZ(insn): return
+def EXTZ(insn):
+    insn.pop() 
+    return "EXTZ", insn.lastr
 
 #EXTS
-def EXTS(insn): return
+def EXTS(insn):
+    insn.pop() 
+    return "EXTS", insn.lastr
 
 #DAA
 def DAA(insn): return
@@ -249,7 +277,6 @@ def AND_R_r(insn): return
 def AND_r_X(insn):
     insn.pop()
     return "AND", insn.lastr, insn.popn(insn.lastsize)
-
 def AND_R_mem(insn): return
 def AND_mem_R(insn): 
     reg = popR(insn, '?', insn.lastsize)
@@ -259,8 +286,9 @@ def AND_mem_X(insn): return
 #OR
 def OR_R_r(insn): 
     return "OR", popR(insn, '?', insn.lastsize), insn.lastr
-
-def OR_r_X(insn): return
+def OR_r_X(insn):
+    insn.pop()
+    return "OR", insn.lastr, insn.popn(insn.lastsize)
 def OR_R_mem(insn): return
 def OR_mem_R(insn): return
 def OR_mem_X(insn): return
@@ -268,17 +296,17 @@ def OR_mem_X(insn): return
 #XOR
 def XOR_R_r(insn):
     return "XOR", popR(insn, '?', insn.lastsize), insn.lastr
-    
 def XOR_r_X(insn): 
     insn.pop()
     return "XOR", insn.lastr, insn.popn(insn.lastsize)
-    
 def XOR_R_mem(insn): return
 def XOR_mem_R(insn): return
 def XOR_mem_X(insn): return
 
 #CPL
-def CPL_r(insn): return
+def CPL_r(insn): 
+    insn.pop()
+    return "CPL", insn.lastr
 
 # 6) Bit operations
 
@@ -338,23 +366,24 @@ def XORCF_X3_mem(n):
 def XORCF_A_mem(insn): return
 
 #RCF, SCF, CCF, ZCF
-def RCF(insn): return
-def SCF(insn): return
-def CCF(insn): return
-def ZCF(insn): return
+def RCF(insn): insn.pop(); return "RCF"
+def SCF(insn): insn.pop(); return "SCF"
+def CCF(insn): insn.pop(); return "CCF"
+def ZCF(insn): insn.pop(); return "ZCF"
 
 #BIT
 def BIT_X_r(insn): 
     insn.pop()
     return "BIT", (insn.pop() & 0xF), insn.lastr
-
 def BIT_X3_mem(n):
     def BIT_N_mem(insn):
         return
     return BIT_N_mem
 
 #RES
-def RES_X_r(insn): return
+def RES_X_r(insn):
+    insn.pop()
+    return "RES", (insn.pop() & 0xF), insn.lastr
 def RES_X3_mem(n):
     def RES_N_mem(insn):
         return
@@ -446,7 +475,6 @@ def SCC(insn):
 def RLC_X_r(insn):
     insn.pop()
     return "RLC", (insn.pop() & 0xF), insn.lastr
-    
 def RLC_A_r(insn): return
 def RLC_mem(insn): return
 
@@ -454,7 +482,6 @@ def RLC_mem(insn): return
 def RRC_X_r(insn):
     insn.pop()
     return "RRC", (insn.pop() & 0xF), insn.lastr
-
 def RRC_A_r(insn): return
 def RRC_mem(insn): return
 
@@ -462,7 +489,6 @@ def RRC_mem(insn): return
 def RL_X_r(insn): 
     insn.pop()
     return "RL", (insn.pop() & 0xF), insn.lastr
-    
 def RL_A_r(insn): return
 def RL_mem(insn): return
 
@@ -470,34 +496,45 @@ def RL_mem(insn): return
 def RR_X_r(insn): 
     insn.pop()
     return "RR", (insn.pop() & 0xF), insn.lastr
-    
-def RR_A_r(insn): return
+def RR_A_r(insn):
+    insn.pop()
+    return "RR", "A", insn.lastr
 def RR_mem(insn): return
 
 #SLA
-def SLA_X_r(insn): return
-def SLA_A_r(insn): return
+def SLA_X_r(insn): 
+    insn.pop()
+    return "RR", (insn.pop() & 0xF), insn.lastr
+def SLA_A_r(insn):
+    insn.pop()
+    return "RR", "A", insn.lastr
 def SLA_mem(insn): return
 
 #SRA
-def SRA_X_r(insn): return
-def SRA_A_r(insn): return
+def SRA_X_r(insn):
+    insn.pop()
+    return "SRA", (insn.pop() & 0xF), insn.lastr
+def SRA_A_r(insn): 
+    insn.pop()
+    return "SRA", "A", insn.lastr
 def SRA_mem(insn): return
 
 #SLL
 def SLL_X_r(insn):
     insn.pop()
     return "SLL", (insn.pop() & 0xF), insn.lastr
-    
-def SLL_A_r(insn): return
+def SLL_A_r(insn):
+    insn.pop()
+    return "SLL", "A", insn.lastr
 def SLL_mem(insn): return
 
 #SRL
 def SRL_X_r(insn):
     insn.pop()
     return "SRL", (insn.pop() & 0xF), insn.lastr
-    
-def SRL_A_r(insn): return
+def SRL_A_r(insn):
+    insn.pop()
+    return "SRL", "A", insn.lastr
 def SRL_mem(insn): return
 
 #RLD / RRD
@@ -545,7 +582,12 @@ def CALR(insn): return
 def CALL(insn): return
 
 #DJNZ
-def DJNZ(insn): return
+def DJNZ(insn): 
+    insn.pop()
+    pc = insn.pc
+    loc = insn.pop()
+    
+    return "DJNZ", insn.lastr, (pc + 3 + loc)
 
 #RET
 def RET(insn): insn.pop(); return "RET"
