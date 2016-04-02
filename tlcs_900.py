@@ -31,6 +31,8 @@ def wrap(x):
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   
     if opc is None:
+        # Pop it off the stack...
+        insn.pop()
         print hex(insn.pc) + ":", hex(x), hex(y), "UNDEFINED"
         return ("UNDEFINED",)
     else:
@@ -46,10 +48,9 @@ def src(insn):
     x, y = peekopc(insn)    
     if (x >= 0xC): 
         insn.lastsize = x - 0xC
-        insn.lastmem = popmem(insn)
     else:
         insn.lastsize = x - 0x8
-        insn.lastr = popR(insn, '?', LWORD)
+    insn.lastmem = popmem(insn)
 
     x, y = peekopc(insn)
     return call_opc(insn, x, y, optable_src)
@@ -119,7 +120,7 @@ def popmem(insn):
             else:
                 return insn.pop() * 4 + insn.pop() * 2
                 
-rrtable_8 = [None, "WA", None, "BC", None, "DE", None, "HL"]
+rrtable_8 = ["INVALID", "WA", "INVALID", "BC", "INVALID", "DE", "INVALID", "HL"]
 
 def rregname(register):
     ext = register.ext
@@ -130,6 +131,7 @@ def rregname(register):
         if size == BYTE:
             return rrtable_8[reg]
         elif size == WORD:
+            print reg
             return Rregtable[LWORD][reg]
         else: return str(reg)
     else:
@@ -147,6 +149,8 @@ def regname(register):
     size = register.size
     reg = register.reg
     
+    if size < 0 or size > 2:
+        return "INVALID"
     if not ext:
         return Rregtable[size][reg]
     
@@ -254,6 +258,6 @@ Rregtable = [
 ]
 
 # TODO: Actually replace T with None and have a function instead of access to cctable
-cctable = ["F", "LT", "LE", "ULE", "PE/OV", "M", "Z", "C", "T", "GE", "GT", "UGT", "PO/NOV", "P", "NZ", "NC"]
+cctable = ["F", "LT", "LE", "ULE", "PE/OV", "M", "Z/EQ", "C", "T", "GE", "GT", "UGT", "PO/NOV", "P", "NZ/NE", "NC"]
 
 from tlcs_900_optable import optable, optable_src, optable_dst, optable_reg 

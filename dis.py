@@ -21,15 +21,21 @@ class Insn:
     
     def pop(self):
         self.pc += 1
-        return struct.unpack('<B', self.data.read(1))[0]
+        r = self.data.read(1)
+        if len(r) < 1: return "END OF FILE"
+        return struct.unpack('<B', r)[0]
 
     def popw(self):
         self.pc += 2
-        return struct.unpack('<H', self.data.read(2))[0]
+        r = self.data.read(2)
+        if len(r) < 2: return "END OF FILE"
+        return struct.unpack('<H', r)[0]
 
     def popl(self):
-        self.pc += 4   
-        return struct.unpack('<I', self.data.read(4))[0]
+        self.pc += 4 
+        r = self.data.read(4)
+        if len(r) < 4: return "END OF FILE"
+        return struct.unpack('<I', r)[0]
          
         
 inputfile = None
