@@ -59,9 +59,16 @@ if not os.path.isfile(inputfile):
     print "Input file \"" + inputfile + "\" doesn't exist."
     sys.exit(4)
     
-from instructions import next_insn 
+import tcls_900
 
 with io.open(inputfile, 'rb', buffering = 30) as f:
     insn = Insn(f)
     while f.peek(1) != b'':
-        next_insn(insn, None)
+        opc = tcls_900.next_insn(insn, None)
+        asm = str(opc[0]) + " "
+        for i in range(1, len(opc)):
+            if i != 1: asm += ", "
+            asm += str(opc[i])
+                
+        print ">>> " + asm + "\n"
+        

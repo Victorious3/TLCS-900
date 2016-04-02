@@ -1,0 +1,555 @@
+from tcls_900 import * 
+
+# 1) Load Instructions
+
+#LD
+def LD_R_r(insn): 
+    return "LD", popR(insn, '?', insn.lastsize), insn.lastr
+def LD_r_R(insn):
+    return "LD", insn.lastr, popR(insn, '?', insn.lastsize)
+    
+def LD_r_3X(n): 
+    def LD_N(insn):
+        insn.pop()
+        return "LD", insn.lastr, n
+    return LD_N
+
+def LD_R_n(insn):
+    return "LD", popR(insn, 'zzz'), insn.pop()
+def LD_RR_nn(insn):
+    return "LD", popR(insn, 'zzz'), insn.popw()
+def LD_XRR_nnnn(insn): 
+    return "LD", popR(insn, 'zzz'), insn.popl()
+
+def LD_r_X(insn): return
+def LD_R_mem(insn): return
+def LD_n_n(insn): return
+def LD_nn_m(insn): return
+def LDB_mem_R(insn): return
+def LDW_mem_R(insn): return
+def LDL_mem_R(insn): return
+def LDB_m_X(insn): return
+def LDW_m_X(insn): return
+
+def LDW_n_nn(insn):
+    insn.pop()
+    return "LDW", wrap(insn.pop()), insn.popw()
+
+def LDB_m_nn(insn): return
+def LDW_m_nn(insn): return
+
+#PUSH
+def PUSH_F(insn): return
+def PUSH_A(insn): return
+
+def PUSH_RR(insn): 
+    return "PUSH", popR(insn, 's')
+
+def PUSH_r(insn): return
+def PUSH_n(insn): return
+def PUSHW_nn(insn): return
+def PUSH_mem(insn): return
+
+#POP
+def POP_F(insn): return
+def POP_A(insn): return
+def POP_RR(insn): 
+    return "POP", popR(insn, '?', WORD)
+
+def POP_XRR(insn): 
+    return "POP", popR(insn, '?', LWORD)
+
+def POP_r(insn): return
+def POPB_mem(insn): return
+def POPW_mem(insn): return
+
+#LDA
+def LDAW_R_mem(insn): 
+    return "LDA", popR(insn, '?', WORD), insn.lastmem
+def LDAL_R_mem(insn):
+    return "LDA", popR(insn, '?', LWORD), insn.lastmem
+    
+#LDAR
+def LDAR(insn): return
+
+# 2) Exchange
+
+# EX
+def EX_F_F1(insn): return
+def EX_R_r(insn): 
+    return "EX", popR(insn, '?', insn.lastsize), insn.lastr
+def EX_mem_R(insn): return
+
+#MIRR
+def MIRR(insn): return
+
+# 3) Load Increment/Decrement & Compare Increment/Decrement Size
+
+#LDXX
+def LDI(insn): return
+def LDIR(insn): return
+def LDD(insn): return
+def LDDR(insn): return
+
+#CPXX
+def CPI(insn): 
+    insn.pop()
+    return "CPI", ("A" if insn.lastsize == WORD else "WA"), "(" + regname(insn.lastr) + "+)"
+    
+def CPIR(insn): return
+def CPD(insn): return
+def CPDR(insn): return
+
+# 4) Arithmetic Operations
+
+#ADD
+def ADD_R_r(insn): 
+    return "ADD", popR(insn, '?', insn.lastsize), insn.lastr
+
+def ADD_r_X(insn):
+    insn.pop()
+    return "ADD", insn.lastr, insn.popn(insn.lastsize)
+
+def ADD_R_mem(insn): 
+    return "ADD", popR(insn, '?', insn.lastsize), wrap(insn.lastmem)
+    
+def ADD_mem_R(insn): return
+def ADD_mem_X(insn): return
+
+#ADC
+def ADC_R_r(insn): 
+    dst = popR(insn, '?', insn.lastsize)
+    return "ADC", dst, insn.lastr
+def ADC_r_X(insn): return
+def ADC_R_mem(insn): return
+def ADC_mem_R(insn): return
+def ADC_mem_X(insn): return
+
+#SUB
+def SUB_R_r(insn):
+    dst = popR(insn, '?', insn.lastsize)
+    return "SUB", dst, insn.lastr
+
+def SUB_r_X(insn):
+    insn.pop()
+    return "SUB", insn.lastr, insn.popn(insn.lastsize)
+    
+def SUB_R_mem(insn): return
+def SUB_mem_R(insn): return
+def SUB_mem_X(insn): return
+
+#SBC
+def SBC_R_r(insn): return
+def SBC_r_X(insn): return
+def SBC_R_mem(insn): return
+def SBC_mem_R(insn): return
+def SBC_mem_X(insn): return
+
+#CP
+def CP_R_r(insn): return
+
+def CP_R_3X(n):
+    def CP_R_N(insn):
+        return
+    return CP_R_N
+
+def CP_r_X(insn): 
+    insn.pop()
+    return "CP", insn.lastr, insn.popn(insn.lastsize)
+
+def CP_R_mem(insn): return
+def CP_mem_R(insn): return
+def CP_mem_X(insn): return
+
+#INC
+def INCF(insn): return
+
+# TODO: INC and DEC, replace constant INC 1, REG with INC REG
+def INC_X3_r(n):
+    def INC_N_r(insn):
+        insn.pop()
+        return "INC", n, insn.lastr
+    return INC_N_r
+
+def INC_X3_mem(n):
+    def INC_N_mem(insn):
+        return
+    return INC_N_mem
+    
+#DEC
+def DECF(insn): insn.pop(); return "DECF"
+
+def DEC_X3_r(n):
+    def DEC_N_r(insn):
+        insn.pop()
+        return "DEC", n, insn.lastr
+    return DEC_N_r
+
+def DEC_X3_mem(n):
+    def DEC_N_mem(insn):
+        return
+    return DEC_N_mem
+
+#NEG
+def NEG_r(insn): return
+
+#EXTZ
+def EXTZ(insn): return
+
+#EXTS
+def EXTS(insn): return
+
+#DAA
+def DAA(insn): return
+
+#PAA
+def PAA(insn): return
+
+#MUL
+def MUL_RR_r(insn): 
+    return "MUL", RReg(popR(insn, '?', insn.lastsize)), insn.lastr
+    
+def MUL_rr_X(insn): return
+def MUL_RR_mem(insn): return
+
+#MULS
+def MULS_RR_r(insn): return
+def MULS_rr_X(insn): return
+def MULS_RR_mem(insn): return
+
+#DIV
+def DIV_RR_r(insn): return
+def DIV_rr_X(insn): return
+def DIV_RR_mem(insn): return
+
+#DIVS
+def DIVS_RR_r(insn): return
+def DIVS_rr_X(insn): return
+def DIVS_RR_mem(insn): return
+
+#MULA
+def MULA(insn): return
+
+#MINC
+def MINC(n):
+    def MINCN(insn):
+        return
+    return MINCN
+    
+#MDEC
+def MDEC(n):
+    def MDECN(insn):
+        return
+    return MDECN
+    
+# 5) Logical operations
+
+#AND
+def AND_R_r(insn): return
+def AND_r_X(insn):
+    insn.pop()
+    return "AND", insn.lastr, insn.popn(insn.lastsize)
+
+def AND_R_mem(insn): return
+def AND_mem_R(insn): 
+    reg = popR(insn, '?', insn.lastsize)
+    return "AND", wrap(insn.lastmem), reg
+def AND_mem_X(insn): return
+
+#OR
+def OR_R_r(insn): 
+    return "OR", popR(insn, '?', insn.lastsize), insn.lastr
+
+def OR_r_X(insn): return
+def OR_R_mem(insn): return
+def OR_mem_R(insn): return
+def OR_mem_X(insn): return
+
+#XOR
+def XOR_R_r(insn):
+    return "XOR", popR(insn, '?', insn.lastsize), insn.lastr
+    
+def XOR_r_X(insn): 
+    insn.pop()
+    return "XOR", insn.lastr, insn.popn(insn.lastsize)
+    
+def XOR_R_mem(insn): return
+def XOR_mem_R(insn): return
+def XOR_mem_X(insn): return
+
+#CPL
+def CPL_r(insn): return
+
+# 6) Bit operations
+
+#LDCF
+def LDCF_X_r(insn): return
+def LDCF_A_r(insn): return
+
+def LDCF_X3_mem(n):
+    def LDCF_N_mem(insn):
+        return
+    return LDCF_N_mem
+
+def LDCF_A_mem(insn): return
+
+#STCF
+def STCF_X_r(insn): return
+def STCF_A_r(insn): return
+
+def STCF_X3_mem(n):
+    def STCF_N_mem(insn):
+        return
+    return STCF_N_mem
+    
+def STCF_A_mem(insn): return
+
+#ANDCF
+def ANDCF_X_r(insn): return
+def ANDCF_A_r(insn): return
+
+def ANDCF_X3_mem(n):
+    def ANDCF_N_mem(insn):
+        return
+    return ANDCF_N_mem
+    
+def ANDCF_A_mem(insn): return
+
+#ORCF
+def ORCF_X_r(insn): return
+def ORCF_A_r(insn): return
+
+def ORCF_X3_mem(n):
+    def ORCF_N_mem(insn):
+        return
+    return ORCF_N_mem
+    
+def ORCF_A_mem(insn): return
+
+#XORCF
+def XORCF_X_r(insn): return
+def XORCF_A_r(insn): return
+
+def XORCF_X3_mem(n):
+    def XORCF_N_mem(insn):
+        return
+    return XORCF_N_mem
+    
+def XORCF_A_mem(insn): return
+
+#RCF, SCF, CCF, ZCF
+def RCF(insn): return
+def SCF(insn): return
+def CCF(insn): return
+def ZCF(insn): return
+
+#BIT
+def BIT_X_r(insn): 
+    insn.pop()
+    return "BIT", (insn.pop() & 0xF), insn.lastr
+
+def BIT_X3_mem(n):
+    def BIT_N_mem(insn):
+        return
+    return BIT_N_mem
+
+#RES
+def RES_X_r(insn): return
+def RES_X3_mem(n):
+    def RES_N_mem(insn):
+        return
+    return RES_N_mem
+    
+#SET
+def SET_X_r(insn):
+    insn.pop()
+    return "SET", (insn.pop() & 0xF), insn.lastr
+    
+def SET_X3_mem(n):
+    def SET_N_mem(insn):
+        return
+    return SET_N_mem
+
+#CHG
+def CHG_X_r(insn): return
+def CHG_X3_mem(n):
+    def CHG_N_mem(insn):
+        return
+    return CHG_N_mem
+
+#TSET
+def TSET_X_r(insn): return
+def TSET_X3_mem(n):
+    def TSET_N_mem(insn):
+        return
+    return TSET_N_mem
+
+#BS1
+def BS1F(insn): return
+def BS1B(insn): return
+
+# 7) Special operations and CPU control
+
+#NOP
+def NOP(insn): insn.pop(); return "NOP"
+
+#NORMAL
+def NORMAL(insn): return
+
+#MAX
+def MAX(insn): insn.pop(); return "MAX"
+
+#MIN
+def MIN(insn): insn.pop(); return "MIN"
+
+#EI
+def EI(insn): return
+
+#DI
+def DI(insn): return
+
+#PUSH
+def PUSH_SR(insn): return
+
+#POP
+def POP_SR(insn): return
+
+#SWI
+def SWI(insn): return
+
+#HALT
+def HALT(insn): return
+
+#LDC
+def LDC_cr_r(insn): return
+def LDC_r_cr(insn): return
+
+#LDX
+def LDX(insn): return
+
+#LINK
+def LINK(insn): return
+
+#UNLNK
+def UNLNK(insn): return
+
+#LDF
+def LDF_n(insn): return
+
+#SCC
+def SCC(insn): 
+    return "SCC", cctable[popcc(insn)], insn.lastr
+    
+# 9) Rotate and shift
+
+#RLC
+def RLC_X_r(insn):
+    insn.pop()
+    return "RLC", (insn.pop() & 0xF), insn.lastr
+    
+def RLC_A_r(insn): return
+def RLC_mem(insn): return
+
+#RRC
+def RRC_X_r(insn):
+    insn.pop()
+    return "RRC", (insn.pop() & 0xF), insn.lastr
+
+def RRC_A_r(insn): return
+def RRC_mem(insn): return
+
+#RL
+def RL_X_r(insn): 
+    insn.pop()
+    return "RL", (insn.pop() & 0xF), insn.lastr
+    
+def RL_A_r(insn): return
+def RL_mem(insn): return
+
+#RR
+def RR_X_r(insn): 
+    insn.pop()
+    return "RR", (insn.pop() & 0xF), insn.lastr
+    
+def RR_A_r(insn): return
+def RR_mem(insn): return
+
+#SLA
+def SLA_X_r(insn): return
+def SLA_A_r(insn): return
+def SLA_mem(insn): return
+
+#SRA
+def SRA_X_r(insn): return
+def SRA_A_r(insn): return
+def SRA_mem(insn): return
+
+#SLL
+def SLL_X_r(insn):
+    insn.pop()
+    return "SLL", (insn.pop() & 0xF), insn.lastr
+    
+def SLL_A_r(insn): return
+def SLL_mem(insn): return
+
+#SRL
+def SRL_X_r(insn):
+    insn.pop()
+    return "SRL", (insn.pop() & 0xF), insn.lastr
+    
+def SRL_A_r(insn): return
+def SRL_mem(insn): return
+
+#RLD / RRD
+def RLD(insn): return
+def RRD(insn): return
+
+# 9) Jump, call and return
+
+#JP
+def JP_nn(insn): 
+    insn.pop()
+    return "JP", insn.popw()
+def JP_nnn(insn):
+    insn.pop()
+    return "JP", (insn.popw() | (insn.pop() << 16))
+
+def JP_cc_mem(insn): return
+
+def JR_cc(insn): 
+    pc = insn.pc
+    cc = cctable[popcc(insn)]
+    loc = insn.pop()
+    
+    return "JR", cc, (pc + 2 + loc)
+    return
+
+def JRL_cc(insn): 
+    pc = insn.pc
+    cc = cctable[popcc(insn)]
+    loc = insn.popw()
+    
+    return "JRL", cc, (pc + 3 + loc)
+def JP_mem(insn): return
+    
+#CALL
+def CALL_nn(insn):
+    insn.pop()
+    return "CALL", insn.popw()
+def CALL_nnn(insn):
+    insn.pop()
+    return "CALL", (insn.popw() | (insn.pop() << 16))
+
+def CALL_cc_mem(insn): return
+def CALR(insn): return
+def CALL(insn): return
+
+#DJNZ
+def DJNZ(insn): return
+
+#RET
+def RET(insn): insn.pop(); return "RET"
+def RET_cc(insn): return
+    
+def RETD(insn): return
+def RETI(insn): return
