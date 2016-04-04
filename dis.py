@@ -83,10 +83,7 @@ with io.open(inputfile, 'rb', buffering = 30) as f:
     insn = Insn(f)
     while f.peek(1) != b'':
         opc = tlcs_900.next_insn(insn, None)
-        asm = str(opc[0]) + " "
-        for i in range(1, len(opc)):
-            if i != 1: asm += ", "
-            asm += str(opc[i])
+        asm = opc[0] + " " + (", ".join(map(str, opc[1:])))
                 
         print ">>> " + asm + "\n"
     if insn.eof:
