@@ -4,12 +4,18 @@ class Insn:
     def __init__(self, data):
         self.data = data
         self.pc = 0
+        self.lastinsn = 0 # Last instruction, this is only set if necessary
         self.lastsize = 0
         self.lastr = "INVALID"
         self.lastmem = "INVALID"
+        self.eof = False # Saves if the EOF was reached while parsing
     
-    def peek(self, n = 1): 
-        return struct.unpack('<B', self.data.peek(n)[n - 1])[0]
+    def peek(self, n = 1):
+        r = self.data.peek(n)
+        if len(r) < n: 
+            self.eof = True
+            return -1
+        return struct.unpack('<B', r[n - 1])[0]
     
     def popn(self, n):
         if n == 0: 
@@ -22,19 +28,25 @@ class Insn:
     def pop(self):
         self.pc += 1
         r = self.data.read(1)
-        if len(r) < 1: return "END OF FILE"
+        if len(r) < 1:
+            self.eof = True 
+            return -1
         return struct.unpack('<B', r)[0]
 
     def popw(self):
         self.pc += 2
         r = self.data.read(2)
-        if len(r) < 2: return "END OF FILE"
+        if len(r) < 2:
+            self.eof = True
+            return -1
         return struct.unpack('<H', r)[0]
 
     def popl(self):
         self.pc += 4 
         r = self.data.read(4)
-        if len(r) < 4: return "END OF FILE"
+        if len(r) < 4:
+            self.eof = True
+            return -1
         return struct.unpack('<I', r)[0]
          
         
@@ -77,4 +89,7 @@ with io.open(inputfile, 'rb', buffering = 30) as f:
             asm += str(opc[i])
                 
         print ">>> " + asm + "\n"
+    if insn.eof:
+        print "Reached EOF while parsing!"
+        print "The last instruction may be corrupted."
         

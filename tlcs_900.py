@@ -13,6 +13,14 @@ class Reg(object):
     def __str__(self):
         return regname(self)
 
+# Class to hold command registers
+class CReg(Reg):
+    def __init__(self, size, reg):
+        super(CReg, self).__init__(False, size, reg)
+    
+    def __str__(self):
+        return cregname(self)
+
 # Class to hold registers used by MUL, DIV
 # Wraps a normal register with a different __str__ method
 # TODO Might want to turn this into a method that modifies the address instead
@@ -38,9 +46,9 @@ class Mem:
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   
     if opc is None:
+        print hex(insn.pc) + ":", hex(x), hex(y), "UNDEFINED"
         # Pop it off the stack...
         insn.pop()
-        print hex(insn.pc) + ":", hex(x), hex(y), "UNDEFINED"
         return ("UNDEFINED",)
     else:
         print hex(insn.pc) + ":", hex(x), hex(y), opc.__name__
@@ -57,12 +65,14 @@ def src(insn):
         insn.lastsize = x - 0xC
     else:
         insn.lastsize = x - 0x8
+    insn.lastinsn = insn.peek()
     insn.lastmem = popmem(insn)
-
+    
     x, y = peekopc(insn)
     return call_opc(insn, x, y, optable_src)
 
 def dst(insn):
+    insn.lastinsn = insn.peek()
     insn.lastmem = popmem(insn)
     x, y = peekopc(insn)
     return call_opc(insn, x, y, optable_dst)
@@ -129,6 +139,7 @@ def popmem(insn):
             elif n == 1:
                 reg = (mem & 0xFE) * 4
                 name = regname(Reg(True, LWORD, reg))
+                offset = insn.popw()
                 return Mem(reg + offset, name + "+" + str(offset)) # r32 + d16
             elif mem == 0x3:
                 reg1 = insn.pop() * 4
@@ -220,6 +231,26 @@ def regname(register):
     
     return rname
     
+lcrnames = ["S0", "S1", "S2", "S3", "D0", "D1", "D2", "D3"]
+wcrnames = ["C0", "C1", "C2", "C3"]
+bcrnames = ["M0", "M1", "M2", "M3"]
+
+def cregname(reg):
+    if reg.size == LWORD:
+        if reg.reg == 0x3C: return "XNSP"
+        n = (reg.reg / 4)
+        if n < 0 or n > 7: return "INVALID"
+        return "DMA" + lcrnames[n]
+    elif reg.size == WORD:
+        if reg.reg == 0x3C: return "INTNEST"
+        n = (reg.reg - 0x20) / 4
+        if n < 0 or n > 3: return "INVALID"
+        return "DMA" + wcrnames[n]
+    else:
+        n = (reg.reg - 0x22) / 4
+        if n < 0 or n > 3: return "INVALID"
+        return "DMA" + bcrnames[n]
+        
 operand_size_table = {
     'z' : [0, 1, None],
     'zz' : [0b00, 0b01, 0b10],
