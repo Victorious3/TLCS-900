@@ -238,16 +238,16 @@ bcrnames = ["M0", "M1", "M2", "M3"]
 def cregname(reg):
     if reg.size == LWORD:
         if reg.reg == 0x3C: return "XNSP"
-        n = (reg.reg / 4)
+        n = reg.reg // 4
         if n < 0 or n > 7: return "INVALID"
         return "DMA" + lcrnames[n]
     elif reg.size == WORD:
         if reg.reg == 0x3C: return "INTNEST"
-        n = (reg.reg - 0x20) / 4
+        n = (reg.reg - 0x20) // 4
         if n < 0 or n > 3: return "INVALID"
         return "DMA" + wcrnames[n]
     else:
-        n = (reg.reg - 0x22) / 4
+        n = (reg.reg - 0x22) // 4
         if n < 0 or n > 3: return "INVALID"
         return "DMA" + bcrnames[n]
         
