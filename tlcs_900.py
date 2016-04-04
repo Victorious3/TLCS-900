@@ -41,7 +41,7 @@ class Mem:
         self.address = address
         
     def __str__(self):
-        return "(" + self.name + ")"
+        return "(%s)" % (self.name)
 
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   
@@ -118,9 +118,9 @@ def popmem(insn):
         reg = (mem2 & 0xFE) * 4
         name = regname(Reg(True, LWORD, reg))
         if (mem & 0x1) == 0:
-            return Mem(reg - c, ("-" + name if c == 1 else name + "-" + str(c))) # -r32
+            return Mem(reg - c, ("-" + name if c == 1 else "%s-%s" % (name, str(c)))) # -r32
         else:
-            return Mem(reg + c, name + "+" + (str(c) if c > 1 else "")) # r32+
+            return Mem(reg + c, "%s+%s" % (name, (str(c) if c > 1 else ""))) # r32+
     else:
         n = mem & 0x3
         if n == 0: 
@@ -140,16 +140,16 @@ def popmem(insn):
                 reg = (mem & 0xFE) * 4
                 name = regname(Reg(True, LWORD, reg))
                 offset = insn.popw()
-                return Mem(reg + offset, name + "+" + str(offset)) # r32 + d16
+                return Mem(reg + offset, "%s+%s" % (name, str(offset))) # r32 + d16
             elif mem == 0x3:
                 reg1 = insn.pop() * 4
                 reg2 = insn.pop()
-                name = regname(Reg(True, LWORD, reg1)) + "+" + regname(Reg(True, BYTE, reg2))
+                name = "%s+%s" % (regname(Reg(True, LWORD, reg1)), regname(Reg(True, BYTE, reg2)))
                 return Mem(reg1 + reg2, name) # r32 + r8
             else:
                 reg1 = insn.pop() * 4
                 reg2 = insn.pop() * 2
-                name = regname(Reg(True, LWORD, reg1)) + "+" + regname(Reg(True, WORD, reg2))
+                name = "%s+%s" % (regname(Reg(True, LWORD, reg1)), regname(Reg(True, WORD, reg2)))
                 return Mem(reg1 + reg2, name) # r32 + r16
                 
 rrtable_8 = ["INVALID", "WA", "INVALID", "BC", "INVALID", "DE", "INVALID", "HL"]

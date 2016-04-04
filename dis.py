@@ -74,7 +74,7 @@ if inputfile is None or outputfile is None:
     sys.exit(3)
 
 if not os.path.isfile(inputfile):
-    print("Input file \"" + inputfile + "\" doesn't exist.")
+    print("Input file \"%s\" doesn't exist." % (inputfile))
     sys.exit(4)
     
 import tlcs_900
@@ -83,9 +83,8 @@ with io.open(inputfile, 'rb', buffering = 30) as f:
     insn = Insn(f)
     while f.peek(1) != b'':
         opc = tlcs_900.next_insn(insn, None)
-        asm = opc[0] + " " + (", ".join(map(str, opc[1:])))
-                
-        print(">>> " + asm + "\n")
+        asm = "%s %s" % (opc[0], (", ".join(map(str, opc[1:]))))   
+        print(">>> %s\n" % (asm))
     if insn.eof:
         print("Reached EOF while parsing!")
         print("The last instruction may be corrupted.")
