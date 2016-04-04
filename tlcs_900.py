@@ -4,7 +4,7 @@ WORD = 1
 LWORD = 2
 
 # Class to hold registers
-class Reg(object):
+class Reg:
     def __init__(self, ext, size, reg):
         self.ext = ext
         self.size = size
@@ -46,12 +46,12 @@ class Mem:
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   
     if opc is None:
-        print hex(insn.pc) + ":", hex(x), hex(y), "UNDEFINED"
+        print(hex(insn.pc) + ":", hex(x), hex(y), "UNDEFINED")
         # Pop it off the stack...
         insn.pop()
         return ("UNDEFINED",)
     else:
-        print hex(insn.pc) + ":", hex(x), hex(y), opc.__name__
+        print(hex(insn.pc) + ":", hex(x), hex(y), opc.__name__)
         asm = opc(insn)
         if type(asm) is tuple: 
             return asm
@@ -163,7 +163,7 @@ def rregname(register):
         if size == BYTE:
             return rrtable_8[reg]
         elif size == WORD:
-            print reg
+            print(reg)
             return Rregtable[LWORD][reg]
         else: return str(reg)
     else:

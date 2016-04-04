@@ -233,7 +233,7 @@ def SBC_r_X(insn):
 def SBC_R_mem(insn):
     return "SBC", popR(insn, '?', insn.lastsize), insn.lastmem
 def SBC_mem_R(insn): 
-    return "SBC", insn.lastmem, popR(insn, '?', insn.lastmem)
+    return "SBC", insn.lastmem, popR(insn, '?', insn.lastsize)
 def SBC_mem_X(insn):
     insn.pop()
     return ("SBCW" if insn.lastsize == WORD else "SBC"), insn.lastmem, insn.popn(insn.lastsize)

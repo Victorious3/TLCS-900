@@ -15,7 +15,7 @@ class Insn:
         if len(r) < n: 
             self.eof = True
             return -1
-        return struct.unpack('<B', r[n - 1])[0]
+        return struct.unpack('<B', r[n - 1:n])[0]
     
     def popn(self, n):
         if n == 0: 
@@ -56,25 +56,25 @@ outputfile = None
 try:
     opts, args = getopt.getopt(sys.argv[1:],"hi:o:",["ifile=","ofile="])
 except getopt.GetoptError:
-    print "dis.py -i <inputfile> -o <outputfile>"
+    print("dis.py -i <inputfile> -o <outputfile>")
     sys.exit(2)
 for opt, arg in opts:
     if opt == '-h':
-        print "dis.py -i <inputfile> -o <outputfile>"
+        print("dis.py -i <inputfile> -o <outputfile>")
         sys.exit()
     elif opt in ("-i", "--ifile"):
         inputfile = arg
     elif opt in ("-o", "--ofile"):
         outputfile = arg
     else:
-        print "dis.py -i <inputfile> -o <outputfile>"
+        print("dis.py -i <inputfile> -o <outputfile>")
         sys.exit(3)
 if inputfile is None or outputfile is None:
-    print "dis.py -i <inputfile> -o <outputfile>"
+    print("dis.py -i <inputfile> -o <outputfile>")
     sys.exit(3)
 
 if not os.path.isfile(inputfile):
-    print "Input file \"" + inputfile + "\" doesn't exist."
+    print("Input file \"" + inputfile + "\" doesn't exist.")
     sys.exit(4)
     
 import tlcs_900
@@ -85,8 +85,8 @@ with io.open(inputfile, 'rb', buffering = 30) as f:
         opc = tlcs_900.next_insn(insn, None)
         asm = opc[0] + " " + (", ".join(map(str, opc[1:])))
                 
-        print ">>> " + asm + "\n"
+        print(">>> " + asm + "\n")
     if insn.eof:
-        print "Reached EOF while parsing!"
-        print "The last instruction may be corrupted."
+        print("Reached EOF while parsing!")
+        print("The last instruction may be corrupted.")
         
