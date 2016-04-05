@@ -83,21 +83,16 @@ def PUSH_mem(insn):
 def POP_F(insn):
     insn.pop()
     return "POP", "F"
-    
 def POP_A(insn):
     insn.pop()
     return "POP", "A"
-
 def POP_RR(insn): 
     return "POP", popR(insn, '?', WORD)
-
 def POP_XRR(insn): 
     return "POP", popR(insn, '?', LWORD)
-
 def POP_r(insn):
     insn.pop() 
     return "POP", insn.lastr
-
 def POPB_mem(insn):
     insn.pop() 
     return "POP", insn.lastmem 
@@ -750,17 +745,25 @@ def RRD(insn):
 #JP
 def JP_nn(insn): 
     insn.pop()
-    return "JP", insn.popw()
+    to = insn.popw()
+    insn.branch(to)
+    
+    return "JP", to
 def JP_nnn(insn):
     insn.pop()
-    return "JP", (insn.popw() | (insn.pop() << 16))
+    to = (insn.popw() | (insn.pop() << 16))
+    insn.branch(to)
+    
+    return "JP", to
 def JP_cc_mem(insn):
-    return "JP", popcc(insn), insn.lastmem
+    cc = cctable[popcc(insn)]
+    return "JP", cc, insn.lastmem
     
 def JR_cc(insn): 
     pc = insn.pc
     cc = cctable[popcc(insn)]
     loc = insn.pop()
+    if cc != "F": insn.branch(loc, cc != "T")
     
     return "JR", cc, (pc + 2 + loc)
 
@@ -768,40 +771,51 @@ def JRL_cc(insn):
     pc = insn.pc
     cc = cctable[popcc(insn)]
     loc = insn.popw()
+    if cc != "F": insn.branch(loc, cc != "T")
     
     return "JRL", cc, (pc + 3 + loc)
-def JP_mem(insn): return
     
 #CALL
 def CALL_nn(insn):
     insn.pop()
-    return "CALL", insn.popw()
+    to = insn.popw()
+    insn.branch(to, True)
+    return "CALL", to
 def CALL_nnn(insn):
     insn.pop()
-    return "CALL", (insn.popw() | (insn.pop() << 16))
+    to = (insn.popw() | (insn.pop() << 16))
+    insn.branch(to, True)
+    return "CALL", to
 def CALL_cc_mem(insn): 
     return "CALL", popcc(insn), insn.lastmem
 def CALR(insn): 
     insn.pop()
-    return "CALR", insn.pc + 3 + insn.popw()
-def CALL(insn): return
+    to = insn.pc + 3 + insn.popw()
+    insn.branch(to, True)
+    return "CALR", to
 
 #DJNZ
 def DJNZ(insn): 
     insn.pop()
-    pc = insn.pc
-    loc = insn.pop()
+    loc = insn.pc + 3 + insn.pop()
+    insn.branch(loc, True)
     
-    return "DJNZ", insn.lastr, (pc + 3 + loc)
+    return "DJNZ", insn.lastr, loc
 
 #RET
-def RET(insn): insn.pop(); return "RET"
+def RET(insn): 
+    insn.pop()
+    insn.kill()
+    return "RET"
 def RET_cc(insn):
     insn.pop()
+    insn.kill()
     return "RET", popcc(insn)
 def RETD(insn): 
     insn.pop()
+    insn.kill()
     return "RETD", insn.popw()
 def RETI(insn): 
     insn.pop()
+    insn.kill()
     return "RETI"

@@ -46,12 +46,12 @@ class Mem:
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   
     if opc is None:
-        print(hex(insn.pc) + ":", hex(x), hex(y), "UNDEFINED")
+        #print(hex(insn.pc) + ":", hex(x), hex(y), "UNDEFINED")
         # Pop it off the stack...
         insn.pop()
         return ("UNDEFINED",)
     else:
-        print(hex(insn.pc) + ":", hex(x), hex(y), opc.__name__)
+        #print(hex(insn.pc) + ":", hex(x), hex(y), opc.__name__)
         asm = opc(insn)
         if type(asm) is tuple: 
             return asm
@@ -91,7 +91,7 @@ def reg(insn):
     x, y = peekopc(insn)
     return call_opc(insn, x, y, optable_reg)
     
-def next_insn(insn, out):
+def next_insn(insn):
     x, y = peekopc(insn)
     return call_opc(insn, x, y, optable)
     
@@ -163,7 +163,6 @@ def rregname(register):
         if size == BYTE:
             return rrtable_8[reg]
         elif size == WORD:
-            print(reg)
             return Rregtable[LWORD][reg]
         else: return str(reg)
     else:
