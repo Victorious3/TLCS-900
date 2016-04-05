@@ -762,18 +762,18 @@ def JP_cc_mem(insn):
 def JR_cc(insn): 
     pc = insn.pc
     cc = cctable[popcc(insn)]
-    loc = insn.pop()
+    loc = pc + insn.pop() + 2
     if cc != "F": insn.branch(loc, cc != "T")
     
-    return "JR", cc, (pc + 2 + loc)
+    return "JR", cc, loc
 
 def JRL_cc(insn): 
     pc = insn.pc
     cc = cctable[popcc(insn)]
-    loc = insn.popw()
+    loc = pc + insn.popw() + 3
     if cc != "F": insn.branch(loc, cc != "T")
     
-    return "JRL", cc, (pc + 3 + loc)
+    return "JRL", cc, loc
     
 #CALL
 def CALL_nn(insn):
