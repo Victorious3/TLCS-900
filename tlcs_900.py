@@ -291,7 +291,10 @@ def popR(insn, tpe, size = -1, spos = -1):
             opsizecode = (b & smask) >> (8 - spos - 3)
         elif tpe != '?': raise ValueError("Type must be one of s/z/zz/zzz/?")
         
-        size = operand_size_table[tpe].index(opsizecode)
+        try:
+            size = operand_size_table[tpe].index(opsizecode)
+        except ValueError:
+            return "INVALID"
         
     return Reg(False, size, rcode)
 
