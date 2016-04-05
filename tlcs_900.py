@@ -298,7 +298,7 @@ def popR(insn, tpe, size = -1, spos = -1):
         
     return Reg(False, size, rcode)
 
-def peekopc(insn, n = 1):
+def peekopc(insn, n = 0):
     opcode = insn.peek(n)
     x = (opcode & 0xF0) >> 4
     y = (opcode & 0x0F)

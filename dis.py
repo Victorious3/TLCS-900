@@ -1,37 +1,68 @@
-import sys, getopt, os, io, struct
+import sys, getopt, os, io, struct, math, threading, time
 
-BUFFER_SIZE = 1048576
-
-class Insn:
+class InputBuffer():
     def __init__(self, data, available):
-        self.data = data
-        self.pc = 0
+        self.buffer = bytearray(available)
+        # Stores which bytes have already been read
+        self.access = bytearray(math.ceil(available / 8))
+        data.readinto(self.buffer)
+    
+    def byte(self, insn, n = 0, peek = False):
+        o = insn.pc + n
+        if o >= len(self.buffer):
+            insn.kill()
+            return -1
+        if ((self.access[o // 8] >> o % 8) & 0x1 == 0):
+            return struct.unpack('<B', self.buffer[o:o + 1])[0]
+        else:
+            insn.kill()
+            return -1
+    
+    def word(self, insn, n = 0, peek = False):
+        b1 = self.byte(insn, n)
+        b2 = self.byte(insn, n + 1)
+        return b1 | b2 >> 8
+        
+    def lword(self, insn, n = 0, peek = False):
+        w1 = self.word(insn, n)
+        w2 = self.word(insn, n + 2)
+        return w1 | w2 >> 16
+    
+    # Not really needed but perhaps at one point this will turn into a framework
+    def qword(self, insn, n = 0, peek = False): 
+        l1 = self.lword(insn, n)
+        l2 = self.lword(insn, n + 4)
+        return l1 | l2 >> 32
+
+class Insn(threading.Thread):
+    def __init__(self, ibuffer, obuffer, pc = 0):
+        threading.Thread.__init__(self)
+        self.daemon = True # We want them to die if somebody force quits the program
+        
+        self.pc = pc
+        self.ibuffer = ibuffer
+        self.obuffer = obuffer
+        
         self.lastinsn = 0 # Last instruction, this is only set if necessary
         self.lastsize = 0
         self.lastr = "INVALID"
         self.lastmem = "INVALID"
-        self.offset = 0
-        self.buffer = bytearray(BUFFER_SIZE) # Bytearray for buffering, reads 1MB at a time
-        self.available = available
-        self.eof = False # Saves if the EOF was reached while parsing
-                
-        data.readinto(self.buffer)
-    
-    # Reads the next section into the buffer, resets offset to 0
-    def __next(self):
-        self.data.readinto(self.buffer)
-        self.offset = 0
-    
-    def peek(self, n = 1):
-        o = self.offset + n
-        if o > len(self.buffer):
-            self.__next()
-            o = self.offset + n
-        if self.available < n:
-            self.eof = True
-            return -1
         
-        return struct.unpack('<B', self.buffer[o - 1:o])[0]
+        # Flag to kill of the thead and let the obuffer refuse input
+        self.dead = False 
+        
+    def run(self):
+        while not self.dead:
+            opc = tlcs_900.next_insn(insn, None)
+            asm = opc[0] + " " + (", ".join(map(str, opc[1:])))
+                    
+            print(">>> " + asm + "\n")
+
+    def kill(self):
+        self.dead = True
+    
+    def peek(self, n = 0):
+        return self.ibuffer.byte(self, n)
     
     def popn(self, n):
         if n == 0: 
@@ -42,21 +73,21 @@ class Insn:
             return self.popl()
     
     def pop(self):
-        b = self.peek()
+        b = self.ibuffer.byte(self)
         self.pc += 1
-        self.offset += 1
-        self.available -= 1
         return b
-
     def popw(self):
-        b1 = self.pop()
-        b2 = self.pop()
-        return b1 | b2 >> 8
-
+        w = self.ibuffer.word(self)
+        self.pc += 2
+        return w
     def popl(self):
-        w1 = self.popw()
-        w2 = self.popw()
-        return w1 | w2 >> 16     
+        l = self.ibuffer.lword(self)
+        self.pc += 4
+        return l
+    def popq(self):
+        q = self.ibuffer.qword(self)
+        self.pc += 4
+        return q
         
 inputfile = None
 outputfile = None
@@ -87,14 +118,13 @@ if not os.path.isfile(inputfile):
     
 import tlcs_900
 
-with io.open(inputfile, 'rb') as f:
-    insn = Insn(f, os.path.getsize(inputfile))
-    while insn.available > 0:
-        opc = tlcs_900.next_insn(insn, None)
-        asm = opc[0] + " " + (", ".join(map(str, opc[1:])))
-                
-        print(">>> " + asm + "\n")
-    if insn.eof:
-        print("Reached EOF while parsing!")
-        print("The last instruction may be corrupted.")
-        
+try:
+    with io.open(inputfile, 'rb') as f:
+        ib = InputBuffer(f, os.path.getsize(inputfile))
+        insn = Insn(ib, None)
+        insn.start()
+    while threading.active_count() > 1: # Wait for all threads to die
+        time.sleep(0.1)
+    print("Done!")
+except KeyboardInterrupt:
+    print("\n! Received keyboard interrupt, quitting threads.\n")
