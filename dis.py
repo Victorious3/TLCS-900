@@ -9,7 +9,7 @@ silent = False
 bounds = []
 
 def print_help():
-    print("dis.py -i <inputfile> -o <outputfile> [-s][-r <from>[-<to>]]")
+    print("dis.py -i <inputfile> -o <outputfile> [-s][-r <from>[:<to>]]")
     sys.exit(2)
 
 try:
@@ -24,7 +24,7 @@ for opt, arg in opts:
         silent = True
     elif opt == "-r":
         try:
-            bounds = list(map(int, arg.split("-")))
+            bounds = list(map(int, arg.split(":")))
         except Exception:
             print_help()
         if len(bounds) > 2:
@@ -98,6 +98,7 @@ class InputBuffer:
         data.readinto(self.buffer)
         
     def was_read(self, o):
+        if o >= len(self.buffer): return True
         o1 = o // 8
         o2 = o % 8
         return (self.access[o1] >> o2) & 0x1 == 0x1
