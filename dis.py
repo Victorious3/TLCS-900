@@ -1,6 +1,16 @@
-import sys, getopt, os, subprocess, io, struct, math, time, shutil, concurrent.futures
+import getopt
+import io
+import math
+import os
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import multiprocessing
+
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from queue import Queue
 
 import tlcs_900 as proc
 
@@ -14,7 +24,7 @@ def print_help():
     sys.exit(2)
 
 try:
-    opts, args = getopt.gnu_getopt(sys.argv[0:],"hsr:i:o:",["ifile=","ofile="])
+    opts, args = getopt.gnu_getopt(sys.argv,"hsr:i:o:",["ifile=","ofile="])
 except getopt.GetoptError:
     print_help()
 for opt, arg in opts:
@@ -83,14 +93,15 @@ class OutputBuffer:
         self.branchlist.append(Branch(ep, to, conditional))
     
 class InputBuffer:
-    def __init__(self, data, available, bounds = []):
-        if len(bounds) > 0:
-            mn = bounds[0]
-            if mn > 0:
-                available = available - mn
-                data.read(mn) # Skip bytes
-        if len(bounds) > 1:
-            available = bounds[1] - bounds[0]
+    def __init__(self, data, available, bounds = None):
+        if bounds is not None:
+            if len(bounds) > 0:
+                mn = bounds[0]
+                if mn > 0:
+                    available = available - mn
+                    data.read(mn) # Skip bytes
+            if len(bounds) > 1:
+                available = bounds[1] - bounds[0]
                 
         self.buffer = bytearray(available)
         # Stores which bytes have already been read
@@ -110,45 +121,55 @@ class InputBuffer:
             return -1
         o1 = o // 8
         o2 = o % 8
-        if ((self.access[o1] >> o2) & 0x1 == 0):
-            if not peek: self.access[o1] = 0x1 << o2 
+        if (self.access[o1] >> o2) & 0x1 == 0:
+            if not peek:
+                self.access[o1] |= (0x1 << o2)
             return self.buffer[o]
         insn.kill()
         return -1
     
     def word(self, insn, n = 0, peek = False):
-        b1 = self.byte(insn, n)
-        b2 = self.byte(insn, n + 1)
+        b1 = self.byte(insn, n, peek)
+        b2 = self.byte(insn, n + 1, peek)
         return b1 | b2 >> 8
         
     def lword(self, insn, n = 0, peek = False):
-        w1 = self.word(insn, n)
-        w2 = self.word(insn, n + 2)
+        w1 = self.word(insn, n, peek)
+        w2 = self.word(insn, n + 2, peek)
         return w1 | w2 >> 16
     
     # Not really needed but perhaps at one point this will turn into a framework
     def qword(self, insn, n = 0, peek = False): 
-        l1 = self.lword(insn, n)
-        l2 = self.lword(insn, n + 4)
+        l1 = self.lword(insn, n, peek)
+        l2 = self.lword(insn, n + 4, peek)
         return l1 | l2 >> 32
 
 class InsnExecutor:
-    def __init__(self, max_workers):
-        self.executor = ThreadPoolExecutor(max_workers)
-        self.taskCounter = 0
+    def __init__(self, max_threads = None):
+        self.numThreads = 0
+        if max_threads is None:
+            max_threads = multiprocessing.cpu_count() * 5
+        self.max_threads = max_threads
+        self.queue = Queue()
 
-    def execute(self, insn):
-        future = self.executor.submit(insn.run)
-        future.add_done_callback(self.is_done)
-        self.taskCounter += 1
+    def query(self, insn):
+        self.queue.put(insn)
 
-    def is_done(self, result):
-        self.taskCounter -= 1
+    def done(self):
+        self.numThreads -= 1
 
-class Insn:
+    def poll(self):
+        while self.numThreads < self.max_threads and not self.queue.empty():
+            insn = self.queue.get_nowait()
+            insn.start()
+            self.numThreads += 1
+
+class Insn(threading.Thread):
     tasks = 0
 
-    def __init__(self, max_workers, ibuffer, obuffer, pc = 0):
+    def __init__(self, executor, ibuffer, obuffer, pc = 0):
+        threading.Thread.__init__(self, daemon = True)
+
         self.pc = pc
         self.ep = pc # Entry point
         self.executor = executor
@@ -171,6 +192,7 @@ class Insn:
             opc = proc.next_insn(self)
             self.instructions.append(opc)
         self.obuffer.insert(self.ep, self.instructions)
+        self.executor.done()
 
     def kill(self):
         self.dead = True
@@ -210,20 +232,24 @@ class Insn:
         # We don't need this one anymore if we know that we have to branch
         if not conditional: self.kill()
         if not self.ibuffer.was_read(to):
-            self.executor.execute(Insn(self.executor, self.ibuffer, self.obuffer, to))
+            self.executor.query(Insn(self.executor, self.ibuffer, self.obuffer, to))
 
 try:
     start = time.time()
     with io.open(inputfile, 'rb') as f:
         ib = InputBuffer(f, os.path.getsize(inputfile), bounds)
         ob = OutputBuffer(outputfile)
-        executor = InsnExecutor(6)
+        executor = InsnExecutor()
         insn = Insn(executor, ib, ob)
-        executor.execute(insn)
 
-    while executor.taskCounter > 0:  # Wait for all threads to die
-       time.sleep(0.1)
-    print("Done in " + str(round(time.time() - start, 3)) + " seconds.")
+    executor.query(insn)
+    executor.poll()
+
+    while executor.numThreads > 0:  # Wait for all threads to process
+        time.sleep(0.1)
+        executor.poll()
+
+    end = round(time.time() - start, 3)
     if not silent:
         print("Result: ")
         print("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
@@ -235,5 +261,6 @@ try:
             for i in range(0, len(v)):
                 v2 = v[i]
                 print("\t\t" + str(i + k) + ": " + v2[0] + " " + ", ".join(map(str, v2[1:])))
+        print("Done in " + str(end) + " seconds.")
 except KeyboardInterrupt:
     print("\n! Received keyboard interrupt, quitting threads.\n")

@@ -61,7 +61,7 @@ def call_opc(insn, x, y, optable):
 
 def src(insn):
     x, y = peekopc(insn)    
-    if (x >= 0xC): 
+    if x >= 0xC:
         insn.lastsize = x - 0xC
     else:
         insn.lastsize = x - 0x8
@@ -201,7 +201,7 @@ def regname(register):
         elif size == LWORD:
             rname += lnames[(reg & 0b1100) >> 2]
         rname += str((reg & 0xF0) >> 4)
-    elif reg >= 0xD0 and reg <= 0xEF:
+    elif 0xD0 <= reg <= 0xEF:
         if size == BYTE:
             if (reg & 0b0010) != 0: rname += "Q"
             rname += bnames[((reg & 0b1100) >> 1) | (reg & 1)]
@@ -214,7 +214,7 @@ def regname(register):
             rname += "'"
         elif reg <= 0xE0:
             return str(reg)
-    elif reg >= 0xF0 and reg <= 0xFF:
+    elif 0xF0 <= reg <= 0xFF:
         if size == BYTE:
             if (reg & 0b0010) != 0: rname += "Q"
         elif size == LWORD:

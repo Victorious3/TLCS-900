@@ -155,11 +155,11 @@ def LDDR(insn):
 #CPXX
 def CPI(insn): 
     insn.pop()
-    return "CPI", ("A" if insn.lastsize == WORD else "WA"), "(" + regname(insn.lastr) + "+)"
+    return "CPI", ("A" if insn.lastsize == WORD else "WA"), "(" + str(insn.lastr) + "+)"
     
 def CPIR(insn):
     insn.pop()
-    return "CPIR", ("A" if insn.lastsize == WORD else "WA"), "(" + regname(insn.lastr) + "+)"
+    return "CPIR", ("A" if insn.lastsize == WORD else "WA"), "(" + str(insn.lastr) + "+)"
 
 def CPD(insn): 
     insn.pop()
