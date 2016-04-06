@@ -13,15 +13,10 @@ def print_help():
     print("dis.py -i <inputfile> -o <outputfile> [-s][-r <from>[:<to>]]")
     sys.exit(2)
 
-print(sys.argv)
 try:
     opts, args = getopt.gnu_getopt(sys.argv[0:],"hsr:i:o:",["ifile=","ofile="])
 except getopt.GetoptError:
-    try:
-        opts, args = getopt.gnu_getopt(sys.argv[10:], "hsr:i:o:", ["ifile=", "ofile="])
-        #pycharm inserts more commandline options in the beginning that break it, so we skip them
-    except getopt.GetoptError:
-        print_help()
+    print_help()
 for opt, arg in opts:
     if opt == "-h":
         print_help()
