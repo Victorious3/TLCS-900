@@ -1,5 +1,6 @@
-import sys, getopt, os, subprocess, io, struct, math, threading, time, shutil
+import sys, getopt, os, subprocess, io, struct, math, time, shutil, concurrent.futures
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 
 import tlcs_900 as proc
 
@@ -13,7 +14,7 @@ def print_help():
     sys.exit(2)
 
 try:
-    opts, args = getopt.gnu_getopt(sys.argv[1:],"hsr:i:o:",["ifile=","ofile="])
+    opts, args = getopt.gnu_getopt(sys.argv[0:],"hsr:i:o:",["ifile=","ofile="])
 except getopt.GetoptError:
     print_help()
 for opt, arg in opts:
@@ -63,7 +64,6 @@ class Branch:
         self.ep = ep;
         self.to = to;
         self.conditional = conditional
-        
     def __str__(self):
         ret = str(self.ep) + " -> " + str(self.to)
         if self.conditional:
@@ -132,13 +132,26 @@ class InputBuffer:
         l2 = self.lword(insn, n + 4)
         return l1 | l2 >> 32
 
-class Insn(threading.Thread):
-    def __init__(self, ibuffer, obuffer, pc = 0):
-        threading.Thread.__init__(self)
-        self.daemon = True # We want them to die if somebody force quits the program
-        
+class InsnExecutor:
+    def __init__(self, max_workers):
+        self.executor = ThreadPoolExecutor(max_workers)
+        self.taskCounter = 0
+
+    def execute(self, insn):
+        future = self.executor.submit(insn.run)
+        future.add_done_callback(self.is_done)
+        self.taskCounter += 1
+
+    def is_done(self, result):
+        self.taskCounter -= 1
+
+class Insn:
+    tasks = 0
+
+    def __init__(self, max_workers, ibuffer, obuffer, pc = 0):
         self.pc = pc
         self.ep = pc # Entry point
+        self.executor = executor
         self.ibuffer = ibuffer
         self.obuffer = obuffer
         
@@ -197,17 +210,19 @@ class Insn(threading.Thread):
         # We don't need this one anymore if we know that we have to branch
         if not conditional: self.kill()
         if not self.ibuffer.was_read(to):
-            Insn(self.ibuffer, self.obuffer, to).start()
-    
+            self.executor.execute(Insn(self.executor, self.ibuffer, self.obuffer, to))
+
 try:
     start = time.time()
     with io.open(inputfile, 'rb') as f:
         ib = InputBuffer(f, os.path.getsize(inputfile), bounds)
         ob = OutputBuffer(outputfile)
-        insn = Insn(ib, ob)
-        insn.start()
-    while threading.active_count() > 1: # Wait for all threads to die
-        time.sleep(0.1)
+        executor = InsnExecutor(6)
+        insn = Insn(executor, ib, ob)
+        executor.execute(insn)
+
+    while executor.taskCounter > 0:  # Wait for all threads to die
+       time.sleep(0.1)
     print("Done in " + str(round(time.time() - start, 3)) + " seconds.")
     if not silent:
         print("Result: ")
