@@ -27,6 +27,7 @@ try:
     opts, args = getopt.gnu_getopt(sys.argv,"hsr:i:o:",["ifile=","ofile="])
 except getopt.GetoptError:
     print_help()
+
 for opt, arg in opts:
     if opt == "-h":
         print_help()
@@ -87,7 +88,8 @@ class OutputBuffer:
         self.ofile = ofile
         
     def insert(self, ep, list):
-        self.insnmap[ep] = list
+        if len(list) > 0:
+            self.insnmap[ep] = list
         
     def branch(self, ep, to, conditional = False):
         self.branchlist.append(Branch(ep, to, conditional))
@@ -164,9 +166,20 @@ class InsnExecutor:
             insn.start()
             self.numThreads += 1
 
-class Insn(threading.Thread):
-    tasks = 0
+class InsnEntry:
+    def __init__(self, pc, length, opcode, instructions):
+        self.pc = pc
+        self.length = length
+        self.opcode = opcode
+        self.instructions = instructions
 
+    def __str__(self):
+        return self.opcode + " " + ", ".join(map(str, self.instructions))
+
+    def bytes(self, ibuffer):
+        return ibuffer.buffer[self.pc:self.pc + self.length]
+
+class Insn(threading.Thread):
     def __init__(self, executor, ibuffer, obuffer, pc = 0):
         threading.Thread.__init__(self, daemon = True)
 
@@ -189,8 +202,9 @@ class Insn(threading.Thread):
         
     def run(self):
         while not self.dead:
+            pc = self.pc
             opc = proc.next_insn(self)
-            self.instructions.append(opc)
+            self.instructions.append(InsnEntry(pc, self.pc - pc, opc[0], opc[1:]))
         self.obuffer.insert(self.ep, self.instructions)
         self.executor.done()
 
@@ -235,9 +249,10 @@ class Insn(threading.Thread):
             self.executor.query(Insn(self.executor, self.ibuffer, self.obuffer, to))
 
 try:
+    file_len = os.path.getsize(inputfile)
     start = time.time()
     with io.open(inputfile, 'rb') as f:
-        ib = InputBuffer(f, os.path.getsize(inputfile), bounds)
+        ib = InputBuffer(f, file_len, bounds)
         ob = OutputBuffer(outputfile)
         executor = InsnExecutor()
         insn = Insn(executor, ib, ob)
@@ -250,17 +265,26 @@ try:
         executor.poll()
 
     end = round(time.time() - start, 3)
-    if not silent:
-        print("Result: ")
-        print("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
-        print("Branches: ")
-        print("\n".join(map(str, ob.branchlist)))
-        print("Instructions: ")
-        for (k, v) in ob.insnmap.items():
-            print("\tSection at " + str(k) + ": ")
+
+    with io.open(outputfile, 'w') as f:
+
+        def output(*args):
+            print(*args)
+            f.write(" ".join(args) + "\n")
+
+        output("Result: ")
+        output("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
+        output("Branches: ")
+        output("\n".join(map(str, ob.branchlist)))
+        output("Instructions: ")
+
+        padding = len(str(file_len))
+        for k, v in sorted(ob.insnmap.items()):
+            output("\tSection at " + str(k) + ": ")
             for i in range(0, len(v)):
                 v2 = v[i]
-                print("\t\t" + str(i + k) + ": " + v2[0] + " " + ", ".join(map(str, v2[1:])))
-        print("Done in " + str(end) + " seconds.")
+                output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0<2X") for i in v2.bytes(ib)]).ljust(14) + " | " + str(v2))
+        output("Done in " + str(end) + " seconds.")
+
 except KeyboardInterrupt:
     print("\n! Received keyboard interrupt, quitting threads.\n")
