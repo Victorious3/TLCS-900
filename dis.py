@@ -304,11 +304,31 @@ try:
         output("Instructions: ")
 
         padding = len(str(file_len))
+
+        last = ENTRY_POINT
         for k, v in sorted(ob.insnmap.items()):
+            nxt = v[0].pc
+            diff = nxt - last
+
+            # Fill with db statements
+            if diff > 1:
+                output("\tData Section at " + str(last) + ": ")
+                while diff > 0:
+                    i = nxt - diff
+                    i2 = min(i + 5, nxt)
+                    b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
+                    dstr = " ".join([format(i, "0>2X") for i in b])
+                    decoded = b.decode("ascii", "ignore").replace("\n", "").replace("\r", "")
+                    output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | db \"" + decoded + "\"")
+                    diff -= 5
+
             output("\tSection at " + str(k) + ": ")
+
             for i in range(0, len(v)):
                 v2 = v[i]
                 output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(14) + " | " + str(v2))
+            last = v2.pc + v2.length
+
         output("Done in " + str(end) + " seconds.")
 
 except KeyboardInterrupt:
