@@ -60,7 +60,7 @@ def call_opc(insn, x, y, optable):
         else: return (asm,)
 
 def src(insn):
-    x, y = peekopc(insn)    
+    x, y = peekopc(insn)
     if x >= 0xC:
         insn.lastsize = x - 0xC
     else:

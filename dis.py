@@ -19,12 +19,15 @@ outputfile = None
 silent = False
 bounds = []
 
+# Equivalent to the .org instruction
+ENTRY_POINT = 0
+
 def print_help():
-    print("dis.py -i <inputfile> -o <outputfile> [-s][-r <from>[:<to>]]")
+    print("dis.py -i <inputfile> -o <outputfile> [-s][-r <from>[:<to>]][-e <entry>]")
     sys.exit(2)
 
 try:
-    opts, args = getopt.gnu_getopt(sys.argv,"hsr:i:o:",["ifile=","ofile="])
+    opts, args = getopt.gnu_getopt(sys.argv,"hsr:i:o:e:",["ifile=","ofile="])
 except getopt.GetoptError:
     print_help()
 
@@ -34,6 +37,8 @@ for opt, arg in opts:
         sys.exit()
     elif opt == "-s":
         silent = True
+    elif opt == "-e":
+        ENTRY_POINT = int(arg, 0)
     elif opt == "-r":
         try:
             bounds = list(map(int, arg.split(":")))
@@ -72,8 +77,8 @@ else:
 
 class Branch:
     def __init__(self, ep, to, conditional):
-        self.ep = ep;
-        self.to = to;
+        self.ep = ep
+        self.to = to
         self.conditional = conditional
     def __str__(self):
         ret = str(self.ep) + " -> " + str(self.to)
@@ -111,6 +116,8 @@ class InputBuffer:
         data.readinto(self.buffer)
         
     def was_read(self, o):
+        o -= ENTRY_POINT
+
         if o >= len(self.buffer): return True
         o1 = o // 8
         o2 = o % 8
@@ -118,8 +125,10 @@ class InputBuffer:
     
     def byte(self, insn, n = 0, peek = False):
         o = insn.pc + n
+        o -= ENTRY_POINT
+
         if o >= len(self.buffer):
-            insn.kill()
+            insn.kill(True)
             return -1
         o1 = o // 8
         o2 = o % 8
@@ -127,24 +136,24 @@ class InputBuffer:
             if not peek:
                 self.access[o1] |= (0x1 << o2)
             return self.buffer[o]
-        insn.kill()
+        insn.kill(True)
         return -1
     
     def word(self, insn, n = 0, peek = False):
         b1 = self.byte(insn, n, peek)
         b2 = self.byte(insn, n + 1, peek)
-        return b1 | b2 >> 8
+        return b1 | (b2 << 8)
         
     def lword(self, insn, n = 0, peek = False):
         w1 = self.word(insn, n, peek)
         w2 = self.word(insn, n + 2, peek)
-        return w1 | w2 >> 16
+        return w1 | (w2 << 16)
     
     # Not really needed but perhaps at one point this will turn into a framework
     def qword(self, insn, n = 0, peek = False): 
         l1 = self.lword(insn, n, peek)
         l2 = self.lword(insn, n + 4, peek)
-        return l1 | l2 >> 32
+        return l1 | (l2 << 32)
 
 class InsnExecutor:
     def __init__(self, max_threads = None):
@@ -161,8 +170,17 @@ class InsnExecutor:
         self.numThreads -= 1
 
     def poll(self):
+        # Batch processing, we only start a new batch when the old
+        # one has finished. It is only possible to jump to a location once.
+        locations = set()
+        if self.numThreads != 0: return
         while self.numThreads < self.max_threads and not self.queue.empty():
             insn = self.queue.get_nowait()
+            if insn.pc in locations:
+                continue
+            else:
+                locations.add(insn.pc)
+
             insn.start()
             self.numThreads += 1
 
@@ -177,7 +195,7 @@ class InsnEntry:
         return self.opcode + " " + ", ".join(map(str, self.instructions))
 
     def bytes(self, ibuffer):
-        return ibuffer.buffer[self.pc:self.pc + self.length]
+        return ibuffer.buffer[self.pc - ENTRY_POINT:self.pc + self.length - ENTRY_POINT]
 
 class Insn(threading.Thread):
     def __init__(self, executor, ibuffer, obuffer, pc = 0):
@@ -195,21 +213,28 @@ class Insn(threading.Thread):
         self.lastmem = "INVALID"
         
         # List of processed instructions to instert at the entry point
-        self.instructions = deque()
+        self.__instructions = deque()
         
         # Flag to kill of the thead
-        self.dead = False
+        self.__dead = False
+        # Flag to check if the last byte should be written.
+        # This is used if the Insn runs into an already processed segment,
+        # In this case the last byte is -1 and should not be written.
+        self.__nowrite = False
         
     def run(self):
-        while not self.dead:
+        while not self.__dead:
             pc = self.pc
             opc = proc.next_insn(self)
-            self.instructions.append(InsnEntry(pc, self.pc - pc, opc[0], opc[1:]))
-        self.obuffer.insert(self.ep, self.instructions)
+            self.__instructions.append(InsnEntry(pc, self.pc - pc, opc[0], opc[1:]))
+        if self.__nowrite:
+            self.__instructions.pop()
+        self.obuffer.insert(self.ep, self.__instructions)
         self.executor.done()
 
-    def kill(self):
-        self.dead = True
+    def kill(self, nowrite = False):
+        self.__dead = True
+        self.__nowrite = nowrite
     
     def peek(self, n = 0):
         return self.ibuffer.byte(self, n, True)
@@ -255,12 +280,12 @@ try:
         ib = InputBuffer(f, file_len, bounds)
         ob = OutputBuffer(outputfile)
         executor = InsnExecutor()
-        insn = Insn(executor, ib, ob)
+        insn = Insn(executor, ib, ob, ENTRY_POINT)
 
     executor.query(insn)
     executor.poll()
 
-    while executor.numThreads > 0:  # Wait for all threads to process
+    while executor.numThreads > 0 and not executor.queue.empty():  # Wait for all threads to process
         time.sleep(0.1)
         executor.poll()
 
@@ -283,7 +308,7 @@ try:
             output("\tSection at " + str(k) + ": ")
             for i in range(0, len(v)):
                 v2 = v[i]
-                output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0<2X") for i in v2.bytes(ib)]).ljust(14) + " | " + str(v2))
+                output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(14) + " | " + str(v2))
         output("Done in " + str(end) + " seconds.")
 
 except KeyboardInterrupt:
