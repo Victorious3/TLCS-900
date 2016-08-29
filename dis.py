@@ -1,3 +1,4 @@
+from __future__ import print_function
 import getopt
 import io
 import math
