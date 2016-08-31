@@ -109,7 +109,8 @@ def popmem(insn):
             return Mem(0xE0 + 4 * reg, name)
         else:
             # XWA to XSP + d8
-            return Mem(0xE0 + 4 * reg + insn.pop(), name)
+            d = insn.pop()
+            return Mem(0xE0 + 4 * reg + d, "%s+%s" % (name, str(d)))
     elif (mem & 0x4) == 0x4:
         
         mem2 = insn.pop()
