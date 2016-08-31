@@ -8,26 +8,33 @@ import sys
 import threading
 import time
 import multiprocessing
+import codecs
 
 from collections import deque
 from queue import Queue
 
 import tlcs_900 as proc
 
-inputfile = None
-outputfile = None
-silent = False
-bounds = []
+# Command line arguments
+INPUTFILE   = None
+OUTPUTFILE  = None
+SILENT      = False
+BOUNDS      = []
 
 # Equivalent to the .org instruction
 ENTRY_POINT = 0
+ENCODING    = "ascii"
 
 def print_help():
     print("dis.py -i <inputfile> -o <outputfile> [-s][-r <from>[:<to>]][-e <entry>]")
     sys.exit(2)
 
 try:
-    opts, args = getopt.gnu_getopt(sys.argv,"hsr:i:o:e:",["ifile=","ofile="])
+    opts, args = getopt.gnu_getopt(
+        args = sys.argv,
+        shortopts = "hsr:i:o:e:",
+        longopts = ["ifile=","ofile=", "encoding", "range", "silent", "entry"])
+
 except getopt.GetoptError:
     print_help()
 
@@ -35,33 +42,40 @@ for opt, arg in opts:
     if opt == "-h":
         print_help()
         sys.exit()
-    elif opt == "-s":
-        silent = True
-    elif opt == "-e":
+    elif opt in ("-s", "--silent"):
+        SILENT = True
+    elif opt in ("-e", "--entry"):
         ENTRY_POINT = int(arg, 0)
-    elif opt == "-r":
+    elif opt in ("-r", "--range"):
         try:
-            bounds = list(map(int, arg.split(":")))
+            BOUNDS = list(map(int, arg.split(":")))
         except Exception:
             print_help()
-        if len(bounds) > 2:
+        if len(BOUNDS) > 2:
             print_help()
     elif opt in ("-i", "--ifile"):
-        inputfile = arg
+        INPUTFILE = arg
     elif opt in ("-o", "--ofile"):
-        outputfile = arg
+        OUTPUTFILE = arg
+    elif opt == "--encoding":
+        try:
+            codecs.lookup(arg)
+        except LookupError:
+            print("Codec '" + arg + "' either doesn't exist or isn't supported on this machine.")
+            sys.exit()
+        ENCODING = arg
     else:
         print_help()
 
-if inputfile is None or outputfile is None:
-    print_help()
+if INPUTFILE is None or OUTPUTFILE is None:
+    print("You must provide both an input file and an output file with [-i, -o]")
     sys.exit(3)
 
-if not os.path.isfile(inputfile):
-    print("Input file \"" + inputfile + "\" doesn't exist.")
+if not os.path.isfile(INPUTFILE):
+    print("Input file \"" + INPUTFILE + "\" doesn't exist.")
     sys.exit(4)
     
-if silent:
+if SILENT:
     # Silent flag overrides print and clear to do nothing
     sys.stdout = open(os.devnull, 'a')
     clear = lambda: None
@@ -274,11 +288,11 @@ class Insn(threading.Thread):
             self.executor.query(Insn(self.executor, self.ibuffer, self.obuffer, to))
 
 try:
-    file_len = os.path.getsize(inputfile)
+    file_len = os.path.getsize(INPUTFILE)
     start = time.time()
-    with io.open(inputfile, 'rb') as f:
-        ib = InputBuffer(f, file_len, bounds)
-        ob = OutputBuffer(outputfile)
+    with io.open(INPUTFILE, 'rb') as f:
+        ib = InputBuffer(f, file_len, BOUNDS)
+        ob = OutputBuffer(OUTPUTFILE)
         executor = InsnExecutor()
         insn = Insn(executor, ib, ob, ENTRY_POINT)
 
@@ -291,7 +305,7 @@ try:
 
     end = round(time.time() - start, 3)
 
-    with io.open(outputfile, 'w') as f:
+    with io.open(OUTPUTFILE, 'w') as f:
 
         def output(*args):
             print(*args)
@@ -318,7 +332,7 @@ try:
                     i2 = min(i + 5, nxt)
                     b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
                     dstr = " ".join([format(i, "0>2X") for i in b])
-                    decoded = b.decode("ascii", "ignore").replace("\n", "").replace("\r", "")
+                    decoded = b.decode(ENCODING, "ignore").replace("\n", ".").replace("\r", ".")
                     output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | db \"" + decoded + "\"")
                     diff -= 5
 
