@@ -11,7 +11,10 @@ def insnentry_to_str(entry, ob):
 
 def insn_to_str(insn, ob):
     if isinstance(insn, Loc):
-        return str(ob.label(insn.loc)) or str(insn.loc)
+        label = ob.label(insn.loc)
+        if label is not None:
+            return str(label)
+        return str(insn.loc)
     else:
         return str(insn)
 
