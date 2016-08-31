@@ -291,6 +291,32 @@ class Insn(threading.Thread):
         if not self.ibuffer.was_read(to):
             self.executor.query(Insn(self.executor, self.ibuffer, self.obuffer, to))
 
+
+# Helper function to decode db statements
+def decode_db(buffer):
+
+    # Replace unprintable ascii characters with dots
+    if ENCODING == "ascii":
+        for i, v in enumerate(buffer):
+            if v < 0x20 or v > 0x7E:
+                buffer[i] = 0x2E
+        return buffer.decode("ascii")
+
+    # Else we go with a more general escape sequence
+    # This might not align perfectly, more codecs aren't
+    # supported as of now.
+    # TODO: Support more codecs, do ascii replace for derived encodings as well
+
+    buffer = buffer.decode(ENCODING, "replace") \
+        .replace("\0", ".") \
+        .replace("\n", ".") \
+        .replace("\r", ".") \
+        .replace("\a", ".") \
+        .replace("\t", ".") \
+        .replace("\uFFFD", ".")
+
+    return buffer
+
 try:
     file_len = os.path.getsize(INPUTFILE)
     start = time.time()
@@ -342,11 +368,7 @@ try:
                 dstr = " ".join([format(i, "0>2X") for i in b])
 
                 # Decode and replace garbage sequences with dots
-                decoded = b.decode(ENCODING, "ignore")\
-                    .replace("\n", ".")\
-                    .replace("\r", ".")\
-                    .replace("\a", ".")\
-                    .replace("\t", ".")
+                decoded = decode_db(b)
 
                 output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | db \"" + decoded + "\"")
                 diff -= 5
