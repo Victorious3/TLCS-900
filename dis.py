@@ -1,3 +1,4 @@
+from __future__ import print_function
 import getopt
 import io
 import math
@@ -177,7 +178,7 @@ class InputBuffer:
                 
         self.buffer = bytearray(available)
         # Stores which bytes have already been read
-        self.access = bytearray(math.ceil(available / 8))
+        self.access = bytearray(int(math.ceil(available / 8.0)))
         data.readinto(self.buffer)
         
     def was_read(self, o):
