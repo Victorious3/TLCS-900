@@ -10,22 +10,22 @@ import time
 import multiprocessing
 import codecs
 
-from collections import deque
+from collections import deque, Counter
 from queue import Queue
 
 import tlcs_900 as proc
 
 # Command line arguments
-INPUTFILE   = None
-OUTPUTFILE  = None
-SILENT      = False
-BOUNDS      = []
-
-# Equivalent to the .org instruction
-ENTRY_POINT = 0
-ENCODING    = "ascii"
+INPUTFILE   = None      # Input file, required
+OUTPUTFILE  = None      # Output file, optional if not silent
+SILENT      = False     # Disables stdout
+BOUNDS      = []        # Section to disassemble, defaults to entire file
+ENTRY_POINT = 0         # Equivalent to the .org instruction, for alignment
+ENCODING    = "ascii"   # Encoding for .db statements
+LABELS      = True      # Tries to group branching statements to labels
 
 def print_help():
+    # TODO: Pimp help, include all options, detailed description
     print("dis.py -i <inputfile> -o <outputfile> [-s][-r <from>[:<to>]][-e <entry>]")
     sys.exit(2)
 
@@ -33,7 +33,7 @@ try:
     opts, args = getopt.gnu_getopt(
         args = sys.argv,
         shortopts = "hsr:i:o:e:",
-        longopts = ["ifile=","ofile=", "encoding", "range", "silent", "entry"])
+        longopts = ["ifile=","ofile=", "encoding", "range", "silent", "entry", "no-labels"])
 
 except getopt.GetoptError:
     print_help()
@@ -41,7 +41,6 @@ except getopt.GetoptError:
 for opt, arg in opts:
     if opt == "-h":
         print_help()
-        sys.exit()
     elif opt in ("-s", "--silent"):
         SILENT = True
     elif opt in ("-e", "--entry"):
@@ -49,7 +48,7 @@ for opt, arg in opts:
     elif opt in ("-r", "--range"):
         try:
             BOUNDS = list(map(int, arg.split(":")))
-        except Exception:
+        except:
             print_help()
         if len(BOUNDS) > 2:
             print_help()
@@ -62,8 +61,10 @@ for opt, arg in opts:
             codecs.lookup(arg)
         except LookupError:
             print("Codec '" + arg + "' either doesn't exist or isn't supported on this machine.")
-            sys.exit()
+            sys.exit(6)
         ENCODING = arg
+    elif opt == "--no-labels":
+        LABELS = False
     else:
         print_help()
 
@@ -95,28 +96,74 @@ else:
 
 class Branch:
     def __init__(self, ep, to, conditional):
-        self.ep = ep
-        self.to = to
+        self.ep = ep # int or Label
+        self.to = to # int or Label
         self.conditional = conditional
+
     def __str__(self):
         ret = str(self.ep) + " -> " + str(self.to)
         if self.conditional:
-            ret += " (C)"
+            ret += " ?"
         return ret
+
+def generate_name(prefix):
+    ident = 0
+    while True:
+        yield prefix + format(ident, "X")
+        ident += 1
+
+class Label:
+    name_generator = generate_name("label_")
+
+    def __init__(self, location, count = 1, name = None):
+        self.location = location
+        self.count = count
+        self.name = name or next(Label.name_generator)
+
+    def __str__(self):
+        return self.name
+
+    # TODO: Better name?
+    def to_str(self):
+        return self.name + ": " + str(self.location) + " (" + str(self.count) + ")"
+
+    def __int__(self):
+        return self.location
 
 class OutputBuffer:
     def __init__(self, ofile):
         self.insnmap = {}
         self.branchlist = deque()
         self.ofile = ofile
+        self.labels = {} # List of labels, compute with create_labels()
         
-    def insert(self, ep, list):
-        if len(list) > 0:
-            self.insnmap[ep] = list
+    def insert(self, ep, lst):
+        if len(lst) > 0:
+            self.insnmap[ep] = lst
         
     def branch(self, ep, to, conditional = False):
         self.branchlist.append(Branch(ep, to, conditional))
-    
+
+    def compute_labels(self, min_occurance = 0):
+        # Count occurrences of branch
+        labels = Counter(map(lambda v: v.to, self.branchlist)).items()
+
+        if min_occurance > 0:
+            labels = filter(lambda v: v[1] > min_occurance, labels)
+
+        labels = dict(map(lambda v: (v[0], Label(v[0], v[1])), labels))
+
+        self.labels = labels
+
+        # Update branch list with labels
+        for branch in self.branchlist:
+            branch.to = self.label(branch.to) or branch.to
+            branch.ep = self.label(branch.ep) or branch.ep
+
+    def label(self, location):
+        return self.labels.get(location, None)
+
+
 class InputBuffer:
     def __init__(self, data, available, bounds = None):
         if bounds is not None:
@@ -173,7 +220,7 @@ class InputBuffer:
         l2 = self.lword(insn, n + 4, peek)
         return l1 | (l2 << 32)
 
-class InsnExecutor:
+class InsnPool:
     def __init__(self, max_threads = None):
         self.numThreads = 0
         if max_threads is None:
@@ -230,10 +277,10 @@ class Insn(threading.Thread):
         self.lastr = "INVALID"
         self.lastmem = "INVALID"
         
-        # List of processed instructions to instert at the entry point
+        # List of processed instructions to insert at the entry point
         self.__instructions = deque()
         
-        # Flag to kill of the thead
+        # Flag to kill of the thread
         self.__dead = False
         # Flag to check if the last byte should be written.
         # This is used if the Insn runs into an already processed segment,
@@ -291,7 +338,6 @@ class Insn(threading.Thread):
         if not self.ibuffer.was_read(to):
             self.executor.query(Insn(self.executor, self.ibuffer, self.obuffer, to))
 
-
 # Helper function to decode db statements
 def decode_db(buffer):
 
@@ -324,7 +370,7 @@ try:
     with io.open(INPUTFILE, 'rb') as f:
         ib = InputBuffer(f, file_len, BOUNDS)
         ob = OutputBuffer(OUTPUTFILE)
-        executor = InsnExecutor()
+        executor = InsnPool()
         insn = Insn(executor, ib, ob, ENTRY_POINT)
 
     executor.query(insn)
@@ -347,10 +393,21 @@ try:
 
     output("Result: ")
     output("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
-    output("Branches: ")
-    output("\n".join(map(str, ob.branchlist)))
-    output("Instructions: ")
 
+    # Labels
+    if LABELS:
+        output("\nLabels:\n")
+        ob.compute_labels() # Labels aren't computed by default
+        output(", ".join(sorted(map(Label.to_str, ob.labels.values()))))
+
+    # Branches
+    output("\nBranches:\n")
+    output(", ".join(map(str, ob.branchlist)))
+
+    # Instructions
+    output("\nInstructions:\n")
+
+    # Padding for byte numbers
     padding = len(str(file_len))
 
     last = ENTRY_POINT
@@ -360,7 +417,7 @@ try:
 
         # Fill with db statements
         if diff > 1:
-            output("\tData Section at " + str(last) + ": ")
+            output("Data Section at " + str(last) + ": ")
             while diff > 0:
                 i = nxt - diff
                 i2 = min(i + 5, nxt)
@@ -373,10 +430,15 @@ try:
                 output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | db \"" + decoded + "\"")
                 diff -= 5
 
-        output("\tSection at " + str(k) + ": ")
+        output("Section at " + str(k) + ": ")
 
         for i in range(0, len(v)):
             v2 = v[i]
+            #Label if present
+            label = ob.label(v2.pc)
+            if label is not None:
+                output("\t" + str(label) + ":")
+
             output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(14) + " | " + str(v2))
         last = v2.pc + v2.length
 
