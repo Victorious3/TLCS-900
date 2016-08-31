@@ -59,7 +59,7 @@ optable_src = [
 
 optable_dst = [
     [LDB_m_X, None, LDW_m_X, None, POPB_mem, None, POPW_mem, None, None, None, None, None, None, None, None, None],
-    [None, None, None, None, LDB_m_nn, None, LDW_m_nn, None, None, None, None, None, None, None, None, None],
+    [None, None, None, LDAR, LDB_m_nn, None, LDW_m_nn, None, None, None, None, None, None, None, None, None],
     [LDAW_R_mem, LDAW_R_mem, LDAW_R_mem, LDAW_R_mem, LDAW_R_mem, LDAW_R_mem, LDAW_R_mem, LDAW_R_mem, ANDCF_A_mem, ORCF_A_mem, XORCF_A_mem, LDCF_A_mem, STCF_A_mem, None, None, None],
     [LDAL_R_mem, LDAL_R_mem, LDAL_R_mem, LDAL_R_mem, LDAL_R_mem, LDAL_R_mem, LDAL_R_mem, LDAL_R_mem, None, None, None, None, None, None, None, None],
     [LDB_mem_R, LDB_mem_R, LDB_mem_R, LDB_mem_R, LDB_mem_R, LDB_mem_R, LDB_mem_R, LDB_mem_R, None, None, None, None, None, None, None, None],

@@ -109,9 +109,14 @@ def LDAL_R_mem(insn):
     return "LDA", popR(insn, '?', LWORD), insn.lastmem
     
 #LDAR
-#TODO: Doesn't seem to exist, it probably gets compiled to a normal LDA? No idea.
-#I can't find it in the optable.
-def LDAR(insn): return
+# Couldn't find it in the documentation, did they forget about this or is it not implemented?
+def LDAR(insn):
+    insn.pop()
+    offset = insn.popw()
+    if offset > 32767:
+        offset -= 65536
+    return "LDAR", popR(insn, 's'), Loc(insn.pc + offset + 5) # TODO: Maybe 4? Test this!
+
 
 # 2) Exchange
 
@@ -764,7 +769,10 @@ def JP_cc_mem(insn):
 def JR_cc(insn): 
     pc = insn.pc
     cc = cctable[popcc(insn)]
-    loc = Loc(pc + insn.pop() + 2)
+    offset = insn.pop()
+    if offset > 127:
+        offset -= 256
+    loc = Loc(pc + offset + 2)
     if cc != "F": insn.branch(loc, cc != "T")
     
     return "JR", cc, loc
@@ -772,7 +780,10 @@ def JR_cc(insn):
 def JRL_cc(insn): 
     pc = insn.pc
     cc = cctable[popcc(insn)]
-    loc = Loc(pc + insn.popw() + 3)
+    offset = insn.popw()
+    if offset > 32767:
+        offset -= 65536
+    loc = Loc(pc + offset + 3)
     if cc != "F": insn.branch(loc, cc != "T")
     
     return "JRL", cc, loc
@@ -792,14 +803,20 @@ def CALL_cc_mem(insn):
     return "CALL", popcc(insn), insn.lastmem
 def CALR(insn): 
     insn.pop()
-    to = Loc(insn.pc + 3 + insn.popw())
+    offset = insn.popw()
+    if offset > 32767:
+        offset -= 65536
+    to = Loc(insn.pc + 3 + offset)
     insn.branch(to, True)
     return "CALR", to
 
 #DJNZ
 def DJNZ(insn): 
     insn.pop()
-    loc = Loc(insn.pc + 3 + insn.pop())
+    offset = insn.pop()
+    if offset > 127:
+        offset -= 256
+    loc = Loc(insn.pc + 3 + offset)
     insn.branch(loc, True)
     
     return "DJNZ", insn.lastr, loc
