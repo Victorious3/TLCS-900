@@ -106,18 +106,24 @@ def popmem(insn):
         name = Rregtable[LWORD][reg]
         if (mem & 0x8) == 0:
             # XWA to XSP
-            return Mem(0xE0 + 4 * reg, name)
+            return Mem(0xE0 + reg, name)
         else:
             # XWA to XSP + d8
             d = insn.pop()
-            return Mem(0xE0 + 4 * reg + d, "%s+%s" % (name, str(d)))
+            if d > 127:
+                d -= 256 # signed
+                name += "-" + (str(-d) if d < -1 else "")
+            else:
+                name += "+" + (str(d) if d > 1 else "")
+            return Mem(0xE0 + reg + d, name)
     elif (mem & 0x4) == 0x4:
         
         mem2 = insn.pop()
         c = (mem2 & 0x2)
         c = 1 if c == 0 else c * 2
-        reg = (mem2 & 0xFE) * 4
+        reg = (mem2 & 0xFC)
         name = regname(Reg(True, LWORD, reg))
+
         if (mem & 0x1) == 0:
             return Mem(reg - c, ("-" + name if c == 1 else "%s-%s" % (name, str(c)))) # -r32
         else:
@@ -134,22 +140,27 @@ def popmem(insn):
             mem = insn.pop()
             n = mem & 0x3
             if n == 0:
-                reg = (mem & 0xFE) * 4
+                reg = (mem & 0xFE)
                 name = regname(Reg(True, LWORD, reg))
                 return Mem(mem * 4, name) # r32
             elif n == 1:
-                reg = (mem & 0xFE) * 4
+                reg = (mem & 0xFE)
                 name = regname(Reg(True, LWORD, reg))
-                offset = insn.popw()
-                return Mem(reg + offset, "%s+%s" % (name, str(offset))) # r32 + d16
+                d = insn.popw()
+                if d > 32767:
+                    d -= 65536  # signed
+                    name += "-" + (str(-d) if d < -1 else "")
+                else:
+                    name += "+" + (str(d) if d > 1 else "")
+                return Mem(reg + d, name) # r32 + d16
             elif mem == 0x3:
-                reg1 = insn.pop() * 4
+                reg1 = insn.pop()
                 reg2 = insn.pop()
                 name = "%s+%s" % (regname(Reg(True, LWORD, reg1)), regname(Reg(True, BYTE, reg2)))
                 return Mem(reg1 + reg2, name) # r32 + r8
             else:
-                reg1 = insn.pop() * 4
-                reg2 = insn.pop() * 2
+                reg1 = insn.pop()
+                reg2 = insn.pop()
                 name = "%s+%s" % (regname(Reg(True, LWORD, reg1)), regname(Reg(True, WORD, reg2)))
                 return Mem(reg1 + reg2, name) # r32 + r16
                 
@@ -219,7 +230,7 @@ def regname(register):
         if size == BYTE:
             if (reg & 0b0010) != 0: rname += "Q"
         elif size == LWORD:
-            rname += "Z"
+            rname += "X"
         if (reg & 0xFC) == 0xFC:
             rname += "S"
         else: rname += "I"
