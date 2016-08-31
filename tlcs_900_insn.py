@@ -1,4 +1,6 @@
-from tlcs_900 import * 
+from tlcs_900 import *
+
+from disapi import Loc
 
 # 1) Load Instructions
 
@@ -745,13 +747,13 @@ def RRD(insn):
 #JP
 def JP_nn(insn): 
     insn.pop()
-    to = insn.popw()
+    to = Loc(insn.popw())
     insn.branch(to)
     
     return "JP", to
 def JP_nnn(insn):
     insn.pop()
-    to = (insn.popw() | (insn.pop() << 16))
+    to = Loc(insn.popw() | (insn.pop() << 16))
     insn.branch(to)
     
     return "JP", to
@@ -762,7 +764,7 @@ def JP_cc_mem(insn):
 def JR_cc(insn): 
     pc = insn.pc
     cc = cctable[popcc(insn)]
-    loc = pc + insn.pop() + 2
+    loc = Loc(pc + insn.pop() + 2)
     if cc != "F": insn.branch(loc, cc != "T")
     
     return "JR", cc, loc
@@ -770,7 +772,7 @@ def JR_cc(insn):
 def JRL_cc(insn): 
     pc = insn.pc
     cc = cctable[popcc(insn)]
-    loc = pc + insn.popw() + 3
+    loc = Loc(pc + insn.popw() + 3)
     if cc != "F": insn.branch(loc, cc != "T")
     
     return "JRL", cc, loc
@@ -778,26 +780,26 @@ def JRL_cc(insn):
 #CALL
 def CALL_nn(insn):
     insn.pop()
-    to = insn.popw()
+    to = Loc(insn.popw())
     insn.branch(to, True)
     return "CALL", to
 def CALL_nnn(insn):
     insn.pop()
-    to = (insn.popw() | (insn.pop() << 16))
+    to = Loc(insn.popw() | (insn.pop() << 16))
     insn.branch(to, True)
     return "CALL", to
 def CALL_cc_mem(insn): 
     return "CALL", popcc(insn), insn.lastmem
 def CALR(insn): 
     insn.pop()
-    to = insn.pc + 3 + insn.popw()
+    to = Loc(insn.pc + 3 + insn.popw())
     insn.branch(to, True)
     return "CALR", to
 
 #DJNZ
 def DJNZ(insn): 
     insn.pop()
-    loc = insn.pc + 3 + insn.pop()
+    loc = Loc(insn.pc + 3 + insn.pop())
     insn.branch(loc, True)
     
     return "DJNZ", insn.lastr, loc
