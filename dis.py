@@ -67,9 +67,13 @@ for opt, arg in opts:
     else:
         print_help()
 
-if INPUTFILE is None or OUTPUTFILE is None:
-    print("You must provide both an input file and an output file with [-i, -o]")
+if INPUTFILE is None:
+    print("You must provide an input file with [-i <inputfile>]")
     sys.exit(3)
+
+if OUTPUTFILE is None and SILENT:
+    print("You must provide an output file with [-o <outputfile>] when in silent mode")
+    sys.exit(5)
 
 if not os.path.isfile(INPUTFILE):
     print("Input file \"" + INPUTFILE + "\" doesn't exist.")
@@ -290,6 +294,7 @@ class Insn(threading.Thread):
 try:
     file_len = os.path.getsize(INPUTFILE)
     start = time.time()
+
     with io.open(INPUTFILE, 'rb') as f:
         ib = InputBuffer(f, file_len, BOUNDS)
         ob = OutputBuffer(OUTPUTFILE)
@@ -305,45 +310,58 @@ try:
 
     end = round(time.time() - start, 3)
 
-    with io.open(OUTPUTFILE, 'w') as f:
+    if OUTPUTFILE is not None:
+        f = io.open(OUTPUTFILE, 'w')
 
         def output(*args):
             print(*args)
             f.write(" ".join(args) + "\n")
+    else:
+        output = print
 
-        output("Result: ")
-        output("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
-        output("Branches: ")
-        output("\n".join(map(str, ob.branchlist)))
-        output("Instructions: ")
+    output("Result: ")
+    output("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
+    output("Branches: ")
+    output("\n".join(map(str, ob.branchlist)))
+    output("Instructions: ")
 
-        padding = len(str(file_len))
+    padding = len(str(file_len))
 
-        last = ENTRY_POINT
-        for k, v in sorted(ob.insnmap.items()):
-            nxt = v[0].pc
-            diff = nxt - last
+    last = ENTRY_POINT
+    for k, v in sorted(ob.insnmap.items()):
+        nxt = v[0].pc
+        diff = nxt - last
 
-            # Fill with db statements
-            if diff > 1:
-                output("\tData Section at " + str(last) + ": ")
-                while diff > 0:
-                    i = nxt - diff
-                    i2 = min(i + 5, nxt)
-                    b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
-                    dstr = " ".join([format(i, "0>2X") for i in b])
-                    decoded = b.decode(ENCODING, "ignore").replace("\n", ".").replace("\r", ".")
-                    output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | db \"" + decoded + "\"")
-                    diff -= 5
+        # Fill with db statements
+        if diff > 1:
+            output("\tData Section at " + str(last) + ": ")
+            while diff > 0:
+                i = nxt - diff
+                i2 = min(i + 5, nxt)
+                b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
+                dstr = " ".join([format(i, "0>2X") for i in b])
 
-            output("\tSection at " + str(k) + ": ")
+                # Decode and replace garbage sequences with dots
+                decoded = b.decode(ENCODING, "ignore")\
+                    .replace("\n", ".")\
+                    .replace("\r", ".")\
+                    .replace("\a", ".")\
+                    .replace("\t", ".")
 
-            for i in range(0, len(v)):
-                v2 = v[i]
-                output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(14) + " | " + str(v2))
-            last = v2.pc + v2.length
+                output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | db \"" + decoded + "\"")
+                diff -= 5
 
-        output("Done in " + str(end) + " seconds.")
+        output("\tSection at " + str(k) + ": ")
+
+        for i in range(0, len(v)):
+            v2 = v[i]
+            output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(14) + " | " + str(v2))
+        last = v2.pc + v2.length
+
+    output("Done in " + str(end) + " seconds.")
+
+    if OUTPUTFILE is not None:
+        f.close()
 
 except KeyboardInterrupt:
     print("\n! Received keyboard interrupt, quitting threads.\n")
