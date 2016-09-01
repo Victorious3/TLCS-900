@@ -15,6 +15,9 @@ BOUNDS      = []        # Section to disassemble, defaults to entire file
 ENTRY_POINT = 0         # Equivalent to the .org instruction, for alignment
 ENCODING    = "ascii"   # Encoding for .db statements
 LABELS      = True      # Tries to group branching statements to labels
+BRANCHES    = True      # Outputs branching information
+RAW         = False     # Outputs the instructions only
+TIMER       = True      # Records timing
 
 def print_help():
     # TODO: Pimp help, include all options, detailed description
@@ -25,7 +28,7 @@ try:
     opts, args = getopt.gnu_getopt(
         args = sys.argv,
         shortopts = "hsr:i:o:e:",
-        longopts = ["ifile=","ofile=", "encoding", "range", "silent", "entry", "no-labels"])
+        longopts = ["ifile=","ofile=", "encoding", "range", "silent", "entry", "no-labels", "no-branches", "no-timer", "raw"])
 
 except getopt.GetoptError:
     print_help()
@@ -57,6 +60,12 @@ for opt, arg in opts:
         ENCODING = arg
     elif opt == "--no-labels":
         LABELS = False
+    elif opt == "--no-branches":
+        BRANCHES = False
+    elif opt == "--no-timer":
+        TIMER = False
+    elif opt == "--raw":
+        RAW = True
     else:
         print_help()
 
@@ -116,7 +125,9 @@ def decode_db(buffer):
 
 try:
     file_len = os.path.getsize(INPUTFILE)
-    start = time.time()
+
+    if TIMER:
+        start = time.time()
 
     with io.open(INPUTFILE, 'rb') as f:
         ib = InputBuffer(f, file_len, BOUNDS, ENTRY_POINT)
@@ -132,8 +143,6 @@ try:
         time.sleep(0.1)
         executor.poll()
 
-    end = round(time.time() - start, 3)
-
     if OUTPUTFILE is not None:
         f = io.open(OUTPUTFILE, 'w')
 
@@ -143,21 +152,25 @@ try:
     else:
         output = print
 
-    output("Result: ")
-    output("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
-
-    # Labels
     if LABELS:
-        output("\nLabels:\n")
-        ob.compute_labels(ENTRY_POINT, file_len + ENTRY_POINT) # Labels aren't computed by default
-        output(", ".join(sorted(map(Label.to_str, ob.labels.values()))))
+        ob.compute_labels(ENTRY_POINT, file_len + ENTRY_POINT)  # Labels aren't computed by default
 
-    # Branches
-    output("\nBranches:\n")
-    output(", ".join(map(str, ob.branchlist)))
+    if not RAW:
+        output("Result: ")
+        output("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
 
-    # Instructions
-    output("\nInstructions:\n")
+        # Labels
+        if LABELS:
+            output("\nLabels:\n")
+            output(", ".join(sorted(map(Label.to_str, ob.labels.values()))))
+
+        # Branches
+        if BRANCHES:
+            output("\nBranches:\n")
+            output(", ".join(map(str, ob.branchlist)))
+
+        # Instructions
+        output("\nInstructions:\n")
 
     # Padding for byte numbers
     padding = len(str(file_len))
@@ -169,32 +182,48 @@ try:
 
         # Fill with db statements
         if diff > 1:
-            output("Data Section at " + str(last) + ": ")
+            output("; Data Section at " + str(last) + ": ")
+
             while diff > 0:
                 i = nxt - diff
                 i2 = min(i + 5, nxt)
                 b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
-                dstr = " ".join([format(i, "0>2X") for i in b])
 
-                # Decode and replace garbage sequences with dots
-                decoded = decode_db(b)
+                if not RAW:
+                    dstr = " ".join([format(i, "0>2X") for i in b])
+                    # Decode and replace garbage sequences with dots
+                    decoded = decode_db(b)
+                    output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | db \"" + decoded + "\"")
+                else:
+                    # In raw mode output actual hex codes
+                    dstr = ", ".join([format(i, "0>2X") + "h" for i in b])
+                    output("    db " + dstr)
 
-                output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | db \"" + decoded + "\"")
                 diff -= 5
 
-        output("Section at " + str(k) + ": ")
+        output("; Section at " + str(k) + ": ")
 
         for i in range(0, len(v)):
             v2 = v[i]
             #Label if present
             label = ob.label(v2.pc)
-            if label is not None:
-                output("\t" + str(label) + ":")
 
-            output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(14) + " | " + insnentry_to_str(v2, ob))
+            if not RAW:
+                if label is not None:
+                    output("\t" + str(label) + ":")
+
+                output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(14) + " | " + insnentry_to_str(v2, ob))
+            else:
+                if label is not None:
+                    output((str(label) + ": ").ljust(12) + insnentry_to_str(v2, ob))
+                else:
+                    output("".ljust(12) + insnentry_to_str(v2, ob))
+
         last = v2.pc + v2.length
 
-    output("Done in " + str(end) + " seconds.")
+    if TIMER:
+        end = round(time.time() - start, 3)
+        output("; Done in " + str(end) + " seconds.")
 
     if OUTPUTFILE is not None:
         f.close()

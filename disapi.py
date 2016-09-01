@@ -116,11 +116,12 @@ class InputBuffer:
 
     def was_read(self, o):
         o -= self.entry_point
-
-        if o >= len(self.buffer): return True
         o1 = o // 8
         o2 = o % 8
-        return (self.access[o1] >> o2) & 0x1 == 0x1
+        try:
+            return (self.access[o1] >> o2) & 0x1 == 0x1
+        except IndexError:
+            return True
 
     def byte(self, insn, n = 0, peek = False):
         o = insn.pc + n
