@@ -12,41 +12,109 @@ INPUTFILE   = None      # Input file, required
 OUTPUTFILE  = None      # Output file, optional if not silent
 SILENT      = False     # Disables stdout
 BOUNDS      = []        # Section to disassemble, defaults to entire file
-ENTRY_POINT = 0         # Equivalent to the .org instruction, for alignment
-ENCODING    = "ascii"   # Encoding for .db statements
+ENTRY_POINT = 0         # Equivalent to the .org directive, for alignment
+ENCODING    = "ascii"   # Encoding for .db directive
 LABELS      = True      # Tries to group branching statements to labels
 BRANCHES    = True      # Outputs branching information
 RAW         = False     # Outputs the instructions only
 TIMER       = True      # Records timing
 
 def print_help():
-    # TODO: Pimp help, include all options, detailed description
-    print("dis.py -i <inputfile> -o <outputfile> [-s][-r <from>[:<to>]][-e <entry>]")
+    print("""\
+Usage: py -3 dis.py -i <inputfile> [options]
+
+Options:
+    -h, --help:
+        Displays this help screen.
+
+    -i, --ifile <inputfile>:
+        Specifies a file to read for binary input.
+        The file has to exist and you need permission to read it.
+
+    -o, --ofile <outputfile>:
+        Specifies a file to write the source to.
+        If no such file exists, a new one will be created and otherwise
+        it gets overwritten. You need write permission.
+
+        This is a required option if not in --silent mode.
+
+    -s, --silent:
+        Completely disables console output, useful if you want to
+        run the script automatically.
+
+    -e, --entry, --org <entry_point>:
+        Similar to the .org directive, sets an initial offset
+        to increment. Useful if you only have parts of a source file
+        avalialable to align jumps properly.
+
+        This will insert
+            .org <entry_point>
+        to the beginning of your source file.
+
+    -r --range <start[:end]>:
+        Specifies a byte range to disassemble. The disassembler will
+        terminate if it tries to jump into a location outside of that range.
+
+        Useful if you only want to re-create a part of your source.
+        Do note that this option will not set the entry point, you need
+        to use the appropriate option for that.
+
+    --encoding <encoding>:
+        Specifies an encoding for the data segments (.db).
+        This option will only have an effect if not in --raw mode.
+        The default encoding is ascii, see
+            https://docs.python.org/3/library/codecs.html#standard-encodings
+        for a list of supported encodings.
+
+        >> Other encodings than ascii might yield to strange outputs due to
+        >> unprintable characters not being escaped!
+
+    --raw:
+        Disables outputting the instruction's hex code and formats the source
+        so that it can be read by a standard assembler.
+
+        Will not output any branching or label information.
+
+The following options are enabled by default:
+
+    --no-labels:
+        Prevents creating label information, the output will show the
+        raw addresses instead.
+
+    --no-branches:
+        Prevents outputting branching information.
+
+    --no-timer:
+        Prevents outputting the elapsed time.
+
+    """)
     sys.exit(2)
 
 try:
     opts, args = getopt.gnu_getopt(
         args = sys.argv,
         shortopts = "hsr:i:o:e:",
-        longopts = ["ifile=","ofile=", "encoding", "range", "silent", "entry", "no-labels", "no-branches", "no-timer", "raw"])
+        longopts = ["ifile=","ofile=", "help", "encoding", "range", "silent", "entry", "org", "no-labels", "no-branches", "no-timer", "raw"])
 
 except getopt.GetoptError:
     print_help()
 
 for opt, arg in opts:
-    if opt == "-h":
+    if opt in ("-h", "--help"):
         print_help()
     elif opt in ("-s", "--silent"):
         SILENT = True
-    elif opt in ("-e", "--entry"):
+    elif opt in ("-e", "--entry", "--org"):
         ENTRY_POINT = int(arg, 0)
     elif opt in ("-r", "--range"):
         try:
             BOUNDS = list(map(int, arg.split(":")))
         except:
-            print_help()
+            print("Invalid range specified.")
+            sys.exit(6)
         if len(BOUNDS) > 2:
-            print_help()
+            print("Invalid range specified.")
+            sys.exit(6)
     elif opt in ("-i", "--ifile"):
         INPUTFILE = arg
     elif opt in ("-o", "--ofile"):
@@ -78,9 +146,9 @@ if OUTPUTFILE is None and SILENT:
     sys.exit(5)
 
 if not os.path.isfile(INPUTFILE):
-    print("Input file \"" + INPUTFILE + "\" doesn't exist.")
+    print("Input file \"" + INPUTFILE + "\" does not exist.")
     sys.exit(4)
-    
+
 if SILENT:
     # Silent flag overrides print and clear to do nothing
     sys.stdout = open(os.devnull, 'a')
@@ -172,6 +240,9 @@ try:
         # Instructions
         output("\nInstructions:\n")
 
+    if ENTRY_POINT != 0:
+        output("\t.org " + format(ENTRY_POINT, "x") + "h")
+
     # Padding for byte numbers
     padding = len(str(file_len))
 
@@ -193,11 +264,11 @@ try:
                     dstr = " ".join([format(i, "0>2X") for i in b])
                     # Decode and replace garbage sequences with dots
                     decoded = decode_db(b)
-                    output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | db \"" + decoded + "\"")
+                    output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | .db \"" + decoded + "\"")
                 else:
                     # In raw mode output actual hex codes
-                    dstr = ", ".join([format(i, "0>2X") + "h" for i in b])
-                    output("    db " + dstr)
+                    dstr = ", ".join([format(i, "0>2x") + "h" for i in b])
+                    output("\t.db " + dstr)
 
                 diff -= 5
 
