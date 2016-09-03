@@ -164,17 +164,47 @@ class InsnPool:
         self.queue = Queue()
         self.proc = proc
 
+        # A lock used to wake up the polling thread if asynchronous
+        self.lock = threading.Semaphore()
+
     def query(self, insn):
         self.queue.put(insn)
 
-    def done(self):
+    def signal(self):
         self.numThreads -= 1
+        if self.has_cycled():
+            # Wake up the polling thread if batch is done processing
+            self.lock.release()
+
+    def has_cycled(self):
+        return self.numThreads == 0
+
+    def has_finished(self):
+        return self.has_cycled() and self.queue.empty()
+
+    def poll_all(self, blocking = True, callback = None):
+        if not blocking and callback is None:
+            raise ValueError("If called in a non blocking way you must provide a callback function.")
+
+        def poll_all_impl():
+            while not self.has_finished():  # Wait for all threads to process
+                self.poll()
+                self.lock.acquire()  # Pauses the current thread and waits till batch is processed
+            if callback:
+                callback()
+
+        if blocking:
+            poll_all_impl()
+        else:
+            thread = threading.Thread(daemon = True, target = poll_all_impl)
+            thread.start()
 
     def poll(self):
         # Batch processing, we only start a new batch when the old
         # one has finished. It is only possible to jump to a location once.
+        if not self.has_cycled(): return
+
         locations = set()
-        if self.numThreads != 0: return
         while self.numThreads < self.max_threads and not self.queue.empty():
             insn = self.queue.get_nowait()
             if insn.pc in locations:
@@ -196,12 +226,12 @@ class InsnEntry:
         return ibuffer.buffer[self.pc - ibuffer.entry_point:self.pc + self.length - ibuffer.entry_point]
 
 class Insn(threading.Thread):
-    def __init__(self, executor, ibuffer, obuffer, pc = 0):
-        threading.Thread.__init__(self, daemon = True)
+    def __init__(self, pool, ibuffer, obuffer, pc = 0):
+        threading.Thread.__init__(self, daemon = True, name = "Insn at " + str(pc))
 
         self.pc = pc
         self.ep = pc # Entry point
-        self.executor = executor
+        self.pool = pool
         self.ibuffer = ibuffer
         self.obuffer = obuffer
 
@@ -223,12 +253,12 @@ class Insn(threading.Thread):
     def run(self):
         while not self.__dead:
             pc = self.pc
-            opc = self.executor.proc.next_insn(self)
+            opc = self.pool.proc.next_insn(self)
             self.__instructions.append(InsnEntry(pc, self.pc - pc, opc[0], opc[1:]))
         if self.__nowrite:
             self.__instructions.pop()
         self.obuffer.insert(self.ep, self.__instructions)
-        self.executor.done()
+        self.pool.signal()
 
     def kill(self, nowrite = False):
         self.__dead = True
@@ -270,4 +300,4 @@ class Insn(threading.Thread):
         # We don't need this one anymore if we know that we have to branch
         if not conditional: self.kill()
         if not self.ibuffer.was_read(to):
-            self.executor.query(Insn(self.executor, self.ibuffer, self.obuffer, to))
+            self.pool.query(Insn(self.pool, self.ibuffer, self.obuffer, to))

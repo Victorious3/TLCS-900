@@ -75,6 +75,7 @@ Options:
 
         Will not output any branching or label information.
 
+
 The following options are enabled by default:
 
     --no-labels:
@@ -200,16 +201,14 @@ try:
     with io.open(INPUTFILE, 'rb') as f:
         ib = InputBuffer(f, file_len, BOUNDS, ENTRY_POINT)
         ob = OutputBuffer(OUTPUTFILE)
+
         import tlcs_900 as proc
-        executor = InsnPool(proc)
-        insn = Insn(executor, ib, ob, ENTRY_POINT)
 
-    executor.query(insn)
-    executor.poll()
+        pool = InsnPool(proc)
+        insn = Insn(pool, ib, ob, ENTRY_POINT)
 
-    while executor.numThreads > 0 and not executor.queue.empty():  # Wait for all threads to process
-        time.sleep(0.1)
-        executor.poll()
+    pool.query(insn)
+    pool.poll_all()
 
     if OUTPUTFILE is not None:
         f = io.open(OUTPUTFILE, 'w')
@@ -246,31 +245,32 @@ try:
     # Padding for byte numbers
     padding = len(str(file_len))
 
+    def output_db(nxt, last):
+        diff = nxt - last
+        if diff < 1: return
+
+        output("; Data Section at " + str(last) + ": ")
+        while diff > 0:
+            i = nxt - diff
+            i2 = min(i + 5, nxt)
+            b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
+
+            if not RAW:
+                dstr = " ".join([format(i, "0>2X") for i in b])
+                # Decode and replace garbage sequences with dots
+                decoded = decode_db(b)
+                output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | .db \"" + decoded + "\"")
+            else:
+                # In raw mode output actual hex codes
+                dstr = ", ".join([format(i, "0>2x") + "h" for i in b])
+                output("\t.db " + dstr)
+
+            diff -= 5
+
     last = ENTRY_POINT
     for k, v in sorted(ob.insnmap.items()):
-        nxt = v[0].pc
-        diff = nxt - last
-
         # Fill with db statements
-        if diff > 1:
-            output("; Data Section at " + str(last) + ": ")
-
-            while diff > 0:
-                i = nxt - diff
-                i2 = min(i + 5, nxt)
-                b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
-
-                if not RAW:
-                    dstr = " ".join([format(i, "0>2X") for i in b])
-                    # Decode and replace garbage sequences with dots
-                    decoded = decode_db(b)
-                    output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | .db \"" + decoded + "\"")
-                else:
-                    # In raw mode output actual hex codes
-                    dstr = ", ".join([format(i, "0>2x") + "h" for i in b])
-                    output("\t.db " + dstr)
-
-                diff -= 5
+        output_db(v[0].pc, last)
 
         output("; Section at " + str(k) + ": ")
 
@@ -291,6 +291,8 @@ try:
                     output("".ljust(12) + insnentry_to_str(v2, ob))
 
         last = v2.pc + v2.length
+
+    output_db(file_len + ENTRY_POINT, last)
 
     if TIMER:
         end = round(time.time() - start, 3)
