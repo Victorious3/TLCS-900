@@ -1,6 +1,5 @@
-from tlcs_900 import *
-
 from disapi import Loc
+from tcls_900.tlcs_900 import *
 
 # 1) Load Instructions
 

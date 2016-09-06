@@ -1,11 +1,10 @@
+import codecs
 import getopt
 import io
 import os
 import shutil
-import subprocess
 import sys
 import time
-import codecs
 
 # Command line arguments
 INPUTFILE   = None      # Input file, required
@@ -151,18 +150,8 @@ if not os.path.isfile(INPUTFILE):
     sys.exit(4)
 
 if SILENT:
-    # Silent flag overrides print and clear to do nothing
+    # Silent flag overrides print to do nothing
     sys.stdout = open(os.devnull, 'a')
-    clear = lambda: None
-else:
-    # Setup clear function
-
-    if os.name in ("nt", "dos"):
-        clear = lambda: subprocess.call("cls")
-    elif os.name in ("linux", "osx", "posix"):
-        clear = lambda: subprocess.call("clear")
-    else:
-        clear = lambda: print("\n" * 120)
 
 # Now import everything from the api
 from disapi import *
@@ -202,7 +191,7 @@ try:
         ib = InputBuffer(f, file_len, BOUNDS, ENTRY_POINT)
         ob = OutputBuffer(OUTPUTFILE)
 
-        import tlcs_900 as proc
+        from tcls_900 import tlcs_900 as proc
 
         pool = InsnPool(proc)
         insn = Insn(pool, ib, ob, ENTRY_POINT)

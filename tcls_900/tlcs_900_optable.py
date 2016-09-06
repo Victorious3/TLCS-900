@@ -1,4 +1,4 @@
-from tlcs_900_insn import * 
+from tcls_900.tlcs_900_insn import *
 
 optable = [
     [NOP, NORMAL, PUSH_SR, POP_SR, MAX, HALT, EI, RETI, LD_n_n, PUSH_n, LDW_n_nn, PUSHW_nn, INCF, DECF, RET, RETD],

@@ -1,3 +1,4 @@
 rom
 __pycache__
 .idea
+pdcurses.dll
