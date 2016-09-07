@@ -1,5 +1,8 @@
+import os
+import sys
+import shutil
+
 import colorama
-import os, sys
 
 Cursor  = colorama.Cursor
 Style   = colorama.Style
@@ -17,15 +20,9 @@ KEY_RIGHT   = 3 << 8
 KEY_LEFT    = 4 << 8
 
 if _WIN32:
-    colorama.init()
-    import msvcrt, ctypes
-
-    class _CursorInfo(ctypes.Structure):
-        _fields_ = [("size", ctypes.c_int),
-                    ("visible", ctypes.c_byte)]
-
+    import gui.term_win32 as term
 else:
-    import tty
+    import gui.term_unix as term
 
 def print_raw(*args):
     print(*args, end = "")
@@ -61,39 +58,14 @@ def get_key():
 
 # Platform specific functions
 def getch():
-    return _getch()
+    return term.getch()
 
 def set_cursor(visible):
-    _set_cursor(visible)
+    term.set_cursor(visible)
 
-def setup():
-    global _getch
-    global _set_cursor
-
-    colorama.init()
-
-    if _WIN32:
-        def _set_cursor(visible):
-            ci = _CursorInfo()
-            handle = ctypes.windll.kernel32.GetStdHandle(-11)
-            ctypes.windll.kernel32.GetConsoleCursorInfo(handle, ctypes.byref(ci))
-            ci.visible = visible
-            ctypes.windll.kernel32.SetConsoleCursorInfo(handle, ctypes.byref(ci))
-
-        _getch = msvcrt.getch
-        _set_cursor = _set_cursor
-    else:
-        def _set_cursor(visible):
-            sys.stdout.write("\033[?25h" if visible else "\033[?25l")
-            sys.stdout.flush()
-
-        tty.setraw(sys.stdin)
-
-        _getch = lambda: sys.stdin.read(1)
 
 def finalize():
-    if not _WIN32:
-        tty.setcbreak(sys.stdin)
+    term.finalize()
 
     set_cursor(True)
 
