@@ -20,9 +20,9 @@ KEY_RIGHT   = 3 << 8
 KEY_LEFT    = 4 << 8
 
 if _WIN32:
-    import gui.term_win32 as term
+    import ui.term_win32 as term
 else:
-    import gui.term_unix as term
+    import ui.term_unix as term
 
 def print_raw(*args):
     print(*args, end = "")

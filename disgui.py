@@ -2,12 +2,12 @@ import time
 import shutil
 
 from disapi import *
-from gui.functions import *
+from ui.term import *
 
 COLUMNS = 0
 ROWS = 0
 
-setup()
+#setup()
 
 clear_screen()
 set_cursor(False)
