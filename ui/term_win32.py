@@ -1,6 +1,7 @@
 import msvcrt, ctypes, shutil
 import colorama
 
+
 win32 = ctypes.windll.kernel32
 
 # C types
