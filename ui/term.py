@@ -101,5 +101,8 @@ def finalize():
 
     # Reset colors and style
     print_raw(Style.RESET_ALL)
+<<<<<<< HEAD
 
 atexit.register(finalize)
+=======
+>>>>>>> origin/master

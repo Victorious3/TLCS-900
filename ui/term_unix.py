@@ -2,8 +2,14 @@ import tty
 import sys
 import shutil
 import signal
+import colorama
 
 import ui.term as term
+
+
+#tty.setraw(sys.stdin)
+
+colorama.init(strip = False, convert = False)
 
 def set_cursor(visible):
     sys.stdout.write("\033[?25h" if visible else "\033[?25l")
@@ -18,7 +24,5 @@ def _on_resize():
         term._resize_handler(width, height)
 
 def finalize():
-    tty.setcbreak(sys.stdin)
-
-tty.setraw(sys.stdin)
-signal.signal(signal.SIGWINCH, _on_resize)
+    #tty.setcbreak(sys.stdin)
+    pass
