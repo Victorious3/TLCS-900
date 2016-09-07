@@ -9,7 +9,7 @@ import time
 # Command line arguments
 INPUTFILE   = None      # Input file, required
 OUTPUTFILE  = None      # Output file, optional if not silent
-SILENT      = False     # Disables stdout
+SILENT      = False     # Disables _stdout
 BOUNDS      = []        # Section to disassemble, defaults to entire file
 ENTRY_POINT = 0         # Equivalent to the .org directive, for alignment
 ENCODING    = "ascii"   # Encoding for .db directive

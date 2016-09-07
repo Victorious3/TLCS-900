@@ -1,6 +1,7 @@
 import os
 import sys
 import shutil
+import atexit
 
 import colorama
 
@@ -19,10 +20,14 @@ KEY_DOWN    = 2 << 8
 KEY_RIGHT   = 3 << 8
 KEY_LEFT    = 4 << 8
 
+M_LEFT      = 1
+M_RIGHT     = 2
+M_MIDDLE    = 3
+
 if _WIN32:
-    import gui.term_win32 as term
+    import ui.term_win32 as term
 else:
-    import gui.term_unix as term
+    import ui.term_unix as term
 
 def print_raw(*args):
     print(*args, end = "")
@@ -35,6 +40,9 @@ def move_cursor(x, y):
 
 def clear_screen():
     print_raw(colorama.ansi.clear_screen())
+
+def screen_size():
+    return shutil.get_terminal_size()
 
 # Returns a tuple with the character and key code
 def get_key():
@@ -60,9 +68,31 @@ def get_key():
 def getch():
     return term.getch()
 
+def poll_event():
+    term.poll_event()
+
 def set_cursor(visible):
     term.set_cursor(visible)
 
+
+_resize_handler = None
+_mouse_handler = None
+_keyboard_handler = None
+
+# handler: (width, height)
+def set_resize_handler(handler):
+    global _resize_handler
+    _resize_handler = handler
+
+# handler: (x, y, down, key, dwheel)
+def set_mouse_handler(handler):
+    global _mouse_handler
+    _mouse_handler = handler
+
+# handler: (down, key, char)
+def set_keyboard_handler(handler):
+    global _keyboard_handler
+    _keyboard_handler = handler
 
 def finalize():
     term.finalize()
@@ -71,3 +101,5 @@ def finalize():
 
     # Reset colors and style
     print_raw(Style.RESET_ALL)
+
+atexit.register(finalize)
