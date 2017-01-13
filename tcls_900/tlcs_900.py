@@ -125,9 +125,9 @@ def popmem(insn):
         name = regname(Reg(True, LWORD, reg))
 
         if (mem & 0x1) == 0:
-            return Mem(reg - c, ("-" + name if c == 1 else "%s-%s" % (name, str(c)))) # -r32
+            return Mem(reg - c, "-" + name) # -r32
         else:
-            return Mem(reg + c, "%s+%s" % (name, (str(c) if c > 1 else ""))) # r32+
+            return Mem(reg + c, name + "+") # r32+
     else:
         n = mem & 0x3
         if n == 0: 
