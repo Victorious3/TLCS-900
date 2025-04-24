@@ -12,6 +12,7 @@ OUTPUTFILE  = None      # Output file, optional if not silent
 SILENT      = False     # Disables _stdout
 BOUNDS      = []        # Section to disassemble, defaults to entire file
 ENTRY_POINT = 0         # Equivalent to the .org directive, for alignment
+START_POINT = None      # Starting point for the disassembly 
 ENCODING    = "ascii"   # Encoding for .db directive
 LABELS      = True      # Tries to group branching statements to labels
 BRANCHES    = True      # Outputs branching information
@@ -57,6 +58,10 @@ Options:
         Useful if you only want to re-create a part of your source.
         Do note that this option will not set the entry point, you need
         to use the appropriate option for that.
+    
+    --start <start>:
+        Offset to start the disassembly from. This is an absolute index,
+        it must be higher or equal to the entry point.
 
     --encoding <encoding>:
         Specifies an encoding for the data segments (.db).
@@ -87,14 +92,15 @@ The following options are enabled by default:
     --no-timer:
         Prevents outputting the elapsed time.
 
-    """)
-    sys.exit(2)
+    """, file=sys.stderr)
+    sys.exit(1)
 
 try:
     opts, args = getopt.gnu_getopt(
         args = sys.argv,
         shortopts = "hsr:i:o:e:",
-        longopts = ["ifile=","ofile=", "help", "encoding", "range", "silent", "entry", "org", "no-labels", "no-branches", "no-timer", "raw"])
+        longopts = ["ifile=","ofile=", "help", "encoding", "range", "start=", 
+                    "silent", "entry", "org", "no-labels", "no-branches", "no-timer", "raw"])
 
 except getopt.GetoptError:
     print_help()
@@ -106,15 +112,17 @@ for opt, arg in opts:
         SILENT = True
     elif opt in ("-e", "--entry", "--org"):
         ENTRY_POINT = int(arg, 0)
+    elif opt == "--start":
+        START_POINT = int(arg, 0)
     elif opt in ("-r", "--range"):
         try:
             BOUNDS = list(map(lambda n: int(n, 0), arg.split(":")))
         except:
             print("Invalid range specified.")
-            sys.exit(6)
+            sys.exit(1)
         if len(BOUNDS) > 2:
             print("Invalid range specified.")
-            sys.exit(6)
+            sys.exit(1)
     elif opt in ("-i", "--ifile"):
         INPUTFILE = arg
     elif opt in ("-o", "--ofile"):
@@ -124,7 +132,7 @@ for opt, arg in opts:
             codecs.lookup(arg)
         except LookupError:
             print("Codec '" + arg + "' either doesn't exist or isn't supported on this machine.")
-            sys.exit(6)
+            sys.exit(1)
         ENCODING = arg
     elif opt == "--no-labels":
         LABELS = False
@@ -138,16 +146,23 @@ for opt, arg in opts:
         print_help()
 
 if INPUTFILE is None:
-    print("You must provide an input file with [-i <inputfile>]")
-    sys.exit(3)
+    print("You must provide an input file with [-i <inputfile>]", file=sys.stderr)
+    sys.exit(1)
 
 if OUTPUTFILE is None and SILENT:
-    print("You must provide an output file with [-o <outputfile>] when in silent mode")
-    sys.exit(5)
+    print("You must provide an output file with [-o <outputfile>] when in silent mode", file=sys.stderr)
+    sys.exit(1)
 
 if not os.path.isfile(INPUTFILE):
-    print("Input file \"" + INPUTFILE + "\" does not exist.")
-    sys.exit(4)
+    print("Input file \"" + INPUTFILE + "\" does not exist.", file=sys.stderr)
+    sys.exit(1)
+
+if START_POINT < ENTRY_POINT:
+    print("Start address must be greater or equal to the entry point.", file=sys.stderr)
+    sys.exit(1)
+
+if START_POINT is None:
+    START_POINT = ENTRY_POINT
 
 if SILENT:
     # Silent flag overrides print to do nothing
@@ -194,7 +209,7 @@ try:
         from tcls_900 import tlcs_900 as proc
 
         pool = InsnPool(proc)
-        insn = Insn(pool, ib, ob, ENTRY_POINT)
+        insn = Insn(pool, ib, ob, START_POINT)
 
     pool.query(insn)
     pool.poll_all()
@@ -241,20 +256,20 @@ try:
         output("; Data Section at " + format(last, "X") + ": ")
         while diff > 0:
             i = nxt - diff
-            i2 = min(i + 6, nxt)
+            i2 = min(i + 7, nxt)
             b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
 
             if not RAW:
                 dstr = " ".join([format(i, "0>2X") for i in b])
                 # Decode and replace garbage sequences with dots
                 decoded = decode_db(b)
-                output("\t\t" + format(i, "X").ljust(padding) + ": " + dstr.ljust(17) + " | .db \"" + decoded + "\"")
+                output("\t\t" + format(i, "X").ljust(padding) + ": " + dstr.ljust(20) + " | .db \"" + decoded + "\"")
             else:
                 # In raw mode output actual hex codes
                 dstr = ", ".join([format(i, "0>2x") + "h" for i in b])
                 output("\t.db " + dstr)
 
-            diff -= 6
+            diff -= 7
 
     last = ENTRY_POINT
     for k, v in sorted(ob.insnmap.items()):
@@ -272,7 +287,7 @@ try:
                 if label is not None:
                     output("\t" + str(label) + ":")
 
-                output("\t\t" + format(v2.pc, "X").ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(17) + " | " + insnentry_to_str(v2, ob))
+                output("\t\t" + format(v2.pc, "X").ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(20) + " | " + insnentry_to_str(v2, ob))
             else:
                 if label is not None:
                     output((str(label) + ": ").ljust(12) + insnentry_to_str(v2, ob))

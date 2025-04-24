@@ -273,12 +273,15 @@ class Insn(threading.Thread):
         return self.ibuffer.byte(self, n, True)
 
     def popn(self, n):
-        if n == 0:
+        if n == 1:
             return self.pop()
-        elif n == 1:
+        elif n == 2:
             return self.popw()
         elif n == 4:
             return self.popl()
+        elif n == 8:
+            return self.popq()
+        raise ValueError("Invalid number of bytes to pop")
 
     def pop(self):
         b = self.ibuffer.byte(self)
@@ -294,7 +297,7 @@ class Insn(threading.Thread):
         return l
     def popq(self):
         q = self.ibuffer.qword(self)
-        self.pc += 4
+        self.pc += 8
         return q
 
     # Used by JR, JP/etc to branch

@@ -166,6 +166,15 @@ def popmem(insn):
                 
 rrtable_8 = ["INVALID", "WA", "INVALID", "BC", "INVALID", "DE", "INVALID", "HL"]
 
+def popn_sz(insn, sz):
+    if sz == BYTE:
+        return insn.pop()
+    elif sz == WORD:
+        return insn.popw()
+    elif sz == LWORD:
+        return insn.popl()
+    raise ValueError("Invalid size")
+
 def rregname(register):
     ext = register.ext
     size = register.size
