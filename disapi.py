@@ -18,6 +18,11 @@ def insn_to_str(insn, ob):
     else:
         return str(insn)
 
+def label_to_str(label):
+    if isinstance(label, Label):
+        return str(label)
+    else: return format(label, "X")
+
 # Holder for a location, used by branching instructions
 class Loc:
     def __init__(self, loc):
@@ -36,7 +41,7 @@ class Branch:
         self.conditional = conditional
 
     def __str__(self):
-        ret = str(self.ep) + " -> " + str(self.to)
+        ret = label_to_str(self.ep) + " -> " + label_to_str(self.to)
         if self.conditional:
             ret += " ?"
         return ret
@@ -60,7 +65,7 @@ class Label:
 
     # TODO: Better name?
     def to_str(self):
-        return self.name + ": " + str(self.location) + " (" + str(self.count) + ")"
+        return self.name + ": " + format(self.location, "X") + " (" + str(self.count) + ")"
 
     def __int__(self):
         return self.location

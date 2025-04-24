@@ -44,7 +44,7 @@ Options:
     -e, --entry, --org <entry_point>:
         Similar to the .org directive, sets an initial offset
         to increment. Useful if you only have parts of a source file
-        avalialable to align jumps properly.
+        available to align jumps properly.
 
         This will insert
             .org <entry_point>
@@ -108,7 +108,7 @@ for opt, arg in opts:
         ENTRY_POINT = int(arg, 0)
     elif opt in ("-r", "--range"):
         try:
-            BOUNDS = list(map(int, arg.split(":")))
+            BOUNDS = list(map(lambda n: int(n, 0), arg.split(":")))
         except:
             print("Invalid range specified.")
             sys.exit(6)
@@ -238,30 +238,30 @@ try:
         diff = nxt - last
         if diff < 1: return
 
-        output("; Data Section at " + str(last) + ": ")
+        output("; Data Section at " + format(last, "X") + ": ")
         while diff > 0:
             i = nxt - diff
-            i2 = min(i + 5, nxt)
+            i2 = min(i + 6, nxt)
             b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
 
             if not RAW:
                 dstr = " ".join([format(i, "0>2X") for i in b])
                 # Decode and replace garbage sequences with dots
                 decoded = decode_db(b)
-                output("\t\t" + str(i).ljust(padding) + ": " + dstr.ljust(14) + " | .db \"" + decoded + "\"")
+                output("\t\t" + format(i, "X").ljust(padding) + ": " + dstr.ljust(17) + " | .db \"" + decoded + "\"")
             else:
                 # In raw mode output actual hex codes
                 dstr = ", ".join([format(i, "0>2x") + "h" for i in b])
                 output("\t.db " + dstr)
 
-            diff -= 5
+            diff -= 6
 
     last = ENTRY_POINT
     for k, v in sorted(ob.insnmap.items()):
         # Fill with db statements
         output_db(v[0].pc, last)
 
-        output("; Section at " + str(k) + ": ")
+        output("; Section at " + format(k, "X") + ": ")
 
         for i in range(0, len(v)):
             v2 = v[i]
@@ -272,7 +272,7 @@ try:
                 if label is not None:
                     output("\t" + str(label) + ":")
 
-                output("\t\t" + str(v2.pc).ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(14) + " | " + insnentry_to_str(v2, ob))
+                output("\t\t" + format(v2.pc, "X").ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(17) + " | " + insnentry_to_str(v2, ob))
             else:
                 if label is not None:
                     output((str(label) + ": ").ljust(12) + insnentry_to_str(v2, ob))
@@ -281,7 +281,12 @@ try:
 
         last = v2.pc + v2.length
 
-    output_db(file_len + ENTRY_POINT, last)
+    if len(BOUNDS) == 2:
+        end = BOUNDS[1] - BOUNDS[0]
+    elif len(BOUNDS) == 1:
+        end = file_len - BOUNDS[0]
+    else: end = file_len
+    output_db(min(file_len, end) + ENTRY_POINT, last)
 
     if TIMER:
         end = round(time.time() - start, 3)
