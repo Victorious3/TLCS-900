@@ -1,0 +1,1030 @@
+SYSCR0:
+  $: 0x00E0
+  XEN: 7
+  XTEN: 6
+  RXEN: 5
+  RXTEN: 4
+  RSYSCK: 3
+  WUEF: 2
+  PRCK1: 1
+  PRCK0: 0
+SYSCR1:
+  $: 0x00E1
+  SYSCK: 3
+  GEAR2: 2
+  GEAR1: 1
+  GEAR0: 0
+SYSCR2:
+  $: 0x00E2
+  SCOSEL: 6
+  WUPTM1: 5
+  WUPTM0: 4
+  HALTM1: 3
+  HALTM0: 2
+  SELDRV: 1
+  DRVE: 0
+
+VLDCTL:
+  $: 0x0449
+  XT1VSEL: 3
+  VLD2VSE: 2
+  VLD1VSE: 1
+  VLD0VSE: 0
+
+DFMCR0:
+  $: 0x00E8
+  ACT1: 7
+  ACT0: 6
+  DLUPFG: 5
+  DLUPTM: 4
+DFMCR1:
+  $: 0x00E9
+  D7: 7
+  D6: 6
+  D5: 5
+  D4: 4
+  D3: 3
+  D2: 2
+  D1: 1
+  D0: 0
+
+EMCCR0:
+  $: 0x00E3
+  PROTECT: 7
+  EXTIN: 2
+  DRVOSCH: 1
+  DRVOSCL: 0
+EMCCR1: 0x00E4
+EMCCR2: 0x00E5
+EMCCR3:
+  $: 0x00E6
+  ENFROM: 6
+  ENDROM: 5
+  ENPROM: 4
+  FFLAG: 2
+  DFLAG: 1
+  PFLAG: 0
+EMCCR4:
+  $: 0x00E7
+  TA3MLDE: 1
+  TA3LCDE: 0
+
+DMAR:
+  $: 0x0089
+  DMAR3: 3
+  DMAR2: 2
+  DMAR1: 1
+  DMAR0: 0
+
+# Interrupts
+INTE0:
+  $: 0x0090
+  I0C: 3
+  I0M2: 2
+  I0M1: 1
+  I0M0: 0
+INTE12:
+  $: 0x0091
+  I2C: 7
+  I2M2: 6
+  I2M1: 5
+  I2M0: 4
+  I1C: 3
+  I1M2: 2
+  I1M1: 1
+  I1M0: 0
+INTE3ALM4:
+  $: 0x0092
+  IA4C: 7
+  IA4M2: 6
+  IA4M1: 5
+  IA4M0: 4
+  I3C: 3
+  I3M2: 2
+  I3M1: 1
+  I3M0: 0
+INTEALM01:
+  $: 0x0093
+  IA1C: 7
+  IA1M2: 6
+  IA1M1: 5
+  IA1M0: 4
+  IA0C: 3
+  IA0M2: 2
+  IA0M1: 1
+  IA0M0: 0
+INTEALM23:
+  $: 0x0094
+  IA3C: 7
+  IA3M2: 6
+  IA3M1: 5
+  IA3M0: 4
+  IA2C: 3
+  IA2M2: 2
+  IA2M1: 1
+  IA2M0: 0
+INTETA01:
+  $: 0x0095
+  ITA1C: 7
+  ITA1M2: 6
+  ITA1M1: 5
+  ITA1M0: 4
+  ITA0C: 3
+  ITA0M2: 2
+  ITA0M1: 1
+  ITA0M0: 0
+INTETA23:
+  $: 0x0096
+  ITA3C: 7
+  ITA3M2: 6
+  ITA3M1: 5
+  ITA3M0: 4
+  ITA2C: 3
+  ITA2M2: 2
+  ITA2M1: 1
+  ITA2M0: 0
+INTERTCKEY:
+  $: 0x0097
+  IKC: 7
+  IKM2: 6
+  IKM1: 5
+  IKM0: 4
+  IRC: 3
+  IRM2: 2
+  IRM1: 1
+  IRM0: 0
+INTES0:
+  $: 0x0098
+  ITX0C: 7
+  ITX0M2: 6
+  ITX0M1: 5 
+  ITX0M0: 4 
+  IRX0C: 3 
+  IRX0M2: 2 
+  IRX0M1: 1 
+  IRX0M0: 0
+INTES1:
+  $: 0x0099
+  ITXT1C: 7
+  ITX1M2: 6 
+  ITX1M1: 5 
+  ITX1M0: 4 
+  IRX1: 3
+  IRX1M2: 2 
+  IRX1M1: 1 
+  IRX1M0: 0
+INTELCD:
+  $: 0x009A
+  ILCD1C: 7
+  ILCDM2: 6
+  ILCDM1: 5 
+  ILCDM0: 4
+INTETC01:
+  $: 0x009B
+  ITC1C: 7
+  ITC1M2: 6 
+  ITC1M1: 5 
+  ITC1M0: 4 
+  ITC0C: 3 
+  ITC0M2: 2 
+  ITC0M1: 1 
+  ITC0M0: 0
+INTETC23:
+  $: 0x009C
+  ITC3C: 7
+  ITC3M2: 6 
+  ITC3M1: 5 
+  ITC3M0: 4 
+  ITC2C: 3 
+  ITC2M2: 2 
+  ITC2M1: 1 
+  ITC2M0: 0
+INTEP01:
+  $: 0x009D
+  IP1C: 7
+  IP1M2: 6 
+  IP1M1: 5 
+  IP1M0: 4 
+  IP0C: 3 
+  IP0M2: 2 
+  IP0M1: 1 
+  IP0M0: 0
+
+IIMC:
+  $: 0x008C
+  I3EDGE: 5
+  I2EDGE: 4 
+  I1EDGE: 3 
+  I0EDGE: 2 
+  I0LE: 1 
+  NMIREE: 0
+INTCLR:
+  $: 0x0088
+  CLRV5: 5
+  CLRV4: 4 
+  CLRV3: 3 
+  CLRV2: 2 
+  CLRV1: 1 
+  CLRV0: 0
+
+#DMA
+DMA0V:
+  $: 0x0080
+  DMA0V5: 5
+  DMA0V4: 4 
+  DMA0V3: 3 
+  DMA0V2: 2 
+  DMA0V1: 1 
+  DMA0V0: 0
+DMA1V:
+  $: 0x0081
+  DMA1V5: 5
+  DMA1V4: 4 
+  DMA1V3: 3 
+  DMA1V2: 2 
+  DMA1V1: 1 
+  DMA1V0: 0
+DMA2V:
+  $: 0x0082
+  DMA2V5: 5
+  DMA2V4: 4 
+  DMA2V3: 3 
+  DMA2V2: 2 
+  DMA2V1: 1 
+  DMA2V0: 0
+DMA3V:
+  $: 0x0083
+  DMA3V5: 5
+  DMA3V4: 4 
+  DMA3V3: 3 
+  DMA3V2: 2 
+  DMA3V1: 1 
+  DMA3V0: 0
+
+#DMA software request register
+DMAR:
+  $: 0x0089
+  DMAR3: 3
+  DMAR2: 2 
+  DMAR1: 1 
+  DMAR0: 0
+# DMA burst register
+DMAB: 
+  $: 0x008A
+  DMAB3: 3
+  DMAB2: 2 
+  DMAB1: 1 
+  DMAB0: 0
+
+# Ports
+P1:
+  $: 0x0001
+  P17: 7
+  P16: 6 
+  P15: 5 
+  P14: 4
+  P13: 3 
+  P12: 2 
+  P11: 1 
+  P10: 0
+P1CR:
+  $: 0x0004
+  P17C: 7
+  P16C: 6 
+  P15C: 5
+  P14C: 4 
+  P13C: 3
+  P12C: 2 
+  P11C: 1 
+  P10C: 0
+P2:
+  $: 0x0006
+  P27: 7
+  P26: 6
+  P25: 5 
+  P24: 4 
+  P23: 3 
+  P22: 2 
+  P21: 1 
+  P20: 0
+
+# Port 5
+P2FC:
+  $: 0x0009
+  P27F: 7
+  P26F: 6 
+  P25F: 5 
+  P24F: 4 
+  P23F: 3 
+  P22F: 2 
+  P21F: 1 
+  P20F: 0
+P5:
+  $: 0x000D
+  P56: 6
+  P53: 3
+  P52: 2
+P5CR:
+  $: 0x000A
+  P56C: 6
+  P53C: 3
+  P52C: 2
+P5FC:
+  $: 0x000B
+  P56F: 6
+  P53F: 3
+  P52F: 2
+P5FC2:
+  $: 0x000C
+  P56F2: 6
+  P52F2: 2
+P5UDE:
+  $: 0x000E
+  P56U: 6
+  P53U: 3
+  UDEP52: 2 
+  P52UD: 1
+
+# Port 6
+P6:
+  $: 0x0012
+  P67: 7
+  P66: 6 
+  P65: 5 
+  P64: 4 
+  P63: 3 
+  P61: 1 
+  P60: 0
+P6CR:
+  $: 0x0014
+  P67C: 7
+  P66C: 6 
+  P65C: 5 
+  P64C: 4 
+  P63C: 3 
+  P61C: 1 
+  P60C: 0
+P6FC:
+  $: 0x0015
+  P67F: 7 
+  P66F: 6 
+  P65F: 5
+  P64F: 4 
+  P63F: 3
+  P62F: 2 
+  P61F: 1 
+  P60F: 0
+P6FC2:
+  $: 0x001B
+  P67F2: 7
+  P66F2: 6 
+  P65F2: 5 
+  P64F2: 4
+  P65F2D: 2
+P6UE:
+  $: 0x0018
+  P67U: 7
+  P66U: 6 
+  P65U: 5
+  P64U: 4 
+  P63U: 3 
+  P61U: 1 
+  P60U: 0
+P6FC3:
+  $: 0x0010
+  P65F3: 5
+  P60F3: 0
+
+# Port 7
+P7: 
+  $: 0x0013
+  P74: 4 
+  P73: 3 
+  P72: 2 
+  P71: 1 
+  P70: 0
+P7CR:
+  $: 0x0016
+  P74C: 4
+  P73C: 3 
+  P72C: 2 
+  P71C: 1 
+  P70C: 0
+P7FC:
+  $: 0x0017
+  P74F: 4
+  P73F: 3 
+  P72F: 2 
+  P71F: 1 
+  P70F: 0
+P7FC2:
+  $: 0x001C
+  P74F2: 4
+  P73F2: 3
+  P71F2: 1 
+  P70F2: 0
+P7UDE:
+  $: 0x001F
+  P72UD: 5
+  P74U: 4 
+  P73U: 3 
+  UDEP72: 2 
+  P71U: 1 
+  P70U: 0
+
+# Port 9
+P9:
+  $: 0x0019
+  P97: 7
+  P96: 6
+  P95: 5 
+  P94: 4 
+  P93: 3
+  P92: 2
+  P91: 1 
+  P90: 0
+P9FC:
+  $: 0x001D
+  P97F: 7
+  P96F: 6
+  P95F: 5
+  P94F: 4
+  P93F: 3
+  P92F: 2
+  P91F: 1
+  P90F: 0
+P9UE:
+  $: 0x001E
+  P97U: 7
+  P96U: 6
+  P95U: 5
+  P94U: 4
+  P93U: 3
+  P92U: 2 
+  P91U: 1 
+  P90U: 0
+
+# Port B
+PB:
+  $: 0x0022
+  PB5: 5
+  PB4: 4
+  PB3: 3
+  PB2: 2
+  PB1: 1 
+  PB0: 0
+PBCR:
+  $: 0x0024
+  PB5C: 5 
+  PB4C: 4
+  PB3C: 3 
+  PB2C: 2 
+  PB1C: 1 
+  PB0C: 0
+PBFC:
+  $: 0x0025
+  PB5F: 5
+  PB4F: 4 
+  PB3F: 3
+PBUDE:
+  $: 0x0020
+  PB5UD: 7
+  PB4UD: 6
+  UDEPB5: 5
+  UDEPB4: 4 
+  PB3U: 3 
+  PB2U: 2
+  PB1U: 1 
+  PB0U: 0
+
+# Port C
+PC:
+  $: 0x0023
+  PC7: 7
+  PC6: 6 
+  PC5: 5 
+  PC4: 4 
+  PC3: 3
+PCCR:
+  $: 0x0026
+  PC7C: 7
+  PC6C: 6 
+  PC5C: 5 
+  PC4C: 4 
+  PC3C: 3
+PCFC:
+  $: 0x0027
+  PC5F: 5
+  PC3F: 3
+PCUDOE:
+  $: 0x0028
+  ODEPC3: 5 
+  PC5UD: 4 
+  PC4UD: 3
+  UDEPC5: 2
+  UDEPC4: 1 
+  PC3U: 0
+
+# Port D
+PD:
+  $: 0x0029
+  PD7: 7
+  PD6: 6
+  PD4: 4 
+  PD3: 3 
+  PD2: 2 
+  PD1: 1 
+  PD0: 0
+PDCR:
+  $: 0x002B
+  PD7C: 7
+  PD6C: 6 
+  PD4C: 4 
+  PD3C: 3 
+  PD2C: 2 
+  PD1C: 1 
+  PD0C: 0
+PDFC:
+  $: 0x002A
+  PD7F: 7 
+  PD6F: 6 
+  PD4F: 4 
+  PD3F: 3 
+  PD2F: 2 
+  PD1F: 1 
+  PD0F: 0
+PDUE:
+  $: 0x002C
+  PD7U: 7
+  PD6U: 6
+  PD4U: 4 
+  PD3U: 3
+  PD2U: 2 
+  PD1U: 1 
+  PD0U: 0
+
+# Memory start address registers
+MSAR0: 0x00C8
+MSAR1: 0x00CA
+MSAR2: 0x00CC
+MSAR3: 0x00CE
+
+# Memory Address Mask Register
+MAMR0: 0x00C9
+MAMR1: 0x00CB
+MAMR2: 0x00CD
+MAMR3: 0x00CF
+
+# Timer
+TA01RUN:
+  $: 0x0100
+  TA0RDE: 7
+  I2TA01: 3
+  TA01PRUN: 2
+  TA1RUN: 1
+  TA0RUN: 0
+TA23RUN:
+  $: 0x0108
+  TA2RDE: 7
+  I2TA23: 3
+  TA23PRUN: 2 
+  TA3RUN: 1 
+  TA2RUN: 0
+TA01MOD:
+  $: 0x0104
+  TA01M1: 7
+  TA01M0: 6
+  PWM01: 5 
+  PWM00: 4 
+  TA1CLK1: 3 
+  TA1CLK0: 2 
+  TA0CLK1: 1 
+  TA0CLK0: 0
+TA23MOD:
+  $: 0x010C
+  TA23M1: 7
+  TA23M0: 6
+  PWM21: 5
+  PWM20: 4
+  TA3CLK1: 3
+  TA3CLK0: 2 
+  TA2CLK1: 1 
+  TA2CLK0: 0
+TA1FFCR:
+  $: 0x0105
+  TA1FFC1: 3
+  TA1FFC0: 2 
+  TA1FFIE: 1 
+  TA1FFIS: 0
+TA3FFCR:
+  $: 0x10D
+  TA3FFC1: 3
+  TA3FFC0: 2 
+  TA3FFIE: 1 
+  TA3FFIS: 0
+
+TA0REG: 0x0102
+TA1REG: 0x0103
+TA2REG: 0x010A
+TA3REG: 0x010B
+
+EMCCR4:
+  $: 0x00E7
+  TA3MLDE: 1
+  TA3LCDE: 0
+
+# MMU
+LOCAL0:
+  $: 0x0350
+  L0E: 7
+  L0EA22: 2 
+  L0EA21: 1 
+  L0EA20: 0
+LOCAL1:
+  $: 0x0351
+  L1E: 7
+  L1EA23: 2 
+  L1EA22: 1 
+  L1EA21: 0
+LOCAL2:
+  $: 0x0352
+  L2E: 7
+  L2EA23: 2 
+  L2EA22: 1 
+  L2EA21: 0
+LOCAL3:
+  $: 0x0353
+  L3E: 7
+  L3EA26: 4
+  L3EA25: 3
+  L3EA24: 2
+  L3EA23: 1
+  L3EA22: 0
+
+# Serial
+SC0MOD0:
+  $: 0x0202
+  TB8: 7
+  RXE: 5 
+  SM1: 3
+  SM0: 2 
+  SC1: 1 
+  SC0: 0
+SC1MOD0:
+  $: 0x020A
+  TB8: 7
+  CTSE: 6
+  RXE: 5
+  WU: 4
+  SM1: 3 
+  SM0: 2 
+  SC1: 1 
+  SC0: 0
+SC0CR:
+  $: 0x201
+  RB8: 7 
+  EVEN: 6
+  PE: 5
+  OERR: 4
+  PERR: 3
+  FERR: 2
+SC1CR:
+  $: 0x209
+  RB8: 7
+  EVEN: 6
+  PE: 5
+  OERR: 4 
+  PERR: 3 
+  FERR: 2 
+  SCLKS: 1 
+  IOC: 0
+BR0CR:
+  $: 0x0203
+  BR0ADDE: 6
+  BR0CK1: 5 
+  BR0CK0: 4 
+  BR0S3: 3 
+  BR0S2: 2 
+  BR0S1: 1
+  BR0S0: 0
+BR0ADD:
+  $: 0x0204
+  BR0K3: 3 
+  BR0K2: 2 
+  BR0K1: 1 
+  BR0K0: 0
+BR1CR:
+  $: 0x020B
+  BR1ADDE: 6
+  BR1CK1: 5
+  BR1CK0: 4 
+  BR1S3: 3 
+  BR1S2: 2 
+  BR1S1: 1 
+  BR1S0: 0
+BR1ADD:
+  $: 0x020C
+  BR1K3: 3
+  BR1K2: 2 
+  BR1K1: 1 
+  BR1K0: 0
+
+SC0BUF: 0x200
+
+SC0MOD1:
+  $: 0x0205
+  I2S0: 7
+  FDPX0: 6
+
+SC1BUF: 0x208
+
+SC1MOD1:
+  $: 0x020D
+  I2S1: 7
+  FDPX1: 6
+
+SIRCR:
+  $: 0x207
+  PLSEL: 7
+  RXSEL: 6
+  TXEN: 5
+  RXEN: 4
+  SIRWD3: 3
+  SIRWD2: 2 
+  SIRWD1: 1 
+  SIRWD0: 0
+
+# DRAM controller
+DREFCR:
+  $: 0x0430
+  DMI: 7
+  RS2: 6
+  RS1: 5
+  RS0: 4 
+  RW2: 3
+  RW1: 2 
+  RW1: 1
+  RC: 0
+DMEMCR:
+  $: 0x431
+  SRFC: 7
+  MACM: 4 
+  MUXE: 3 
+  MUXW: 2 
+  MUXW: 1 
+  MAC: 0
+
+# Watchdog timer
+WDMOD:
+  $: 0x300
+  WDTE: 7 
+  WDTP1: 6
+  WDTP0: 5
+  I2WDT: 2 
+  RESCR: 1
+
+WDCR: 0x0301
+
+# Real time clock
+SECR: 
+  $: 0x0320
+  SE6: 6
+  SE5: 5
+  SE4: 4
+  SE3: 3
+  SE2: 2 
+  SE1: 1
+  SE0: 0
+MINR: 
+  $: 0x0321
+  MI6: 6 
+  MI5: 5 
+  MI4: 4
+  MI3: 3 
+  MI2: 2
+  MI1: 1 
+  MI0: 0
+HOURR: 
+  $: 0x0322
+  HO5: 5
+  HO4: 4 
+  HO3: 3 
+  HO2: 2 
+  HO1: 1 
+  HO0: 0
+DAYR: 
+  $: 0x0323
+  WE2: 2
+  WE1: 1 
+  WE0: 0
+DATER: 
+  $: 0x0324
+  DA5: 5
+  DA4: 4
+  DA3: 3
+  DA2: 2 
+  DA1: 1 
+  DA0: 0
+MONTHR: 
+  $: 0x0325
+  MO4: 4
+  MO3: 3 
+  MO2: 2 
+  MO1: 1 
+  MO0: 0
+YEARR: 
+  $: 0x0326
+  YE7: 7
+  YE6: 6
+  YE5: 5
+  YE4: 4
+  YE3: 3
+  YE2: 2 
+  YE1: 1
+  YE0: 0
+  LEAP1: 1
+  LEAP0: 0
+PAGER: 
+  $: 0x0327
+  INTENA: 7
+  ADJUST: 4 
+  ENATMR: 3 
+  ENAALM: 2
+  PAGE: 0
+RESTR:
+  $: 0x0328
+  DIS1HZ: 7
+  DIS16HZ: 6 
+  RSTTMR: 5
+  RSTALM: 4 
+  RE3: 3 
+  RE2: 2
+  RE1: 1 
+  RE0: 0
+
+# LCD Controller
+LCDSAL:
+  $: 0x0360
+  SAL15: 7 
+  SAL14: 6
+  SAL13: 5
+  SAL12: 4
+  MODE: 0
+LCDSAH:
+  $: 0x0361
+  SAL23: 7
+  SAL22: 6
+  SAL21: 5 
+  SAL20: 4
+  SAL19: 3 
+  SAL18: 2 
+  SAL17: 1 
+  SAL16: 0
+LCDSIZE:
+  $: 0x0362
+  COM3: 7
+  COM2: 6 
+  COM1: 5
+  COM0: 4
+  SEG3: 3
+  SEG2: 2
+  SEG1: 1 
+  SEG0: 0
+LCDCTL:
+  $: 0x0363
+  LCDON: 7
+  BUS1: 4 
+  BUS0: 3
+  MMULCD: 2
+  FP8: 1
+  START: 0
+LCDFFP:
+  $: 0x0364
+  FP7: 7
+  FP6: 6
+  FP5: 5
+  FP4: 4
+  FP3: 3
+  FP2: 2
+  FP1: 1
+  FP0: 0
+LCDCTL2:
+  $: 0x0366
+  RAMBUS: 2
+  AC1: 1
+  AC0: 0
+
+LCDC1L: 0x0FE0
+LCDC1H: 0x0FE1
+LCDC2L: 0x0FE2
+LCDC2H: 0x0FE3
+LCDC3L: 0x0FE4
+LCDC3H: 0x0FE5
+LCDR1L: 0x0FE6
+LCDR1H: 0x0FE7
+
+# alarm / melody generator
+ALM:
+  $: 0x0330
+  AL8: 7
+  AL7: 6 
+  AL6: 5
+  AL5: 4
+  AL4: 3 
+  AL3: 2
+  AL2: 1
+  AL1: 0
+MELALMC:
+  $: 0x0331
+  FC1: 7
+  FC0: 6
+  ALMINV: 5
+  MELALM: 0
+MELFL:
+  $: 0x0332
+  ML7: 7
+  ML6: 6
+  ML5: 5
+  ML4: 4
+  ML3: 3
+  ML2: 2
+  ML1: 1
+  ML0: 0
+MELFH:
+  $: 0x0333
+  MELON: 7
+  ML11: 3
+  ML10: 2
+  ML9: 1
+  ML8: 0
+ALMINT:
+  $: 0x0334
+  IALM4E: 4
+  IALM3E: 3
+  IALM2E: 2
+  IALM1E: 1
+  IALM0E: 0
+
+# Voltage level detector
+VLDCR0:
+  $: 0x0440
+  V0EN: 7
+  LHSEL: 6
+  INT0EN: 5
+  VLD0IN: 4
+  V03: 3
+  V02: 2
+  V01: 1
+  V00: 0
+VLDCR1:
+  $: 0x0441
+  V1EN: 7
+  INT1EN: 5
+  VLD1IN: 4
+  V12: 2
+  V11: 1
+  V10: 0
+VLDCR2:
+  $: 0x0442
+  V2EN: 0
+  INT2EN: 5
+  VLD2IN: 4
+  V21: 1
+  V20: 0
+VLDCTL:
+  $: 0x0449
+  XT1VSEL: 3
+  VLD2USE: 2
+  VLD1USE: 1
+  VLD0USE: 0
+HPCTST1:
+  $: 0x0445
+  TIM21: 5
+  TIM20: 4
+  TIM11: 3
+  TIM10: 2
+  TIM01: 1
+  TIM00: 0
+HPCTST2:
+  $: 0x0446
+  SAM_2: 5
+  SAM_1: 4
+  SAM_0: 3
+
+# data horizontal and vertical conversion (HVC) circuit
+HVREGA0: 0x0450
+HVREGA1: 0x0451
+HVREGA2: 0x0452
+HVREGA3: 0x0453
+HVREGA4: 0x0454
+HVREGA5: 0x0455
+HVREGA6: 0x0456
+HVREGA7: 0x0457
+HVREGB0: 0x0458
+HVREGB1: 0x0459
+HVREGB2: 0x045A
+HVREGB3: 0x045B
+HVREGB4: 0x045C
+HVREGB5: 0x045D
+HVREGB6: 0x045E
+HVREGB7: 0x045F
