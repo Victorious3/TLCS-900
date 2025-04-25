@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import time
+from tcls_900 import microc
 
 # Command line arguments
 INPUTFILE   = None      # Input file, required
@@ -201,6 +202,8 @@ try:
 
     if TIMER:
         start = time.time()
+
+    microc.load_microcontroller("TMP91C016")
 
     with io.open(INPUTFILE, 'rb') as f:
         ib = InputBuffer(f, file_len, BOUNDS, ENTRY_POINT)

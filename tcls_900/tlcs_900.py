@@ -1,3 +1,5 @@
+from . import microc
+
 # Constants
 BYTE = 0
 WORD = 1
@@ -34,10 +36,14 @@ class RReg(Reg):
 # Class that holds memory addresses
 class Mem:
     def __init__(self, address, name = None):
+        location = microc.check_address(address)
+        if location: name = location.name
+
         if name is None:
-            self.name = str(address)
+            self.name = format(address, "X") + "h"
         else:
             self.name = name
+
         self.address = address
         
     def __str__(self):

@@ -575,6 +575,50 @@ MAMR1: 0x00CB
 MAMR2: 0x00CD
 MAMR3: 0x00CF
 
+# CS/Wait controlelr
+B0CS:
+  $: 0x00C0
+  B0E: 7
+  B0OM1: 5
+  B0OM0: 4
+  B0BUS: 3
+  B0W2: 2
+  B0W1: 1
+  B0W0: 0
+B1CS:
+  $: 0x00C1
+  B1E: 7
+  B1OM1: 5
+  B1OM0: 4
+  B1BUS: 3
+  B1W2: 2
+  B1W1: 1
+  B1W0: 0  
+B2CS:
+  $: 0x00C2
+  B2E: 7
+  B2OM1: 5
+  B2OM0: 4
+  B2BUS: 3
+  B2W2: 2
+  B2W1: 1
+  B2W0: 0 
+B3CS:
+  $: 0x00C3
+  B3E: 7
+  B3OM1: 5
+  B3OM0: 4
+  B3BUS: 3
+  B3W2: 2
+  B3W1: 1
+  B3W0: 0 
+BEXCS:
+  $: 0x00C7
+  BEXBUS: 3
+  BEXW2: 2 
+  BEXW1: 1 
+  BEXW0: 0
+
 # Timer
 TA01RUN:
   $: 0x0100

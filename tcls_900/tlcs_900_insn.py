@@ -29,9 +29,9 @@ def LD_R_mem(insn):
 
 def LD_n_n(insn):
     if (insn.pop() & 0x2) == 0: #BYTE
-        return "LD", insn.pop(), insn.pop()
+        return "LD", Mem(insn.pop()), insn.pop()
     else: #WORD
-        return "LDW", insn.pop(), insn.popw()
+        return "LDW", Mem(insn.pop()), insn.popw()
         
 def LD_nn_m(insn):
     insn.pop()
@@ -52,7 +52,7 @@ def LDW_m_X(insn):
 
 def LDW_n_nn(insn):
     insn.pop()
-    return "LDW", insn.pop(), insn.popw()
+    return "LDW", Mem(insn.pop()), insn.popw()
 
 def LDB_m_nn(insn):
     return "LD", insn.lastmem, Mem(insn.popw())
@@ -386,7 +386,7 @@ def AND_mem_R(insn):
     return "AND", insn.lastmem, reg
 def AND_mem_X(insn):
     insn.pop() 
-    return ("ANDW" if insn.lastsize == WORD else "AND"), popn_sz(insn, insn.lastsize)
+    return ("ANDW" if insn.lastsize == WORD else "AND"), insn.lastmem, popn_sz(insn, insn.lastsize)
 
 #OR
 def OR_R_r(insn): 
@@ -805,7 +805,7 @@ def CALR(insn):
     offset = insn.popw()
     if offset > 32767:
         offset -= 65536
-    to = Loc(insn.pc + 3 + offset)
+    to = Loc(insn.pc + offset)
     insn.branch(to, True)
     return "CALR", to
 
@@ -815,7 +815,7 @@ def DJNZ(insn):
     offset = insn.pop()
     if offset > 127:
         offset -= 256
-    loc = Loc(insn.pc + 3 + offset)
+    loc = Loc(insn.pc + offset)
     insn.branch(loc, True)
     
     return "DJNZ", insn.lastr, loc
