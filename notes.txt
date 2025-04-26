@@ -1,0 +1,2 @@
+Rom loads at offset F00000
+Reset Vector is at  FFFF00 and points to FFEC19

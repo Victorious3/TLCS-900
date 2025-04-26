@@ -35,15 +35,17 @@ class RReg(Reg):
 
 # Class that holds memory addresses
 class Mem:
-    def __init__(self, address, name = None):
+    def __init__(self, insn, address, name = None):
         location = microc.check_address(address)
-        if location: name = location.name
-
-        if name is None:
-            self.name = format(address, "X") + "h"
+        
+        if name is not None: pass
+        elif location: name = location.name
+        elif insn.ibuffer.min <= address < insn.ibuffer.max:
+            name = insn.obuffer.datalabel(address)
         else:
-            self.name = name
-
+            name = format(address, "X") + "h"
+        
+        self.name = name
         self.address = address
         
     def __str__(self):
@@ -112,7 +114,7 @@ def popmem(insn):
         name = Rregtable[LWORD][reg]
         if (mem & 0x8) == 0:
             # XWA to XSP
-            return Mem(0xE0 + reg, name)
+            return Mem(insn, 0xE0 + reg, name)
         else:
             # XWA to XSP + d8
             d = insn.pop()
@@ -121,7 +123,7 @@ def popmem(insn):
                 name += "-" + (str(-d) if d < -1 else "")
             else:
                 name += "+" + (str(d) if d > 1 else "")
-            return Mem(0xE0 + reg + d, name)
+            return Mem(insn, 0xE0 + reg + d, name)
     elif (mem & 0x4) == 0x4:
         
         mem2 = insn.pop()
@@ -131,24 +133,24 @@ def popmem(insn):
         name = regname(Reg(True, LWORD, reg))
 
         if (mem & 0x1) == 0:
-            return Mem(reg - c, "-" + name) # -r32
+            return Mem(insn, reg - c, "-" + name) # -r32
         else:
-            return Mem(reg + c, name + "+") # r32+
+            return Mem(insn, reg + c, name + "+") # r32+
     else:
         n = mem & 0x3
         if n == 0: 
-            return Mem(insn.pop()) # 8
+            return Mem(insn, insn.pop()) # 8
         elif n == 1:
-            return Mem(insn.popw()) # 16
+            return Mem(insn, insn.popw()) # 16
         elif n == 2:
-            return Mem(insn.popw() | (insn.pop() >> 16)) # 24
+            return Mem(insn, insn.popw() | (insn.pop() >> 16)) # 24
         else:
             mem = insn.pop()
             n = mem & 0x3
             if n == 0:
                 reg = (mem & 0xFE)
                 name = regname(Reg(True, LWORD, reg))
-                return Mem(mem * 4, name) # r32
+                return Mem(insn, mem * 4, name) # r32
             elif n == 1:
                 reg = (mem & 0xFE)
                 name = regname(Reg(True, LWORD, reg))
@@ -158,17 +160,17 @@ def popmem(insn):
                     name += "-" + (str(-d) if d < -1 else "")
                 else:
                     name += "+" + (str(d) if d > 1 else "")
-                return Mem(reg + d, name) # r32 + d16
+                return Mem(insn, reg + d, name) # r32 + d16
             elif mem == 0x3:
                 reg1 = insn.pop()
                 reg2 = insn.pop()
                 name = "%s+%s" % (regname(Reg(True, LWORD, reg1)), regname(Reg(True, BYTE, reg2)))
-                return Mem(reg1 + reg2, name) # r32 + r8
+                return Mem(insn, reg1 + reg2, name) # r32 + r8
             else:
                 reg1 = insn.pop()
                 reg2 = insn.pop()
                 name = "%s+%s" % (regname(Reg(True, LWORD, reg1)), regname(Reg(True, WORD, reg2)))
-                return Mem(reg1 + reg2, name) # r32 + r16
+                return Mem(insn, reg1 + reg2, name) # r32 + r16
                 
 rrtable_8 = ["INVALID", "WA", "INVALID", "BC", "INVALID", "DE", "INVALID", "HL"]
 

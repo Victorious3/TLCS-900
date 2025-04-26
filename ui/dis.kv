@@ -1,0 +1,22 @@
+<MainWindow>:
+    RecycleView:
+        bar_width: 10
+        scroll_type: ['bars', 'content']
+
+        BoxLayout:
+            size_hint: 1, None 
+            height: self.minimum_height
+            id: main_panel
+            orientation: 'vertical'
+
+<SectionPanel>:
+    size_hint: 1, None
+    height: 100
+    canvas.before:
+        Color:
+            rgba: 0, 0, 0, 1
+        Line:
+            width: 2
+            rectangle: self.x, self.y, self.width, self.height
+    Label:
+        text: "I'm inside a border!"

@@ -29,13 +29,13 @@ def LD_R_mem(insn):
 
 def LD_n_n(insn):
     if (insn.pop() & 0x2) == 0: #BYTE
-        return "LD", Mem(insn.pop()), insn.pop()
+        return "LD", Mem(insn, insn.pop()), insn.pop()
     else: #WORD
-        return "LDW", Mem(insn.pop()), insn.popw()
+        return "LDW", Mem(insn, insn.pop()), insn.popw()
         
 def LD_nn_m(insn):
     insn.pop()
-    return ("LDW" if insn.lastsize == WORD else "LD"), Mem(insn.popw()), insn.lastmem
+    return ("LDW" if insn.lastsize == WORD else "LD"), Mem(insn, insn.popw()), insn.lastmem
 def LDB_mem_R(insn): 
     return "LD", insn.lastmem, popR(insn, '?', BYTE)
 def LDW_mem_R(insn): 
@@ -52,12 +52,12 @@ def LDW_m_X(insn):
 
 def LDW_n_nn(insn):
     insn.pop()
-    return "LDW", Mem(insn.pop()), insn.popw()
+    return "LDW", Mem(insn, insn.pop()), insn.popw()
 
 def LDB_m_nn(insn):
-    return "LD", insn.lastmem, Mem(insn.popw())
+    return "LD", insn.lastmem, Mem(insn, insn.popw())
 def LDW_m_nn(insn):
-    return "LDW", insn.lastmem, Mem(insn.popw())
+    return "LDW", insn.lastmem, Mem(insn, insn.popw())
     
 #PUSH
 def PUSH_F(insn):
@@ -635,7 +635,7 @@ def LDX(insn):
     insn.pop()
     r2 = insn.pop()
     insn.pop()
-    return "LDX", Mem(r1), r2
+    return "LDX", Mem(insn, r1), r2
 
 #LINK
 def LINK(insn): 

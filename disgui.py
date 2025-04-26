@@ -1,22 +1,6 @@
-import time
-import shutil
+from ui import main
+from tcls_900 import microc
 
-from disapi import *
-from ui.term import *
-
-COLUMNS = 0
-ROWS = 0
-
-clear_screen()
-set_cursor(False)
-
-move_cursor(0, 0)
-print_c("This is " + Fore.RED + " a TEST.")
-
-(c, k) = get_key()
-while k != 3:
-    print(c, k)
-    (c, k) = get_key()
-
-# Finalize
-finalize()
+if __name__ == "__main__":
+    microc.load_microcontroller("TMP91C016")
+    main.main("rom/el9900.rom", 0xFFEC19, 0xF00000)

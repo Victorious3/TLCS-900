@@ -46,19 +46,11 @@ class Branch:
             ret += " ?"
         return ret
 
-def _generate_name(prefix):
-    ident = 0
-    while True:
-        yield prefix + format(ident, "X")
-        ident += 1
-
 class Label:
-    name_generator = _generate_name("label_")
-
     def __init__(self, location, count = 1, name = None):
         self.location = location
         self.count = count
-        self.name = name or next(Label.name_generator)
+        self.name = name or "label_" + format(location, "X")
 
     def __str__(self):
         return self.name
@@ -80,6 +72,10 @@ class OutputBuffer:
     def insert(self, ep, lst):
         if len(lst) > 0:
             self.insnmap[ep] = lst
+
+    def datalabel(self, ep):
+        name = "data_" + format(ep, "X")
+        self.labels[ep] = name
 
     def branch(self, ep, to, conditional = False):
         self.branchlist.append(Branch(ep, to, conditional))
@@ -104,14 +100,21 @@ class OutputBuffer:
 
 class InputBuffer:
     def __init__(self, data, available, bounds = None, entry_point = 0):
+        self.min = 0
+        self.max = available
         if bounds is not None:
             if len(bounds) > 0:
                 mn = bounds[0]
                 if mn > 0:
                     available = available - mn
                     data.read(mn) # Skip bytes
+                    self.mind = mn
             if len(bounds) > 1:
                 available = bounds[1] - bounds[0]
+                self.max = bounds[1]
+
+        self.min += entry_point
+        self.max += entry_point
 
         self.buffer = bytearray(available)
         # Stores which bytes have already been read
