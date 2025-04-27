@@ -1,7 +1,10 @@
 import os
 from abc import ABC
-from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label, insnentry_to_str
+from functools import reduce
+from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label
 
+DATA_PER_ROW = 7
+MAX_SECTION_LENGTH = DATA_PER_ROW * 100
 
 class Instruction:
     def __init__(self, entry: InsnEntry):
@@ -31,7 +34,7 @@ class CodeSection(Section):
 class Project:
     def __init__(self, path: str):
         self.path = path
-        self.sections = []
+        self.sections: list[Section] = []
 
     def rescan(self, ep: int, org: int, oneshot = False):
         self.sections = [] # TODO Only update parts that changed
@@ -88,8 +91,9 @@ class Project:
             label = None
 
             if len(v) == 1:
-                self.sections.append(CodeSection(v[start].pc, 1, label_list(last_label), data, map(Instruction, v[start:start+1])))
-                last = v[start].pc + 1
+                v1 = v[start]
+                self.sections.append(CodeSection(s, 1, label_list(last_label), ib.buffer[v1.pc - org:v1.pc + v1.length + 1 - org], list(map(Instruction, v[start:start+1]))))
+                last = v1.pc + v1.length
             else:  
                 while True:
                     while label is None:
@@ -105,8 +109,8 @@ class Project:
                         ve = v[i - 1]
                         s = vs.pc
                         e = ve.pc - vs.pc - 1
-                        data = ib.buffer[s - org:s + e - org]
-                        self.sections.append(CodeSection(s, e, label_list(last_label), data, map(Instruction, v[start:i])))
+                        data = ib.buffer[s - org:s + e + 1 - org]
+                        self.sections.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:i - 1]))))
                     
                     last_label = label
                     label = None
@@ -114,14 +118,33 @@ class Project:
 
                 s = v[start].pc
                 e = v[-1].pc + v[-1].length - s - 1
-                data = ib.buffer[s - org:s + e - org]
-                self.sections.append(CodeSection(s, e, label_list(last_label), data, map(Instruction, v[start:-1])))
+                data = ib.buffer[s - org:s + e + 1 - org]
+                self.sections.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:i + 1]))))
 
                 last = s + e + 1
-
+        
         output_db(file_len + org, last)
-        for section in self.sections:
-            print(section)
+
+        def split_section(section: Section):
+            if section.length < MAX_SECTION_LENGTH:
+                return [section]
+            
+            res = []
+            if isinstance(section, DataSection):
+                labels = section.labels
+                for i in range(0, section.length, MAX_SECTION_LENGTH):
+                    diff = min(MAX_SECTION_LENGTH, section.length - i + 1)
+                    res.append(DataSection(section.offset + i, diff, labels, section.data[i:i + diff + 1]))
+                    labels = []
+
+            else: res = [section]
+
+            return res
+
+        self.sections = reduce(list.__add__, map(split_section, self.sections))
+
+        #for section in self.sections:
+        #    print(section)
             
 
 
