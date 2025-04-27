@@ -4,7 +4,7 @@ from functools import reduce
 from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label
 
 DATA_PER_ROW = 7
-MAX_SECTION_LENGTH = DATA_PER_ROW * 100
+MAX_SECTION_LENGTH = DATA_PER_ROW * 10
 
 class Instruction:
     def __init__(self, entry: InsnEntry):
@@ -92,7 +92,7 @@ class Project:
 
             if len(v) == 1:
                 v1 = v[start]
-                self.sections.append(CodeSection(s, 1, label_list(last_label), ib.buffer[v1.pc - org:v1.pc + v1.length + 1 - org], list(map(Instruction, v[start:start+1]))))
+                self.sections.append(CodeSection(v1.pc, v1.length, label_list(last_label), ib.buffer[v1.pc - org:v1.pc + v1.length + 1 - org], list(map(Instruction, v[start:start+1]))))
                 last = v1.pc + v1.length
             else:  
                 while True:
@@ -136,8 +136,25 @@ class Project:
                     diff = min(MAX_SECTION_LENGTH, section.length - i + 1)
                     res.append(DataSection(section.offset + i, diff, labels, section.data[i:i + diff + 1]))
                     labels = []
+            elif isinstance(section, CodeSection):
+                labels = section.labels
+                last = 0
+                last_i = 0
+                i = 0
+                offset = 0
+                for insn in section.instructions:
+                    offset += insn.entry.length
+                    if offset - last + insn.entry.length > MAX_SECTION_LENGTH:
+                        data = section.data[last:offset]
+                        res.append(CodeSection(section.offset + offset, offset - last, labels, data, section.instructions[last_i:i]))
+                        last = offset - insn.entry.length
+                        last_i = i
+                        labels = []
 
-            else: res = [section]
+                    i += 1
+                
+                if last < section.length:
+                    res.append(CodeSection(section.offset + last, section.length - last, labels, section.data[last:], section.instructions[last_i:]))
 
             return res
 

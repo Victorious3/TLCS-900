@@ -3,8 +3,11 @@ import math
 from kivy.app import App
 from kivy.metrics import dp
 from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.uix.widget import Widget
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
@@ -25,7 +28,7 @@ def find_font_height():
 
 FONT_HEIGHT = find_font_height()
 
-class MainWindow(BoxLayout): pass
+class MainWindow(FloatLayout): pass
 
 class LabelRow(TextInput):
     def __init__(self, section: Section, label: str, **kwargs):
@@ -137,14 +140,46 @@ class SectionPanel(BoxLayout, RecycleDataViewBehavior):
 
         self.add_widget(rows)
         self.height = self.minimum_height
+
+class GotoPosition(TextInput):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        app().goto_position = self
+
+    def _key_down(self, key, repeat=False):
+        if key[2] == "enter":
+            try:
+                offset = int(self.text, base=16)
+            except ValueError:
+                return
+
+            self.opacity = 0
+            self.disabled = True
+            self.text = ""
+
+            app().scroll_to_offset(offset)
+            return
         
+        super()._key_down(key, repeat)
+
+class Keyboard(Widget):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        Window.bind(on_key_down=self._keydown)
+
+    def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
+        if "ctrl" in modifiers and keycode == 10: # ctrl + g
+            app().goto_position.disabled = False
+            app().goto_position.opacity = 1
+            app().goto_position.focus = True
+
 
 class RV(RecycleView):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        app().rv = self
 
-        project: Project = App.get_running_app().project
-
+        project: Project = app().project
 
         data = []
         for section in project.sections:
@@ -161,20 +196,29 @@ class DisApp(App):
     def __init__(self, project: Project):
         super().__init__()
         self.project = project
+        self.goto_position: GotoPosition = None
+        self.rv: RV = None
     
     def build(self):
         window = MainWindow()
-        self.load_regions()
         return window
     
-    def load_regions(self):
-        #self.main_panel.clear_widgets()
-        #for section in self.project.sections:
-        #print(len(self.project.sections))
-        #for i in range(30):
-        #    section_panel = SectionPanel()
-        #    self.main_panel.add_widget(section_panel)
-        pass
+    def scroll_to_offset(self, offset: int):
+        scroll_pos = 0
+        for i in range(len(self.rv.data)):
+            last_height = self.rv.data[-1]["height"]
+            data = self.rv.data[i]
+            section: Section = data["section"]
+            if section.offset <= offset < section.offset + section.length:
+                self.rv.scroll_y = 1 - (scroll_pos / (self.rv.children[0].height - self.rv.height))
+                break
+
+            scroll_pos += data["height"]
+
+        print(sum(map(lambda d: d["height"], self.rv.data)), self.rv.children[0].height)
+    
+def app() -> DisApp:
+    return App.get_running_app()
 
 def main(path: str, ep: int, org: int):
     project = load_project(path, ep, org)

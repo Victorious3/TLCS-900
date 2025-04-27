@@ -1,7 +1,19 @@
 <MainWindow>:
     RV
+    Keyboard
+    GotoPosition:
+        id: goto_position
+        opacity: 0
+        disabled: True
+        size_hint: None, None
+        width: dp(240)
+        height: dp(32)
+        pos_hint: { "center_x": 0.5, "top": 1 }
 
 <RV>:
+    id: disassembler_view
+    size_hint: 1, 1
+    pos: 0, 0
     bar_width: 10
     scroll_type: ['bars', 'content']
     viewclass: 'SectionPanel'
@@ -13,6 +25,7 @@
         orientation: 'vertical'
 
 <SectionPanel>:
+    padding: 0
     size_hint: 1, None
     height: dp(1000)
     orientation: 'vertical'
