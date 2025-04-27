@@ -1,6 +1,7 @@
 <MainWindow>:
+    Minimap
     RV
-    Keyboard
+    
     GotoPosition:
         id: goto_position
         opacity: 0
@@ -10,11 +11,18 @@
         height: dp(32)
         pos_hint: { "center_x": 0.5, "top": 1 }
 
+    Keyboard
+
+<Minimap>:
+    size_hint: None, 1
+    width: dp(15)
+    pos_hint: { "right": 1, "top": 1 }
+
 <RV>:
     id: disassembler_view
     size_hint: 1, 1
-    pos: 0, 0
-    bar_width: 10
+    bar_width: dp(15)
+    scroll_wheel_distance: 150
     scroll_type: ['bars', 'content']
     viewclass: 'SectionPanel'
 

@@ -4,7 +4,7 @@ from functools import reduce
 from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label
 
 DATA_PER_ROW = 7
-MAX_SECTION_LENGTH = DATA_PER_ROW * 10
+MAX_SECTION_LENGTH = DATA_PER_ROW * 40
 
 class Instruction:
     def __init__(self, entry: InsnEntry):
@@ -35,6 +35,8 @@ class Project:
     def __init__(self, path: str):
         self.path = path
         self.sections: list[Section] = []
+        self.ib: InputBuffer = InputBuffer
+        self.ob: OutputBuffer = None
 
     def rescan(self, ep: int, org: int, oneshot = False):
         self.sections = [] # TODO Only update parts that changed
@@ -44,6 +46,8 @@ class Project:
         with open(self.path, 'rb') as f:
             ib = InputBuffer(f, file_len, entry_point=org)
             ob = OutputBuffer(None)
+            self.ob = ob
+            self.ib = ib
 
             from tcls_900 import tlcs_900 as proc
 

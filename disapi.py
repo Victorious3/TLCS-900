@@ -67,7 +67,7 @@ class OutputBuffer:
         self.insnmap = {}
         self.branchlist = deque()
         self.ofile = ofile
-        self.labels = {} # List of labels, compute with create_labels()
+        self.labels = {} # List of labels, compute with compute_labels
 
     def insert(self, ep, lst):
         if len(lst) > 0:

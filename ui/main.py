@@ -1,9 +1,12 @@
 import math
+from itertools import takewhile
 
 from kivy.app import App
 from kivy.metrics import dp
 from kivy.clock import Clock
 from kivy.core.window import Window
+from kivy.graphics import Color, Line, Rectangle
+from kivy.graphics.context_instructions import Translate
 from kivy.uix.widget import Widget
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
@@ -11,10 +14,13 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
+from kivy.utils import get_color_from_hex
 
 from .project import Section, CodeSection, DataSection, DATA_PER_ROW, Project, load_project
+from disapi import Loc
 
-FONT_SIZE = 16
+FONT_SIZE = dp(15)
+LABEL_HEIGHT = FONT_SIZE + dp(4)
 FONT_NAME = "ui/FiraMono"
 
 def find_font_height():
@@ -24,11 +30,146 @@ def find_font_height():
         font_size = FONT_SIZE
     )
     label.texture_update()
-    return label.texture_size[1]
+    return label.texture_size
 
-FONT_HEIGHT = find_font_height()
+FONT_WDI, FONT_HEIGHT = find_font_height()
 
 class MainWindow(FloatLayout): pass
+
+class DisLabel(Label):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.size_hint = None, None
+        self.font_size = FONT_SIZE
+        self.font_name = FONT_NAME
+        self.texture_update()
+        self.size = self.texture_size
+
+class LocationLabel(DisLabel):
+    hover_labels = []
+    any_hovared = False
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.original_color = self.color
+        self.ctrl_down = False
+        self.hovered = False
+
+        LocationLabel.hover_labels.append(self)
+
+        Window.bind(on_key_down=self._keydown)
+        Window.bind(on_key_up=self._keyup)
+        Window.bind(on_mouse_up=self._on_mouse_up)
+        Window.bind(on_mouse_move=self._on_mouse_move)
+                
+
+    @classmethod
+    def on_mouse_move(cls, window, pos):
+        cls.any_hovered = False
+        label: LocationLabel
+        for label in cls.hover_labels:
+            if not label.get_root_window():
+                label.hovered = False
+                continue
+
+            if label.collide_point(*label.to_widget(*pos)):
+                label.hovered = True
+                cls.any_hovered = True
+            else:
+                label.hovered = False
+                
+            label._on_update()
+
+        cls.update_cursor()
+        
+    @classmethod
+    def update_cursor(cls):
+        if cls.any_hovered and app().ctrl_down:
+            Window.set_system_cursor('hand')
+        else:
+            Window.set_system_cursor('arrow')
+
+    def _on_mouse_move(self, window, x, y, modifiers):
+        self.hovered = False
+        if not self.get_root_window():
+            return
+
+        if self.collide_point(*self.to_widget(x, y)):
+            self.hovered = True
+            LocationLabel.any_hovered = True
+        else:
+            self.hovered = False
+            
+        self._on_update()
+
+    def _on_mouse_up(self, window, x: int, y: int, button: str, modifiers):
+        if self.hovered and self.ctrl_down and button == 'left':
+            try:
+                app().scroll_to_label(self.text)
+            except ValueError: pass
+
+    def _on_update(self):
+        self.canvas.before.clear()
+
+        if self.hovered and self.ctrl_down:
+            color = get_color_from_hex("#64B5F6")
+            self.color = color
+            
+            with self.canvas.before:
+                Color(*color)
+                Line(points=[
+                    self.x, self.y + 1,
+                    self.right, self.y + 1
+                ], width=1)
+
+        else: self.color = self.original_color
+
+    def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
+        if keycode == 224: 
+            self.ctrl_down = True
+            self._on_update()
+    
+    def _keyup(self, window, keyboard: int, keycode: int):
+        if keycode == 224: 
+            self.ctrl_down = False
+            self._on_update()
+        
+
+class Minimap(Widget):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        app().minimap = self
+
+        self.bind(pos=self.redraw, size=self.redraw)
+
+    def redraw(self, *args):        
+        sections = app().project.sections
+        offset = 0
+        if not app().rv: return
+        total_height = app().rv.children[0].height
+        if total_height == 0: return
+
+        def cs_height(section): return len(section.instructions) * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0)
+        def ds_height(section): return math.ceil(section.length / DATA_PER_ROW) * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0)
+
+        self.canvas.after.clear()
+        with self.canvas.after:
+            it = iter(sections)
+            for section in it:
+                if isinstance(section, CodeSection):
+                    height = cs_height(section)
+                    height += sum(map(cs_height, takewhile(lambda x: isinstance(x, CodeSection), it)))
+                elif isinstance(section, DataSection):
+                    height = ds_height(section)
+                    height += sum(map(ds_height, takewhile(lambda x: isinstance(x, DataSection), it)))
+                offset += height
+
+                if isinstance(section, CodeSection):
+                    Color(1, 0, 0, 1)
+                    sec_offset = (1 - (offset / total_height)) * self.height
+                    sec_height = height / total_height * self.height
+                    r = Rectangle(pos=[self.x, self.y + sec_offset], size=[self.width, sec_height])
+
 
 class LabelRow(TextInput):
     def __init__(self, section: Section, label: str, **kwargs):
@@ -36,11 +177,12 @@ class LabelRow(TextInput):
         self.size_hint = 1, None
         self.font_size = FONT_SIZE
         self.font_name = FONT_NAME
-        self.height = dp(32)
+        self.height = LABEL_HEIGHT
         self.section = section
         self.background_color = 0, 0, 0, 0
         self.foreground_color = 1, 1, 1, 1
         self.text = label
+        self.padding = 0
 
 class SectionColumn(Label):
     def __init__(self, **kwargs):
@@ -95,18 +237,39 @@ class SectionData(SectionColumn):
         self.text = "\n".join(lines)
         self.resize()
 
-class SectionMnemonic(SectionColumn):
+
+def loc_to_str(insn: Loc):
+    ob = app().project.ob
+    label = ob.label(insn.loc)
+    if label is not None:
+        return str(label)
+    return str(insn.loc)
+
+class SectionMnemonic(BoxLayout):
     def __init__(self, section: Section, **kwargs):
         super().__init__(**kwargs)
-        self.width = dp(200)
         self.section = section
-        self.halign = "left"
-
-        lines = []
+        self.width = dp(200)
+        self.size_hint = None, 1
+        self.orientation = "vertical"
+        
         if isinstance(section, CodeSection):
             for insn in section.instructions:
-                lines.append(insn.entry.opcode + " " + ", ".join(map(str, insn.entry.instructions)))
+                row = BoxLayout(orientation = "horizontal")
+                row.add_widget(DisLabel(text = insn.entry.opcode + " "))
+                for i in range(len(insn.entry.instructions)):
+                    param = insn.entry.instructions[i]
+                    if isinstance(param, Loc):
+                        row.add_widget(LocationLabel(text = loc_to_str(param)))
+                    else:
+                        row.add_widget(DisLabel(text = str(param)))
+                    if i < len(insn.entry.instructions) - 1:
+                        row.add_widget(DisLabel(text = ", "))
+
+                self.add_widget(row)
+
         elif isinstance(section, DataSection):
+            lines = []
             i = 0
             while i < section.length:
                 next = min(i + DATA_PER_ROW, section.length)
@@ -118,8 +281,9 @@ class SectionMnemonic(SectionColumn):
 
                 i += DATA_PER_ROW
             
-        self.text = "\n".join(lines)
-        self.resize()
+            for line in lines:
+                self.add_widget(DisLabel(text = line))
+        
 
 class SectionPanel(BoxLayout, RecycleDataViewBehavior):
     def refresh_view_attrs(self, rv, index, data):
@@ -150,17 +314,25 @@ class GotoPosition(TextInput):
         if key[2] == "enter":
             try:
                 offset = int(self.text, base=16)
+                try:
+                    app().scroll_to_offset(offset)
+                except ValueError: return
             except ValueError:
-                return
+                try:
+                    app().scroll_to_label(self.text)
+                except ValueError: return
 
-            self.opacity = 0
-            self.disabled = True
-            self.text = ""
-
-            app().scroll_to_offset(offset)
+            
+            self.hide()
             return
         
         super()._key_down(key, repeat)
+    
+    def hide(self):
+        self.opacity = 0
+        self.disabled = True
+        self.text = ""
+
 
 class Keyboard(Widget):
     def __init__(self, **kwargs):
@@ -188,7 +360,7 @@ class RV(RecycleView):
             elif isinstance(section, CodeSection):
                 columns = len(section.instructions)
 
-            data.append({"section": section, "height": columns * FONT_HEIGHT + (dp(32) if section.labels else 0)})
+            data.append({"section": section, "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0)})
 
         self.data = data
 
@@ -196,27 +368,75 @@ class DisApp(App):
     def __init__(self, project: Project):
         super().__init__()
         self.project = project
+        
         self.goto_position: GotoPosition = None
         self.rv: RV = None
+        self.minimap: Minimap = None
+
+        self.ctrl_down = False
+
+        Window.bind(mouse_pos=LocationLabel.on_mouse_move)
+        Window.bind(on_key_down=self._keydown)
+        Window.bind(on_key_up=self._keyup)
     
     def build(self):
+        Window.clearcolor = get_color_from_hex("#1F1F1F")
+
         window = MainWindow()
         return window
+    
+
+    def after_layout_is_ready(self, dt):
+        self.minimap.redraw()
+
+    def on_start(self):
+        super().on_start()
+        Clock.schedule_once(self.after_layout_is_ready, 0)
+    
+    def scroll_to_label(self, label: str):
+        for section in self.project.sections:
+            if section.labels and section.labels[0].name == label:
+                print("Goto label:", label, "at", hex(section.offset))
+                self.scroll_to_offset(section.offset)
+                return
+        raise ValueError("Invalid label")
     
     def scroll_to_offset(self, offset: int):
         scroll_pos = 0
         for i in range(len(self.rv.data)):
-            last_height = self.rv.data[-1]["height"]
+            total_height = self.rv.children[0].height
             data = self.rv.data[i]
             section: Section = data["section"]
             if section.offset <= offset < section.offset + section.length:
-                self.rv.scroll_y = 1 - (scroll_pos / (self.rv.children[0].height - self.rv.height))
-                break
+                scroll_pos += LABEL_HEIGHT
+                if isinstance(section, DataSection):
+                    scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
+                elif isinstance(section, CodeSection):
+                    for insn in section.instructions:
+                        if offset > insn.entry.pc: scroll_pos += FONT_HEIGHT
+                        else: break
+
+                self.rv.scroll_y = 1 - (scroll_pos / (total_height - self.rv.height))
+                return
 
             scroll_pos += data["height"]
+        raise ValueError("Invalid location")
 
-        print(sum(map(lambda d: d["height"], self.rv.data)), self.rv.children[0].height)
+    def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
+        if keycode == 224: 
+            self.ctrl_down = True
+            LocationLabel.update_cursor()
+        elif keycode == 41: 
+            self.goto_position.hide()
+            return True
     
+    def _keyup(self, window, keyboard: int, keycode: int):
+        if keycode == 224: 
+            self.ctrl_down = False
+            LocationLabel.update_cursor()
+        elif keycode == 41:
+            return True
+
 def app() -> DisApp:
     return App.get_running_app()
 
