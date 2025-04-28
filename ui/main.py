@@ -1,5 +1,5 @@
 import math
-from itertools import takewhile
+from itertools import groupby
 
 from kivy.app import App
 from kivy.metrics import dp
@@ -144,7 +144,6 @@ class Minimap(Widget):
 
     def redraw(self, *args):        
         sections = app().project.sections
-        offset = 0
         if not app().rv: return
         total_height = app().rv.children[0].height
         if total_height == 0: return
@@ -154,21 +153,17 @@ class Minimap(Widget):
 
         self.canvas.after.clear()
         with self.canvas.after:
-            it = iter(sections)
-            for section in it:
-                if isinstance(section, CodeSection):
-                    height = cs_height(section)
-                    height += sum(map(cs_height, takewhile(lambda x: isinstance(x, CodeSection), it)))
-                elif isinstance(section, DataSection):
-                    height = ds_height(section)
-                    height += sum(map(ds_height, takewhile(lambda x: isinstance(x, DataSection), it)))
-                offset += height
+            offset = 0
+            Color(1, 0, 0, 1)
+            for key, group in groupby(sections, key=type):
+                group = list(group)
+                if key == DataSection:
+                    height = sum(map(ds_height, group))
+                else:
+                    height = sum(map(cs_height, group))
+                    Rectangle(pos=(self.x, self.y + (1 - (offset / total_height)) * self.height), size=(self.width, height / total_height * self.height))
 
-                if isinstance(section, CodeSection):
-                    Color(1, 0, 0, 1)
-                    sec_offset = (1 - (offset / total_height)) * self.height
-                    sec_height = height / total_height * self.height
-                    r = Rectangle(pos=[self.x, self.y + sec_offset], size=[self.width, sec_height])
+                offset += height
 
 
 class LabelRow(TextInput):
