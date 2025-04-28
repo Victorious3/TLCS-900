@@ -22,7 +22,7 @@
     id: disassembler_view
     size_hint: 1, 1
     bar_width: dp(15)
-    scroll_wheel_distance: 150
+    scroll_wheel_distance: 50
     scroll_type: ['bars', 'content']
     viewclass: 'SectionPanel'
 
@@ -35,9 +35,9 @@
     padding: 0
     size_hint: None, None
     orientation: 'vertical'
-    canvas.before:
-        Color:
-            rgba: 1, 0, 0, 1
-        Line:
-            width: 2
-            rectangle: self.x, self.y, self.width, self.height
+    #canvas.before:
+    #    Color:
+    #        rgba: 1, 0, 0, 1
+    #    Line:
+    #        width: 2
+    #        rectangle: self.x, self.y, self.width, self.height

@@ -113,9 +113,6 @@ class Project:
                         e = ve.pc + ve.length - vs.pc
                         data = ib.buffer[s - org:s + e + 1 - org]
                         self.sections.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:i - 1]))))
-                        
-                        if last_label and last_label.name == "label_F84BA1":
-                            print(start, i, len(v[start:i]))
 
                         start = i - 1
                         last_label = label

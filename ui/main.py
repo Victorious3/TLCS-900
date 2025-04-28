@@ -1,5 +1,6 @@
-import math
+import math, time
 from itertools import groupby
+from threading import Thread
 
 from kivy.app import App
 from kivy.metrics import dp
@@ -16,7 +17,7 @@ from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.utils import get_color_from_hex
 
-from .project import Section, CodeSection, DataSection, DATA_PER_ROW, Project, load_project
+from .project import Section, CodeSection, DataSection, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
 from disapi import Loc
 
 FONT_SIZE = dp(15)
@@ -154,7 +155,7 @@ class Minimap(Widget):
         self.canvas.after.clear()
         with self.canvas.after:
             offset = 0
-            Color(1, 0, 0, 1)
+            Color(*get_color_from_hex("#66BB6A"))
             for key, group in groupby(sections, key=type):
                 group = list(group)
                 if key == DataSection:
@@ -281,25 +282,39 @@ class SectionMnemonic(BoxLayout):
         
 
 class SectionPanel(BoxLayout, RecycleDataViewBehavior):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.scheduled_update = None
+
     def refresh_view_attrs(self, rv, index, data):
         super().refresh_view_attrs(rv, index, data)
-        self.width = dp(680)
 
-        section: Section = data["section"]
+        def update(dt):
+            if not self.is_visible(): 
+                self.canvas.clear()
+                return
 
-        self.clear_widgets()
-        for label in section.labels:
-            self.add_widget(LabelRow(section, label.name))
+            section: Section = data["section"]
 
-        rows = BoxLayout(orientation = "horizontal", size_hint=(None, None))
-        rows.add_widget(SectionAddresses(section))
-        rows.add_widget(SectionData(section))
-        rows.add_widget(SectionMnemonic(section))
-        rows.do_layout()
-        rows.height = rows.minimum_height
+            self.clear_widgets()
+            for label in section.labels:
+                self.add_widget(LabelRow(section, label.name))
 
-        self.add_widget(rows)
-        self.height = self.minimum_height
+            rows = BoxLayout(orientation = "horizontal", size_hint=(None, 1))
+            rows.add_widget(SectionAddresses(section))
+            rows.add_widget(SectionData(section))
+            rows.add_widget(SectionMnemonic(section))
+
+            self.add_widget(rows)
+        
+        if self.scheduled_update:
+            self.scheduled_update.cancel()
+        self.scheduled_update = Clock.schedule_once(update, 0.05)
+
+    def is_visible(self):
+        visible_range = app().rv.get_visible_range()   
+        window = MAX_SECTION_LENGTH * FONT_HEIGHT     
+        return self.y + self.height >= visible_range[0] - window and self.y <= visible_range[1] + window
 
 class GotoPosition(TextInput):
     def __init__(self, **kwargs):
@@ -329,7 +344,6 @@ class GotoPosition(TextInput):
         self.disabled = True
         self.text = ""
 
-
 class Keyboard(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -340,7 +354,6 @@ class Keyboard(Widget):
             app().goto_position.disabled = False
             app().goto_position.opacity = 1
             app().goto_position.focus = True
-
 
 class RV(RecycleView):
     def __init__(self, **kwargs):
@@ -361,6 +374,13 @@ class RV(RecycleView):
                          "width": dp(1500) })
 
         self.data = data
+
+
+    def get_visible_range(self):
+        content_height = self.children[0].height - self.height
+        scroll_pos = self.scroll_y * content_height
+
+        return scroll_pos, scroll_pos + self.height
 
 class DisApp(App):
     def __init__(self, project: Project):
@@ -402,7 +422,7 @@ class DisApp(App):
     def scroll_to_offset(self, offset: int):
         scroll_pos = 0
         for i in range(len(self.rv.data)):
-            total_height = self.rv.children[0].height
+            total_height = self.rv.children[0].height - self.rv.height
             data = self.rv.data[i]
             section: Section = data["section"]
             if section.offset <= offset < section.offset + section.length:
@@ -414,7 +434,7 @@ class DisApp(App):
                         if offset > insn.entry.pc: scroll_pos += FONT_HEIGHT
                         else: break
 
-                self.rv.scroll_y = 1 - (scroll_pos / (total_height - self.rv.height))
+                self.rv.scroll_y = 1 - (scroll_pos / total_height)
                 return
 
             scroll_pos += data["height"]
