@@ -72,18 +72,19 @@ class Project:
             for i in range(last + 1, nxt):
                 label = ob.label(i)
                 if label is not None:
-                    length = i - start - 1
+                    length = i - start
                     buf = ib.buffer[start - org:i - org]
                     self.sections.append(DataSection(start, length, label_list(last_label), buf))
                     last_label = label
                     start = i
             
-            length = nxt - start - 1
+            length = nxt - start
             if length > 0:
                 buf = ib.buffer[start - org:nxt - org]
                 self.sections.append(DataSection(start, length, label_list(last_label), buf))
         
         last = org
+
         # Load the sections
         for k, v in sorted(ob.insnmap.items()):
             v = list(v)
@@ -101,31 +102,34 @@ class Project:
             else:  
                 while True:
                     while label is None:
-                        v2 = v[i]
-                        label = ob.label(v2.pc)
-                        if i >= len(v) - 1: break
+                        label = ob.label(v[i].pc)
                         i += 1
-
-                    if i >= len(v) - 1: break
+                        if i > len(v) - 1: break
                 
                     if label is not None:
                         vs = v[start]
                         ve = v[i - 1]
                         s = vs.pc
-                        e = ve.pc - vs.pc - 1
+                        e = ve.pc + ve.length - vs.pc
                         data = ib.buffer[s - org:s + e + 1 - org]
                         self.sections.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:i - 1]))))
+                        
+                        if last_label and last_label.name == "label_F84BA1":
+                            print(start, i, len(v[start:i]))
+
+                        start = i - 1
+                        last_label = label
+                        label = None
                     
-                    last_label = label
-                    label = None
-                    start = i - 1
-
+                    if i > len(v) - 1:
+                        break
+                
                 s = v[start].pc
-                e = v[-1].pc + v[-1].length - s - 1
+                e = v[-1].pc + v[-1].length - s
                 data = ib.buffer[s - org:s + e + 1 - org]
-                self.sections.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:i + 1]))))
+                self.sections.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:]))))
 
-                last = s + e + 1
+                last = s + e
         
         output_db(file_len + org, last)
 

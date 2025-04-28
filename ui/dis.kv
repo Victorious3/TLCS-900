@@ -27,15 +27,13 @@
     viewclass: 'SectionPanel'
 
     RecycleBoxLayout:
-        default_size_hint: 1, None
-        size_hint: 1, None
+        size_hint: None, None
         height: self.minimum_height
         orientation: 'vertical'
 
 <SectionPanel>:
     padding: 0
-    size_hint: 1, None
-    height: dp(1000)
+    size_hint: None, None
     orientation: 'vertical'
     canvas.before:
         Color:

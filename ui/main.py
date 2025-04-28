@@ -283,6 +283,7 @@ class SectionMnemonic(BoxLayout):
 class SectionPanel(BoxLayout, RecycleDataViewBehavior):
     def refresh_view_attrs(self, rv, index, data):
         super().refresh_view_attrs(rv, index, data)
+        self.width = dp(680)
 
         section: Section = data["section"]
 
@@ -355,7 +356,9 @@ class RV(RecycleView):
             elif isinstance(section, CodeSection):
                 columns = len(section.instructions)
 
-            data.append({"section": section, "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0)})
+            data.append({"section": section, 
+                         "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),
+                         "width": dp(1500) })
 
         self.data = data
 
