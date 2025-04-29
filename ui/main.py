@@ -248,7 +248,7 @@ class ArrowRenderer(Widget):
 
             merge = False
             for a in active_arrows:
-                if (a[0] == a1[2] and a[0] == a[2] == False or
+                if (a[0] == a1[0] and a[2] == a[2] == False or
                     a[1] == a1[1] and a[2] == a[2] == True):
                         arrow_offsets[a1] = arrow_offsets.get(a, 0)
                         merge = True
