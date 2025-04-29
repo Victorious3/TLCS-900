@@ -1,6 +1,6 @@
 import math, time
-from itertools import groupby
-from threading import Thread
+from itertools import groupby, combinations
+from functools import cache
 
 from kivy.app import App
 from kivy.metrics import dp
@@ -16,6 +16,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.utils import get_color_from_hex
+from kivy.graphics.texture import Texture
 
 from .project import Section, CodeSection, DataSection, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
 from disapi import Loc
@@ -166,6 +167,210 @@ class Minimap(Widget):
 
                 offset += height
 
+def partition(pred, iterable):
+    matches = []
+    nones  = []
+    for item in iterable:
+        (matches if pred(item) else nones).append(item)
+    return matches, nones
+
+MAX_OFFSET = 15
+COLORS =  [get_color_from_hex("#80FFCC"), 
+           get_color_from_hex("#A080FF"), 
+           get_color_from_hex("#FFB380"), 
+           get_color_from_hex("#809FFF"), 
+           get_color_from_hex("#FF80F0"), 
+           get_color_from_hex("#8CFF80"),
+           get_color_from_hex("#FFE080"),
+           get_color_from_hex("#FF8080"),
+           get_color_from_hex("#80FFFF"),
+           get_color_from_hex("#D580FF"),
+           get_color_from_hex("#80CCFF"),
+           get_color_from_hex("#F0FF80"),
+           get_color_from_hex("#80FF9F"),
+           get_color_from_hex("#808CFF"),
+           get_color_from_hex("#BFFF80"),
+           get_color_from_hex("#FF80B3")]
+
+class ArrowRenderer(Widget):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        app().arrows = self
+
+        self.arrows: list[tuple[int, int]] = []
+        self.arrow_offsets = {}
+
+        self.recompute_arrows()
+
+    def recompute_arrows(self):
+        arrows = []
+        for section in app().project.sections:
+            if not isinstance(section, CodeSection): continue
+            for insn in section.instructions:
+                location: Loc = None
+                if insn.entry.opcode == "JP":
+                    if len(insn.entry.instructions) == 1:
+                        location = insn.entry.instructions[0]
+                elif insn.entry.opcode == "JR":
+                    location = insn.entry.instructions[1]
+
+                if not location: continue
+                arrows.append((min(insn.entry.pc, location.loc), max(insn.entry.pc, location.loc), insn.entry.pc < location.loc))
+
+        arrows = sorted(arrows, key = lambda x: x[0])
+
+        arrow_offsets = {}
+        active_arrows = []
+        for a1 in arrows:
+            l = len(active_arrows)
+            if l > 0:
+                mn = active_arrows[-1][1]
+            else: mn = 0
+
+            #if a1[0] == 0xF2BAA2: print(list(map(lambda a: hex(a[0]) + " -> " + hex(a[1]) + " " + str(arrow_offsets.get(a, 0)), active_arrows)))
+            
+            filtered = []
+            width = 0
+            i = l - 1
+            while i >= 0:
+                cur = active_arrows[i]
+                w = arrow_offsets.get(cur, 0)
+                if cur[1] >= mn:
+                    if w >= width:
+                        filtered.append(cur) 
+                        width = w
+
+                    mn = min(mn, cur[0])
+                i -= 1
+
+            active_arrows = list(reversed(filtered))
+
+            merge = False
+            for a in active_arrows:
+                if (a[0] == a1[2] and a[0] == a[2] == False or
+                    a[1] == a1[1] and a[2] == a[2] == True):
+                        arrow_offsets[a1] = arrow_offsets.get(a, 0)
+                        merge = True
+                        break
+            
+            if not merge:
+                for a in active_arrows:
+                    next = arrow_offsets.get(a, 0) + 1
+                    if next > MAX_OFFSET:
+                        arrow_offsets[a] = -1
+                    else: arrow_offsets[a] = next
+                
+                arrow_offsets[a1] = 0
+                
+            active_arrows.append(a1)
+            
+        self.arrows = list(arrows)
+        self.arrow_offsets = arrow_offsets
+
+    def redraw(self):
+        rv = app().rv
+        layout_manager = rv.layout_manager
+        vstart, vend = rv.get_visible_range()
+
+        if len(layout_manager.children) == 0: return
+
+        start_index = layout_manager.get_view_index_at((0, vstart))
+        end_index = layout_manager.get_view_index_at((0, vend))
+
+        vstart = rv.children[0].height - vstart
+        vend = rv.children[0].height - vend
+
+        first: Section = rv.data[end_index]["section"]
+        last: Section = rv.data[start_index]["section"]
+
+        self.canvas.after.clear()
+
+        with self.canvas.after:
+            @cache
+            def get_offset(pc):
+                offset = 0
+                for data in rv.data:
+                    section: Section = data["section"]
+                    if section.offset <= pc < section.length + section.offset:
+                        if section.labels: 
+                            offset += LABEL_HEIGHT
+                        if isinstance(section, CodeSection):
+                            for i in section.instructions:
+                                if i.entry.pc <= pc < i.entry.pc + i.entry.length:
+                                    return offset
+                                offset += FONT_HEIGHT
+                        elif isinstance(section, DataSection):
+                            offset += math.ceil((pc - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
+                            return offset
+
+                    offset += data["height"]
+                return offset
+
+            arrows_to_render = []
+            for arrow in self.arrows:
+                if arrow[0] > first.length + last.offset: continue
+                if arrow[1] < first.offset: continue
+                arrows_to_render.append(arrow)
+        
+            for a in arrows_to_render:
+                y_start = self.height - get_offset(a[0]) + (vstart - self.height)
+                y_end = self.height - get_offset(a[1]) + (vstart - self.height)
+
+                y_start = max(-50, min(self.height + 50, y_start)) - LABEL_HEIGHT / 2
+                y_end = max(-500, min(self.height + 50, y_end)) - LABEL_HEIGHT / 2
+
+                w = self.arrow_offsets.get(a, 0) - 1
+                
+                if w < 0:
+                    Color(*COLORS[15])
+                    offset = (MAX_OFFSET + 1) * 8
+                    if a[2]:
+                        Line(points=[self.right, y_start, 
+                                     self.right - offset - 5, y_start,
+                                     self.right - offset - 5, y_start - LABEL_HEIGHT / 2])
+                        
+                        Line(points=[self.right - offset - 0, y_start - LABEL_HEIGHT / 2 + 5, 
+                                     self.right - offset - 5, y_start - LABEL_HEIGHT / 2,
+                                     self.right - offset - 10, y_start - LABEL_HEIGHT / 2 + 5])
+                    else:
+                        Line(points=[self.right, y_end, 
+                                     self.right - offset - 5, y_end,
+                                     self.right - offset - 5, y_end + LABEL_HEIGHT / 2])
+                        
+                        Line(points=[self.right - offset - 0, y_end + LABEL_HEIGHT / 2 - 5, 
+                                     self.right - offset - 5, y_end + LABEL_HEIGHT / 2,
+                                     self.right - offset - 10, y_end + LABEL_HEIGHT / 2 - 5])
+                    continue
+                
+                Color(*COLORS[w])
+                left = self.right - w*8 - 15
+                
+                Line(points=[self.right, y_start, 
+                             left, y_start, 
+                             left, y_end,
+                             self.right, y_end])
+                
+                if not a[2]:
+                    Line(points=[self.right - 5, y_start - 5,
+                                 self.right, y_start,
+                                 self.right - 5, y_start + 5])
+                    
+                    if y_start > self.height and y_end < self.height:
+                        Line(points=[left - 5, self.height - 5,
+                                     left, self.height,
+                                     left + 5, self.height - 5])
+                else:
+                    Line(points=[self.right - 5, y_end - 5,
+                                 self.right, y_end,
+                                 self.right - 5, y_end + 5])
+                    
+                    if y_end < 0 and y_start > 9:
+                        Line(points=[left - 5, 5,
+                                     left, 0,
+                                     left + 5, 5])
+                            
+
 
 class LabelRow(TextInput):
     def __init__(self, section: Section, label: str, **kwargs):
@@ -178,7 +383,7 @@ class LabelRow(TextInput):
         self.background_color = 0, 0, 0, 0
         self.foreground_color = 1, 1, 1, 1
         self.text = label
-        self.padding = 0
+        self.padding = [dp(100), 0, 0, 0]
 
 class SectionColumn(Label):
     def __init__(self, **kwargs):
@@ -195,7 +400,7 @@ class SectionColumn(Label):
 class SectionAddresses(SectionColumn):
     def __init__(self, section: Section, **kwargs):
         super().__init__(**kwargs)
-        self.width = dp(120)
+        self.width = dp(240)
         self.section = section
         self.halign = "right"
 
@@ -285,16 +490,18 @@ class SectionPanel(BoxLayout, RecycleDataViewBehavior):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.scheduled_update = None
+        self.section: Section = None
 
     def refresh_view_attrs(self, rv, index, data):
         super().refresh_view_attrs(rv, index, data)
+
+        section: Section = data["section"]
+        self.section = section
 
         def update(dt):
             if not self.is_visible(): 
                 self.canvas.clear()
                 return
-
-            section: Section = data["section"]
 
             self.clear_widgets()
             for label in section.labels:
@@ -375,6 +582,9 @@ class RV(RecycleView):
 
         self.data = data
 
+    def update_from_scroll(self, *largs):
+        super().update_from_scroll(*largs)
+        app().arrows.redraw()
 
     def get_visible_range(self):
         content_height = self.children[0].height - self.height
@@ -390,6 +600,7 @@ class DisApp(App):
         self.goto_position: GotoPosition = None
         self.rv: RV = None
         self.minimap: Minimap = None
+        self.arrows: ArrowRenderer = None
 
         self.ctrl_down = False
 
@@ -403,9 +614,9 @@ class DisApp(App):
         window = MainWindow()
         return window
     
-
     def after_layout_is_ready(self, dt):
         self.minimap.redraw()
+        self.arrows.redraw()
 
     def on_start(self):
         super().on_start()
@@ -426,13 +637,14 @@ class DisApp(App):
             data = self.rv.data[i]
             section: Section = data["section"]
             if section.offset <= offset < section.offset + section.length:
-                scroll_pos += LABEL_HEIGHT
+                if section.labels: scroll_pos += LABEL_HEIGHT
                 if isinstance(section, DataSection):
                     scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
                 elif isinstance(section, CodeSection):
                     for insn in section.instructions:
                         if offset > insn.entry.pc: scroll_pos += FONT_HEIGHT
                         else: break
+                
 
                 self.rv.scroll_y = 1 - (scroll_pos / total_height)
                 return

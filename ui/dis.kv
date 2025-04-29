@@ -1,4 +1,5 @@
 <MainWindow>:
+    ArrowRenderer
     Minimap
     RV
     
@@ -12,6 +13,11 @@
         pos_hint: { "center_x": 0.5, "top": 1 }
 
     Keyboard
+
+<ArrowRenderer>:
+    size_hint: None, 1
+    width: dp(15) * 12
+    pos_hint: { "left": 1, "top": 1 }
 
 <Minimap>:
     size_hint: None, 1
@@ -35,9 +41,9 @@
     padding: 0
     size_hint: None, None
     orientation: 'vertical'
-    #canvas.before:
-    #    Color:
-    #        rgba: 1, 0, 0, 1
-    #    Line:
-    #        width: 2
-    #        rectangle: self.x, self.y, self.width, self.height
+    canvas.before:
+        Color:
+            rgba: 1, 0, 0, 1
+        Line:
+            width: 2
+            rectangle: self.x, self.y, self.width, self.height

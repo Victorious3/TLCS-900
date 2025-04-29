@@ -108,7 +108,7 @@ class Project:
                 
                     if label is not None:
                         vs = v[start]
-                        ve = v[i - 1]
+                        ve = v[i - 2]
                         s = vs.pc
                         e = ve.pc + ve.length - vs.pc
                         data = ib.buffer[s - org:s + e + 1 - org]
@@ -149,9 +149,9 @@ class Project:
                 offset = 0
                 for insn in section.instructions:
                     offset += insn.entry.length
-                    if offset - last + insn.entry.length > MAX_SECTION_LENGTH:
+                    if offset - last > MAX_SECTION_LENGTH:
                         data = section.data[last:offset]
-                        res.append(CodeSection(section.offset + offset, offset - last, labels, data, section.instructions[last_i:i]))
+                        res.append(CodeSection(section.offset + last, offset - last, labels, data, section.instructions[last_i:i]))
                         last = offset - insn.entry.length
                         last_i = i
                         labels = []
