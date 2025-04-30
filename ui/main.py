@@ -1,6 +1,7 @@
 import math, time
 from itertools import groupby, combinations
 from functools import cache
+from dataclasses import dataclass
 
 from kivy.app import App
 from kivy.metrics import dp
@@ -94,12 +95,18 @@ COLORS =  [get_color_from_hex("#80FFCC"),
            get_color_from_hex("#BFFF80"),
            get_color_from_hex("#FF80B3")]
 
+@dataclass
 class Arrow:
-    def __init__(self, start, end, direction, tips):
-        self.start = start
-        self.end = end
-        self.direction = direction
-        self.tips = tips
+    start: int
+    end: int
+    direction: bool
+    tips: list[int]
+
+    def __hash__(self):
+        return id(self)
+    
+    def __str__(self):
+        return f"{self.start:X} -> {self.end:X}"
 
 class ArrowRenderer(Widget):
 
@@ -154,11 +161,10 @@ class ArrowRenderer(Widget):
         active_arrows = []
         for a1 in arrows:
             l = len(active_arrows)
-            if l > 0:
-                mn = active_arrows[-1].end
-            else: mn = 0
-
-            #if a1.start == 0xF2BAA2: print(list(map(lambda a: hex(a.start) + " -> " + hex(a.end) + " " + str(arrow_offsets.get(a, 0)), active_arrows)))
+            #if l > 0:
+            #    mn = active_arrows[-1].end
+            #else: mn = 0
+            mn = a1.start
             
             filtered = []
             width = 0
@@ -175,16 +181,28 @@ class ArrowRenderer(Widget):
                 i -= 1
 
             active_arrows = list(reversed(filtered))
-                
-            for a in active_arrows:
-                next = arrow_offsets.get(a, 0)
-                if next < 0: continue
-                if next > MAX_OFFSET:
-                    arrow_offsets[a] = -1
-                else: arrow_offsets[a] = next + 1
+            active_offsets = set(map(lambda x: arrow_offsets.get(x, 0), active_arrows))
+            max_offset = max(active_offsets, default = 0)
+
+            last_offset = arrow_offsets.get(active_arrows[-1], 0) if len(active_arrows) > 0 else 0
+            first = True 
+            if last_offset == 0:
+                for a in reversed(active_arrows):
+                    next = arrow_offsets.get(a, 0)
+                    if next + 1 > MAX_OFFSET:
+                        arrow_offsets[a] = -1
+                        break
+
+                    if next < 0: continue
+                    if next + 1 not in active_offsets and next <= max_offset:
+                        arrow_offsets[a] = next + 1
+                        break
+
+                    arrow_offsets[a] = next + 1
+                    active_offsets.add(next + 1)
+                    first = False
             
             arrow_offsets[a1] = 0
-            
             active_arrows.append(a1)
             
         self.arrows = list(arrows)
@@ -243,7 +261,7 @@ class ArrowRenderer(Widget):
                 y_start = calc_offset(a.start)
                 y_end = calc_offset(a.end)
 
-                w = self.arrow_offsets.get(a, 0) - 1
+                w = self.arrow_offsets.get(a, 0)
                 
                 if w < 0:
                     Color(*COLORS[15])
