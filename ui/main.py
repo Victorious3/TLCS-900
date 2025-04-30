@@ -17,6 +17,7 @@ from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.utils import get_color_from_hex
 from kivy.graphics.texture import Texture
+from kivy.core.text import Label as CoreLabel
 
 from .project import Section, CodeSection, DataSection, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
 from disapi import Loc
@@ -34,109 +35,10 @@ def find_font_height():
     label.texture_update()
     return label.texture_size
 
-FONT_WDI, FONT_HEIGHT = find_font_height()
+FONT_WIDTH, FONT_HEIGHT = find_font_height()
 
 class MainWindow(FloatLayout): pass
-
-class DisLabel(Label):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.size_hint = None, None
-        self.font_size = FONT_SIZE
-        self.font_name = FONT_NAME
-        self.texture_update()
-        self.size = self.texture_size
-
-class LocationLabel(DisLabel):
-    hover_labels = []
-    any_hovared = False
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.original_color = self.color
-        self.ctrl_down = False
-        self.hovered = False
-
-        LocationLabel.hover_labels.append(self)
-
-        Window.bind(on_key_down=self._keydown)
-        Window.bind(on_key_up=self._keyup)
-        Window.bind(on_mouse_up=self._on_mouse_up)
-        Window.bind(on_mouse_move=self._on_mouse_move)
                 
-
-    @classmethod
-    def on_mouse_move(cls, window, pos):
-        cls.any_hovered = False
-        label: LocationLabel
-        for label in cls.hover_labels:
-            if not label.get_root_window():
-                label.hovered = False
-                continue
-
-            if label.collide_point(*label.to_widget(*pos)):
-                label.hovered = True
-                cls.any_hovered = True
-            else:
-                label.hovered = False
-                
-            label._on_update()
-
-        cls.update_cursor()
-        
-    @classmethod
-    def update_cursor(cls):
-        if cls.any_hovered and app().ctrl_down:
-            Window.set_system_cursor('hand')
-        else:
-            Window.set_system_cursor('arrow')
-
-    def _on_mouse_move(self, window, x, y, modifiers):
-        self.hovered = False
-        if not self.get_root_window():
-            return
-
-        if self.collide_point(*self.to_widget(x, y)):
-            self.hovered = True
-            LocationLabel.any_hovered = True
-        else:
-            self.hovered = False
-            
-        self._on_update()
-
-    def _on_mouse_up(self, window, x: int, y: int, button: str, modifiers):
-        if self.hovered and self.ctrl_down and button == 'left':
-            try:
-                app().scroll_to_label(self.text)
-            except ValueError: pass
-
-    def _on_update(self):
-        self.canvas.before.clear()
-
-        if self.hovered and self.ctrl_down:
-            color = get_color_from_hex("#64B5F6")
-            self.color = color
-            
-            with self.canvas.before:
-                Color(*color)
-                Line(points=[
-                    self.x, self.y + 1,
-                    self.right, self.y + 1
-                ], width=1)
-
-        else: self.color = self.original_color
-
-    def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
-        if keycode == 224: 
-            self.ctrl_down = True
-            self._on_update()
-    
-    def _keyup(self, window, keyboard: int, keycode: int):
-        if keycode == 224: 
-            self.ctrl_down = False
-            self._on_update()
-        
-
 class Minimap(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -192,6 +94,13 @@ COLORS =  [get_color_from_hex("#80FFCC"),
            get_color_from_hex("#BFFF80"),
            get_color_from_hex("#FF80B3")]
 
+class Arrow:
+    def __init__(self, start, end, direction, tips):
+        self.start = start
+        self.end = end
+        self.direction = direction
+        self.tips = tips
+
 class ArrowRenderer(Widget):
 
     def __init__(self, **kwargs):
@@ -216,19 +125,40 @@ class ArrowRenderer(Widget):
                     location = insn.entry.instructions[1]
 
                 if not location: continue
-                arrows.append((min(insn.entry.pc, location.loc), max(insn.entry.pc, location.loc), insn.entry.pc < location.loc))
+                arrows.append(Arrow(min(insn.entry.pc, location.loc), max(insn.entry.pc, location.loc), insn.entry.pc < location.loc, []))
 
-        arrows = sorted(arrows, key = lambda x: x[0])
+        arrows = sorted(arrows, key = lambda x: x.start)
+        
+        arrows2 = []
+        active_arrows: list = []
+        for a1 in arrows:
+            active_arrows = list(filter(lambda a: a.end >= a1.start, active_arrows))
+
+            for a in active_arrows:
+                if a.end == a1.end and a.direction == a1.direction == True:
+                    a.tips.append(a1.start)
+                    a.start = min(a1.start, a.start)
+                    break
+                elif a.start == a1.start and a.direction == a1.direction == False:
+                    a.tips.append(a1.end)
+                    a.end = max(a1.end, a.end)
+                    break
+            else:
+                arrows2.append(a1)
+                
+            active_arrows.append(a1)
+
+        arrows = arrows2
 
         arrow_offsets = {}
         active_arrows = []
         for a1 in arrows:
             l = len(active_arrows)
             if l > 0:
-                mn = active_arrows[-1][1]
+                mn = active_arrows[-1].end
             else: mn = 0
 
-            #if a1[0] == 0xF2BAA2: print(list(map(lambda a: hex(a[0]) + " -> " + hex(a[1]) + " " + str(arrow_offsets.get(a, 0)), active_arrows)))
+            #if a1.start == 0xF2BAA2: print(list(map(lambda a: hex(a.start) + " -> " + hex(a.end) + " " + str(arrow_offsets.get(a, 0)), active_arrows)))
             
             filtered = []
             width = 0
@@ -236,33 +166,25 @@ class ArrowRenderer(Widget):
             while i >= 0:
                 cur = active_arrows[i]
                 w = arrow_offsets.get(cur, 0)
-                if cur[1] >= mn:
+                if cur.end >= mn:
                     if w >= width:
                         filtered.append(cur) 
                         width = w
 
-                    mn = min(mn, cur[0])
+                    mn = min(mn, cur.start)
                 i -= 1
 
             active_arrows = list(reversed(filtered))
-
-            merge = False
+                
             for a in active_arrows:
-                if (a[0] == a1[0] and a[2] == a[2] == False or
-                    a[1] == a1[1] and a[2] == a[2] == True):
-                        arrow_offsets[a1] = arrow_offsets.get(a, 0)
-                        merge = True
-                        break
+                next = arrow_offsets.get(a, 0)
+                if next < 0: continue
+                if next > MAX_OFFSET:
+                    arrow_offsets[a] = -1
+                else: arrow_offsets[a] = next + 1
             
-            if not merge:
-                for a in active_arrows:
-                    next = arrow_offsets.get(a, 0) + 1
-                    if next > MAX_OFFSET:
-                        arrow_offsets[a] = -1
-                    else: arrow_offsets[a] = next
-                
-                arrow_offsets[a1] = 0
-                
+            arrow_offsets[a1] = 0
+            
             active_arrows.append(a1)
             
         self.arrows = list(arrows)
@@ -275,8 +197,8 @@ class ArrowRenderer(Widget):
 
         if len(layout_manager.children) == 0: return
 
-        start_index = layout_manager.get_view_index_at((0, vstart))
-        end_index = layout_manager.get_view_index_at((0, vend))
+        start_index = min(layout_manager.get_view_index_at((0, vstart)) + 1, len(rv.data) - 1)
+        end_index = max(layout_manager.get_view_index_at((0, vend)) - 1, 0)
 
         vstart = rv.children[0].height - vstart
         vend = rv.children[0].height - vend
@@ -309,23 +231,24 @@ class ArrowRenderer(Widget):
 
             arrows_to_render = []
             for arrow in self.arrows:
-                if arrow[0] > first.length + last.offset: continue
-                if arrow[1] < first.offset: continue
+                if arrow.start > first.length + last.offset: continue
+                if arrow.end < first.offset: continue
                 arrows_to_render.append(arrow)
         
-            for a in arrows_to_render:
-                y_start = self.height - get_offset(a[0]) + (vstart - self.height)
-                y_end = self.height - get_offset(a[1]) + (vstart - self.height)
+            def calc_offset(x):
+                e = self.height - get_offset(x) + (vstart - self.height)
+                return max(-50, min(self.height + 50, e)) - LABEL_HEIGHT / 2
 
-                y_start = max(-50, min(self.height + 50, y_start)) - LABEL_HEIGHT / 2
-                y_end = max(-500, min(self.height + 50, y_end)) - LABEL_HEIGHT / 2
+            for a in arrows_to_render:
+                y_start = calc_offset(a.start)
+                y_end = calc_offset(a.end)
 
                 w = self.arrow_offsets.get(a, 0) - 1
                 
                 if w < 0:
                     Color(*COLORS[15])
                     offset = (MAX_OFFSET + 1) * 8
-                    if a[2]:
+                    if a.direction:
                         Line(points=[self.right, y_start, 
                                      self.right - offset - 5, y_start,
                                      self.right - offset - 5, y_start - LABEL_HEIGHT / 2])
@@ -351,7 +274,12 @@ class ArrowRenderer(Widget):
                              left, y_end,
                              self.right, y_end])
                 
-                if not a[2]:
+                for tip in a.tips:
+                    o = calc_offset(tip)
+                    Line(points=[self.right, o, 
+                                 left, o])
+                
+                if not a.direction:
                     Line(points=[self.right - 5, y_start - 5,
                                  self.right, y_start,
                                  self.right - 5, y_start + 5])
@@ -446,31 +374,51 @@ def loc_to_str(insn: Loc):
         return str(label)
     return str(insn.loc)
 
-class SectionMnemonic(BoxLayout):
+class LocationLabel:
+    def __init__(self, text, x, y, width, height):
+        self.hovered = False
+        self.text = text
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+
+class SectionMnemonic(SectionColumn):
+    any_hovered = False
+
     def __init__(self, section: Section, **kwargs):
         super().__init__(**kwargs)
         self.section = section
         self.width = dp(200)
         self.size_hint = None, 1
-        self.orientation = "vertical"
+        self.halign = "left"
+        self.labels: list[LocationLabel] = []
+        self.ctrl_down = False
+
+        Window.bind(on_key_down=self._keydown)
+        Window.bind(on_key_up=self._keyup)
+        Window.bind(on_mouse_up=self._on_mouse_up)
+        Window.bind(mouse_pos=self._on_mouse_move)
         
+        text = []
         if isinstance(section, CodeSection):
             for insn in section.instructions:
-                row = BoxLayout(orientation = "horizontal")
-                row.add_widget(DisLabel(text = insn.entry.opcode + " "))
+                row = insn.entry.opcode + " "
                 for i in range(len(insn.entry.instructions)):
                     param = insn.entry.instructions[i]
                     if isinstance(param, Loc):
-                        row.add_widget(LocationLabel(text = loc_to_str(param)))
+                        t = loc_to_str(param)
+                        self.labels.append(
+                            LocationLabel(t, len(row) * FONT_WIDTH, len(text) * FONT_HEIGHT, len(t) * FONT_WIDTH, FONT_HEIGHT))
+                        row += t
                     else:
-                        row.add_widget(DisLabel(text = str(param)))
+                        row += str(param)
                     if i < len(insn.entry.instructions) - 1:
-                        row.add_widget(DisLabel(text = ", "))
+                        row += ", "
 
-                self.add_widget(row)
+                text.append(row)
 
         elif isinstance(section, DataSection):
-            lines = []
             i = 0
             while i < section.length:
                 next = min(i + DATA_PER_ROW, section.length)
@@ -478,18 +426,76 @@ class SectionMnemonic(BoxLayout):
                 res = data.decode("ascii", "replace")
                 res = "".join(x if 0x6F > ord(x) > 0x20 else "." for x in res)
 
-                lines.append(f'.db "{res}"')
+                text.append(f'.db "{res}"')
 
                 i += DATA_PER_ROW
             
-            for line in lines:
-                self.add_widget(DisLabel(text = line))
+        self.text = "\n".join(text)
+        self.resize()
+
+    @classmethod
+    def on_mouse_move(cls, window, pos):
+        cls.any_hovered = False
         
+    @classmethod
+    def update_cursor(cls):
+        if cls.any_hovered and app().ctrl_down:
+            Window.set_system_cursor('hand')
+        else:
+            Window.set_system_cursor('arrow')
+
+    def _on_mouse_move(self, window, pos):
+        x, y = pos
+        sx, sy = self.to_window(self.x, self.y)
+        for label in self.labels:
+            label.hovered = False
+            if (sx + label.x <= x <= sx + label.x + label.width and
+                sy + self.height - label.y - label.height <= y <= sy + self.height - label.y):
+                SectionMnemonic.any_hovered = True
+                label.hovered = True
+               
+
+        self._on_update()
+        SectionMnemonic.update_cursor()
+
+    def _on_mouse_up(self, window, x: int, y: int, button: str, modifiers):
+        for label in self.labels:
+            if label.hovered and self.ctrl_down and button == 'left':
+                try:
+                    app().scroll_to_label(label.text)
+                except ValueError: pass
+
+    def _on_update(self):
+        self.canvas.after.clear()
+
+        for label in self.labels:
+            if label.hovered and self.ctrl_down:
+                color = get_color_from_hex("#64B5F6")
+
+                cl = CoreLabel(text = label.text, font_size = FONT_SIZE, font_name = FONT_NAME)
+                cl.refresh()
+                              
+                with self.canvas.after:
+                    Color(*color)
+                    Rectangle(texture = cl.texture, pos = (self.x + label.x, self.y + self.height - label.y - label.height), size = cl.texture.size)
+                    Line(points=[
+                        self.x + label.x, self.y + self.height - label.y - label.height + 1,
+                        self.x + label.x + label.width, self.y + self.height - label.y - label.height + 1
+                    ], width=1)
+
+    def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
+        if keycode == 224: 
+            self.ctrl_down = True
+            self._on_update()
+    
+    def _keyup(self, window, keyboard: int, keycode: int):
+        if keycode == 224: 
+            self.ctrl_down = False
+            self._on_update()
 
 class SectionPanel(BoxLayout, RecycleDataViewBehavior):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.scheduled_update = None
         self.section: Section = None
 
     def refresh_view_attrs(self, rv, index, data):
@@ -498,25 +504,17 @@ class SectionPanel(BoxLayout, RecycleDataViewBehavior):
         section: Section = data["section"]
         self.section = section
 
-        def update(dt):
-            if not self.is_visible(): 
-                self.canvas.clear()
-                return
+        self.clear_widgets()
+        for label in section.labels:
+            self.add_widget(LabelRow(section, label.name))
 
-            self.clear_widgets()
-            for label in section.labels:
-                self.add_widget(LabelRow(section, label.name))
+        rows = BoxLayout(orientation = "horizontal", size_hint=(None, 1))
+        rows.add_widget(SectionAddresses(section))
+        rows.add_widget(SectionData(section))
+        rows.add_widget(SectionMnemonic(section))
 
-            rows = BoxLayout(orientation = "horizontal", size_hint=(None, 1))
-            rows.add_widget(SectionAddresses(section))
-            rows.add_widget(SectionData(section))
-            rows.add_widget(SectionMnemonic(section))
-
-            self.add_widget(rows)
+        self.add_widget(rows)
         
-        if self.scheduled_update:
-            self.scheduled_update.cancel()
-        self.scheduled_update = Clock.schedule_once(update, 0.05)
 
     def is_visible(self):
         visible_range = app().rv.get_visible_range()   
@@ -604,7 +602,7 @@ class DisApp(App):
 
         self.ctrl_down = False
 
-        Window.bind(mouse_pos=LocationLabel.on_mouse_move)
+        Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
     
@@ -655,7 +653,7 @@ class DisApp(App):
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
         if keycode == 224: 
             self.ctrl_down = True
-            LocationLabel.update_cursor()
+            SectionMnemonic.update_cursor()
         elif keycode == 41: 
             self.goto_position.hide()
             return True
@@ -663,7 +661,7 @@ class DisApp(App):
     def _keyup(self, window, keyboard: int, keycode: int):
         if keycode == 224: 
             self.ctrl_down = False
-            LocationLabel.update_cursor()
+            SectionMnemonic.update_cursor()
         elif keycode == 41:
             return True
 
