@@ -38,6 +38,34 @@ def find_font_height():
 
 FONT_WIDTH, FONT_HEIGHT = find_font_height()
 
+def DashedLine(points, dash_length = 5, space_length = 2):
+    for i in range(0, len(points) - 2, 2):
+        x1, y1 = points[i], points[i + 1]
+        x2, y2 = points[i + 2], points[i + 3]
+
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.sqrt(dx**2 + dy**2)
+        if length == 0: continue
+
+        total_dash = dash_length + space_length
+        steps = int(length / total_dash)
+        unit_dx = dx / length
+        unit_dy = dy / length
+
+        dist_covered = 0
+        while dist_covered < length:
+            start_x = x1 + unit_dx * dist_covered
+            start_y = y1 + unit_dy * dist_covered
+
+            dash_end = min(dash_length, length - dist_covered)
+            end_x = start_x + unit_dx * dash_end
+            end_y = start_y + unit_dy * dash_end
+
+            Line(points=[start_x, start_y, end_x, end_y], width=1)
+            dist_covered += dash_length + space_length
+
+
 class MainWindow(FloatLayout): pass
                 
 class Minimap(Widget):
@@ -101,6 +129,7 @@ class Arrow:
     end: int
     direction: bool
     tips: list[int]
+    cond: bool
 
     def __hash__(self):
         return id(self)
@@ -125,14 +154,18 @@ class ArrowRenderer(Widget):
             if not isinstance(section, CodeSection): continue
             for insn in section.instructions:
                 location: Loc = None
+                cond = False
                 if insn.entry.opcode == "JP":
                     if len(insn.entry.instructions) == 1:
                         location = insn.entry.instructions[0]
                 elif insn.entry.opcode == "JR":
+                    cc = insn.entry.instructions[0]
+                    if cc != "T": cond = True
+                    elif cc == "F": continue
                     location = insn.entry.instructions[1]
 
                 if not location: continue
-                arrows.append(Arrow(min(insn.entry.pc, location.loc), max(insn.entry.pc, location.loc), insn.entry.pc < location.loc, []))
+                arrows.append(Arrow(min(insn.entry.pc, location.loc), max(insn.entry.pc, location.loc), insn.entry.pc < location.loc, [], cond))
 
         arrows = sorted(arrows, key = lambda x: x.start)
         
@@ -142,14 +175,15 @@ class ArrowRenderer(Widget):
             active_arrows = list(filter(lambda a: a.end >= a1.start, active_arrows))
 
             for a in active_arrows:
-                if a.end == a1.end and a.direction == a1.direction == True:
-                    a.tips.append(a1.start)
-                    a.start = min(a1.start, a.start)
-                    break
-                elif a.start == a1.start and a.direction == a1.direction == False:
-                    a.tips.append(a1.end)
-                    a.end = max(a1.end, a.end)
-                    break
+                if a.cond == a1.cond:
+                    if a.end == a1.end and a.direction == a1.direction == True:
+                        a.tips.append(a1.start)
+                        a.start = min(a1.start, a.start)
+                        break
+                    elif a.start == a1.start and a.direction == a1.direction == False:
+                        a.tips.append(a1.end)
+                        a.end = max(a1.end, a.end)
+                        break
             else:
                 arrows2.append(a1)
                 
@@ -185,7 +219,6 @@ class ArrowRenderer(Widget):
             max_offset = max(active_offsets, default = 0)
 
             last_offset = arrow_offsets.get(active_arrows[-1], 0) if len(active_arrows) > 0 else 0
-            first = True 
             if last_offset == 0:
                 for a in reversed(active_arrows):
                     next = arrow_offsets.get(a, 0)
@@ -200,7 +233,6 @@ class ArrowRenderer(Widget):
 
                     arrow_offsets[a] = next + 1
                     active_offsets.add(next + 1)
-                    first = False
             
             arrow_offsets[a1] = 0
             active_arrows.append(a1)
@@ -262,13 +294,15 @@ class ArrowRenderer(Widget):
                 y_end = calc_offset(a.end)
 
                 w = self.arrow_offsets.get(a, 0)
+                if a.cond: line = DashedLine
+                else: line = Line
                 
                 if w < 0:
                     Color(*COLORS[15])
                     offset = (MAX_OFFSET + 1) * 8
                     if a.direction:
                         def render(y): 
-                            Line(points=[self.right, y, 
+                            line(points=[self.right, y, 
                                  self.right - offset - 5, y,
                                  self.right - offset - 5, y - LABEL_HEIGHT / 2])
                             
@@ -282,7 +316,7 @@ class ArrowRenderer(Widget):
                         
                     else:
                         def render(y):
-                            Line(points=[self.right, y, 
+                            line(points=[self.right, y, 
                                         self.right - offset - 5, y,
                                         self.right - offset - 5, y + LABEL_HEIGHT / 2])
                             
@@ -298,14 +332,14 @@ class ArrowRenderer(Widget):
                 Color(*COLORS[w])
                 left = self.right - w*8 - 15
                 
-                Line(points=[self.right, y_start, 
+                line(points=[self.right, y_start, 
                              left, y_start, 
                              left, y_end,
                              self.right, y_end])
                 
                 for tip in a.tips:
                     o = calc_offset(tip)
-                    Line(points=[self.right, o, 
+                    line(points=[self.right, o, 
                                  left, o])
                 
                 if not a.direction:
