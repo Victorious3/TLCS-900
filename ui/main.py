@@ -249,21 +249,32 @@ class ArrowRenderer(Widget):
                     Color(*COLORS[15])
                     offset = (MAX_OFFSET + 1) * 8
                     if a.direction:
-                        Line(points=[self.right, y_start, 
-                                     self.right - offset - 5, y_start,
-                                     self.right - offset - 5, y_start - LABEL_HEIGHT / 2])
+                        def render(y): 
+                            Line(points=[self.right, y, 
+                                 self.right - offset - 5, y,
+                                 self.right - offset - 5, y - LABEL_HEIGHT / 2])
+                            
+                            Line(points=[self.right - offset - 0, y - LABEL_HEIGHT / 2 + 5, 
+                                         self.right - offset - 5, y - LABEL_HEIGHT / 2,
+                                         self.right - offset - 10, y - LABEL_HEIGHT / 2 + 5])
+                            
+                        render(y_start)
+                        for tip in a.tips:
+                            render(calc_offset(tip))
                         
-                        Line(points=[self.right - offset - 0, y_start - LABEL_HEIGHT / 2 + 5, 
-                                     self.right - offset - 5, y_start - LABEL_HEIGHT / 2,
-                                     self.right - offset - 10, y_start - LABEL_HEIGHT / 2 + 5])
                     else:
-                        Line(points=[self.right, y_end, 
-                                     self.right - offset - 5, y_end,
-                                     self.right - offset - 5, y_end + LABEL_HEIGHT / 2])
-                        
-                        Line(points=[self.right - offset - 0, y_end + LABEL_HEIGHT / 2 - 5, 
-                                     self.right - offset - 5, y_end + LABEL_HEIGHT / 2,
-                                     self.right - offset - 10, y_end + LABEL_HEIGHT / 2 - 5])
+                        def render(y):
+                            Line(points=[self.right, y, 
+                                        self.right - offset - 5, y,
+                                        self.right - offset - 5, y + LABEL_HEIGHT / 2])
+                            
+                            Line(points=[self.right - offset - 0, y + LABEL_HEIGHT / 2 - 5, 
+                                        self.right - offset - 5, y + LABEL_HEIGHT / 2,
+                                        self.right - offset - 10, y + LABEL_HEIGHT / 2 - 5])
+                        render(y_end)
+                        for tip in a.tips:
+                            render(calc_offset(tip))
+
                     continue
                 
                 Color(*COLORS[w])
