@@ -1,4 +1,4 @@
-import math, time
+import math, time, weakref
 from itertools import groupby, combinations
 from functools import cache
 from dataclasses import dataclass
@@ -158,7 +158,7 @@ class ArrowRenderer(Widget):
                 if insn.entry.opcode == "JP":
                     if len(insn.entry.instructions) == 1:
                         location = insn.entry.instructions[0]
-                elif insn.entry.opcode == "JR":
+                elif insn.entry.opcode == "JR" or insn.entry.opcode == "JRL":
                     cc = insn.entry.instructions[0]
                     if cc != "T": cond = True
                     elif cc == "F": continue
@@ -377,40 +377,71 @@ class LabelRow(TextInput):
         self.padding = [dp(100), 0, 0, 0]
         self.multiline = False
 
-class SectionColumn(Label):
-    def __init__(self, **kwargs):
+class SectionColumn(TextInput):
+    selection = (None, None)
+
+    def __init__(self, section, **kwargs):
         super().__init__(**kwargs)
         self.size_hint = None, None
         self.font_size = FONT_SIZE
         self.font_name = FONT_NAME
+        self._editable = False
+        self.background_color = 0, 0, 0, 0
+        self.foreground_color = 1, 1, 1, 1
+        self.readonly = True
+        self.line_height = FONT_SIZE
+        self.padding = 0
+        self.cursor_color = 0, 0, 0, 0
+        self.section = section
+
+        self.__class__.objects.add(self)
 
     def resize(self):
-        self.texture_update()
-        self.height = self.texture_size[1]
-        self.text_size = self.size
+        self.height = (self.text.count("\n") + 1) * FONT_HEIGHT
+
+    def on_touch_down(self, touch):
+        return
+    
+    def __init_subclass__(cls):
+        cls.objects: set[SectionColumn] = weakref.WeakSet()
+
+    @classmethod
+    def on_touch_move_section(cls, window, pos):
+        for panel in SectionData.objects:
+            x, y = panel.to_window(panel.x, panel.y)
+            if x <= pos.x <= x + panel.width and y <= pos.y <= y + panel.height:
+                section = panel.section
+                y1 = y - pos.y
+                if isinstance(section, DataSection):
+                    row = math.floor((1 + (y1 / (section.length // DATA_PER_ROW * FONT_HEIGHT))) * (section.length // DATA_PER_ROW))
+                    print(row)
+                    pass
+                elif isinstance(section, CodeSection):
+                    pass
+
+            
+        pass
 
 class SectionAddresses(SectionColumn):
     def __init__(self, section: Section, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(section, **kwargs)
         self.width = dp(240)
-        self.section = section
         self.halign = "right"
 
         if isinstance(section, CodeSection):
-            self.text = "\n".join(format(x, "X") + ":" for x in map(lambda i: i.entry.pc, section.instructions))
+            self.text = "\n".join(format(x, "X") for x in map(lambda i: i.entry.pc, section.instructions))
         elif isinstance(section, DataSection):
-            self.text = "\n".join(format(x + section.offset, "X") + ":" for x in range(0, section.length, DATA_PER_ROW))
+            self.text = "\n".join(format(x + section.offset, "X") for x in range(0, section.length, DATA_PER_ROW))
 
         self.resize()
 
 class SectionData(SectionColumn):
     def __init__(self, section: Section, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(section, **kwargs)
         self.width = DATA_PER_ROW * dp(40)
-        self.section = section
         self.halign = "left"
         self.padding = [dp(30), 0, 0, 0]
-        self.color = get_color_from_hex("#4EC9B0")
+        self.foreground_color = get_color_from_hex("#B5CEA8")
 
         lines = []
         if isinstance(section, CodeSection):
@@ -452,8 +483,7 @@ class SectionMnemonic(SectionColumn):
     any_hovered = False
 
     def __init__(self, section: Section, **kwargs):
-        super().__init__(**kwargs)
-        self.section = section
+        super().__init__(section, **kwargs)
         self.width = dp(200)
         self.size_hint = None, 1
         self.halign = "left"
@@ -670,6 +700,7 @@ class DisApp(App):
         Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
+        Window.bind(on_touch_move=SectionData.on_touch_move_section)
     
     def build(self):
         Window.clearcolor = get_color_from_hex("#1F1F1F")

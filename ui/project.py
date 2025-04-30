@@ -139,7 +139,6 @@ class Project:
                 labels = section.labels
                 for i in range(0, section.length, MAX_SECTION_LENGTH):
                     diff = min(MAX_SECTION_LENGTH, section.length - i)
-                    print(hex(section.offset + i), diff)
                     res.append(DataSection(section.offset + i, diff, labels, section.data[i:i + diff + 1]))
                     labels = []
             elif isinstance(section, CodeSection):
