@@ -24,7 +24,7 @@ from .project import Section, CodeSection, DataSection, DATA_PER_ROW, MAX_SECTIO
 from disapi import Loc
 
 FONT_SIZE = dp(15)
-LABEL_HEIGHT = FONT_SIZE + dp(4)
+LABEL_HEIGHT = FONT_SIZE + dp(5)
 FONT_NAME = "ui/FiraMono"
 
 def find_font_height():
@@ -375,6 +375,7 @@ class LabelRow(TextInput):
         self.foreground_color = 1, 1, 1, 1
         self.text = label
         self.padding = [dp(100), 0, 0, 0]
+        self.multiline = False
 
 class SectionColumn(Label):
     def __init__(self, **kwargs):
@@ -409,6 +410,7 @@ class SectionData(SectionColumn):
         self.section = section
         self.halign = "left"
         self.padding = [dp(30), 0, 0, 0]
+        self.color = get_color_from_hex("#4EC9B0")
 
         lines = []
         if isinstance(section, CodeSection):
