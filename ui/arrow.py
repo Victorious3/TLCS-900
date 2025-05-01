@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
 from kivy.uix.widget import Widget
-from kivy.graphics import Color, Line, Rectangle
+from kivy.graphics import Color, Line
 
-from .project import Section, CodeSection, DataSection, DATA_PER_ROW
+from .project import Section, CodeSection
 from .main import LABEL_HEIGHT, app, FONT_HEIGHT
 from disapi import Loc
 
@@ -201,14 +201,10 @@ class ArrowRenderer(Widget):
                     if section.offset <= pc < section.length + section.offset:
                         if section.labels: 
                             offset += LABEL_HEIGHT
-                        if isinstance(section, CodeSection):
-                            for i in section.instructions:
-                                if i.entry.pc <= pc < i.entry.pc + i.entry.length:
-                                    return offset
-                                offset += FONT_HEIGHT
-                        elif isinstance(section, DataSection):
-                            offset += math.ceil((pc - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
-                            return offset
+                        for i in section.instructions:
+                            if i.entry.pc <= pc < i.entry.pc + i.entry.length:
+                                return offset
+                            offset += FONT_HEIGHT
 
                     offset += data["height"]
                 return offset

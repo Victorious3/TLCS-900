@@ -21,6 +21,7 @@ from kivy.effects.dampedscroll import DampedScrollEffect
 FONT_SIZE = dp(15)
 LABEL_HEIGHT = FONT_SIZE + dp(5)
 FONT_NAME = "ui/FiraMono"
+BG_COLOR = get_color_from_hex("#1F1F1F")
 
 def app() -> "DisApp":
     return App.get_running_app()
@@ -57,27 +58,22 @@ class LabelRow(TextInput):
         self.padding = [dp(100), 0, 0, 0]
         self.multiline = False
 
-class SectionColumn(TextInput):
-    selection = (None, None)
+class SectionColumn(Label):
+    selection_start = 0
+    selection_end = 0
 
-    def __init__(self, section, **kwargs):
+    def __init__(self, section: Section, **kwargs):
         super().__init__(**kwargs)
+        self.section = section
         self.size_hint = None, None
         self.font_size = FONT_SIZE
         self.font_name = FONT_NAME
-        self._editable = False
-        self.background_color = 0, 0, 0, 0
-        self.foreground_color = 1, 1, 1, 1
-        self.readonly = True
-        self.line_height = FONT_SIZE
-        self.padding = 0
-        self.cursor_color = 0, 0, 0, 0
-        self.section = section
-
         self.__class__.objects.add(self)
 
     def resize(self):
-        self.height = (self.text.count("\n") + 1) * FONT_HEIGHT
+        self.texture_update()
+        self.height = self.texture_size[1]
+        self.text_size = self.size
 
     def on_touch_down(self, touch):
         return
@@ -85,34 +81,38 @@ class SectionColumn(TextInput):
     def __init_subclass__(cls):
         cls.objects: set[SectionColumn] = weakref.WeakSet()
 
-    @classmethod
-    def on_touch_move_section(cls, window, pos):
+    def calculate_selection(pos: tuple[int, int]):
         for panel in SectionData.objects:
             x, y = panel.to_window(panel.x, panel.y)
-            if x <= pos.x <= x + panel.width and y <= pos.y <= y + panel.height:
+            if y <= pos[1] <= y + panel.height:
                 section = panel.section
-                y1 = y - pos.y
-                if isinstance(section, DataSection):
-                    row = math.floor((1 + (y1 / (section.length // DATA_PER_ROW * FONT_HEIGHT))) * (section.length // DATA_PER_ROW))
-                    print(row)
-                    pass
-                elif isinstance(section, CodeSection):
-                    pass
+                y1 = y - pos[1]
+                rows = len(section.instructions)
+                row = math.floor(rows + y1 / FONT_HEIGHT)
+                offset = section.instructions[row].entry.pc
 
-            
-        pass
+                return offset
+                
+        return -1
+
+    @classmethod
+    def on_touch_move_section(cls, window, pos):
+        end = cls.calculate_selection((pos.x, pos.y))
+        if end > 0: cls.selection_end = end
+        print(format(cls.selection_end, "X"))
+    
+    @classmethod
+    def on_mouse_down(cls, window, x, y, button, modifiers):
+        selection_end = cls.calculate_selection((x, y))
+        cls.selection_end = selection_end
+        cls.selection_start = selection_end
 
 class SectionAddresses(SectionColumn):
     def __init__(self, section: Section, **kwargs):
         super().__init__(section, **kwargs)
         self.width = dp(240)
         self.halign = "right"
-
-        if isinstance(section, CodeSection):
-            self.text = "\n".join(format(x, "X") for x in map(lambda i: i.entry.pc, section.instructions))
-        elif isinstance(section, DataSection):
-            self.text = "\n".join(format(x + section.offset, "X") for x in range(0, section.length, DATA_PER_ROW))
-
+        self.text = "\n".join(format(x, "X") for x in map(lambda i: i.entry.pc, section.instructions))
         self.resize()
 
 class SectionData(SectionColumn):
@@ -121,23 +121,14 @@ class SectionData(SectionColumn):
         self.width = DATA_PER_ROW * dp(40)
         self.halign = "left"
         self.padding = [dp(30), 0, 0, 0]
-        self.foreground_color = get_color_from_hex("#B5CEA8")
+        self.color = get_color_from_hex("#B5CEA8")
 
         lines = []
-        if isinstance(section, CodeSection):
-            for insn in section.instructions:
-                data = section.data[
-                    insn.entry.pc - section.offset :
-                    insn.entry.pc + insn.entry.length - section.offset]
-                lines.append(" ".join(format(x, "0>2X") for x in data))
-        elif isinstance(section, DataSection):
-            i = 0
-            while i < section.length:
-                next = min(i + DATA_PER_ROW, section.length)
-                data = section.data[i:next]
-                lines.append(" ".join(format(x, "0>2X") for x in data))
-
-                i += DATA_PER_ROW
+        for insn in section.instructions:
+            data = section.data[
+                insn.entry.pc - section.offset :
+                insn.entry.pc + insn.entry.length - section.offset]
+            lines.append(" ".join(format(x, "0>2X") for x in data))
 
         self.text = "\n".join(lines)
         self.resize()
@@ -176,35 +167,26 @@ class SectionMnemonic(SectionColumn):
         Window.bind(mouse_pos=self._on_mouse_move)
         
         text = []
-        if isinstance(section, CodeSection):
-            for insn in section.instructions:
-                row = insn.entry.opcode + " "
-                for i in range(len(insn.entry.instructions)):
-                    param = insn.entry.instructions[i]
-                    if isinstance(param, Loc):
-                        t = loc_to_str(param)
-                        self.labels.append(
-                            LocationLabel(t, len(row) * FONT_WIDTH, len(text) * FONT_HEIGHT, len(t) * FONT_WIDTH, FONT_HEIGHT))
-                        row += t
-                    else:
-                        row += str(param)
-                    if i < len(insn.entry.instructions) - 1:
-                        row += ", "
+        for insn in section.instructions:
+            row = insn.entry.opcode + " "
+            for i in range(len(insn.entry.instructions)):
+                param = insn.entry.instructions[i]
+                if isinstance(param, Loc):
+                    t = loc_to_str(param)
+                    self.labels.append(
+                        LocationLabel(t, len(row) * FONT_WIDTH, len(text) * FONT_HEIGHT, len(t) * FONT_WIDTH, FONT_HEIGHT))
+                    row += t
+                elif isinstance(param, bytearray):
+                    res = param.decode("ascii", "replace")
+                    res = "".join(x if 0x6F > ord(x) > 0x20 else "." for x in res)
+                    row += '"' + res + '"'
+                else:
+                    row += str(param)
+                if i < len(insn.entry.instructions) - 1:
+                    row += ", "
 
-                text.append(row)
+            text.append(row)
 
-        elif isinstance(section, DataSection):
-            i = 0
-            while i < section.length:
-                next = min(i + DATA_PER_ROW, section.length)
-                data = section.data[i:next].copy()
-                res = data.decode("ascii", "replace")
-                res = "".join(x if 0x6F > ord(x) > 0x20 else "." for x in res)
-
-                text.append(f'.db "{res}"')
-
-                i += DATA_PER_ROW
-            
         self.text = "\n".join(text)
         self.resize()
 
@@ -346,11 +328,7 @@ class RV(RecycleView):
 
         data = []
         for section in project.sections:
-            if isinstance(section, DataSection):
-                columns = math.ceil(section.length / DATA_PER_ROW)
-            elif isinstance(section, CodeSection):
-                columns = len(section.instructions)
-
+            columns = len(section.instructions)
             data.append({"section": section, 
                          "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),
                          "width": dp(1500) })
@@ -382,10 +360,11 @@ class DisApp(App):
         Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
-        Window.bind(on_touch_move=SectionData.on_touch_move_section)
+        Window.bind(on_touch_move=SectionColumn.on_touch_move_section)
+        Window.bind(on_mouse_down=SectionColumn.on_mouse_down)
     
     def build(self):
-        Window.clearcolor = get_color_from_hex("#1F1F1F")
+        Window.clearcolor = BG_COLOR
 
         window = MainWindow()
         return window
@@ -414,14 +393,7 @@ class DisApp(App):
             section: Section = data["section"]
             if section.offset <= offset < section.offset + section.length:
                 if section.labels: scroll_pos += LABEL_HEIGHT
-                if isinstance(section, DataSection):
-                    scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
-                elif isinstance(section, CodeSection):
-                    for insn in section.instructions:
-                        if offset > insn.entry.pc: scroll_pos += FONT_HEIGHT
-                        else: break
-                
-
+                scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
                 self.rv.scroll_y = 1 - (scroll_pos / total_height)
                 return
 

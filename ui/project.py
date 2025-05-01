@@ -11,25 +11,27 @@ class Instruction:
         self.entry = entry
 
 class Section(ABC):
-    def __init__(self, offset: int, length: int, labels: list[Label], data: bytearray):
+    def __init__(self, offset: int, length: int, labels: list[Label], data: bytearray, instructions: list[Instruction]):
         self.offset = offset
         self.length = length
         self.labels = labels
         self.data = data
+        self.instructions = instructions
 
     def __str__(self):
         return f"{self.__class__.__name__}: {list(map(str, self.labels))} {self.offset:X} -> {self.offset + self.length:X}"
 
-class DataSection(Section):
+class DataSection(Section): 
     def __init__(self, offset, length, labels, data):
-        super().__init__(offset, length, labels, data)
+        instructions = []
+        for i in range(0, length, DATA_PER_ROW):
+            width = min(DATA_PER_ROW, length - i)
+            res = data[i:i+width]
+            instructions.append(Instruction(InsnEntry(offset + i, width, ".db", (res,))))
+            
+        super().__init__(offset, length, labels, data, instructions)
 
-class CodeSection(Section):
-    def __init__(self, 
-                 offset: int, length: int, labels: list[Label], 
-                 data: bytearray, instructions: list[Instruction]):
-        super().__init__(offset, length, labels, data)
-        self.instructions = instructions
+class CodeSection(Section): pass
 
 class Project:
     def __init__(self, path: str):
