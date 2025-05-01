@@ -19,6 +19,8 @@ from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.utils import get_color_from_hex
 from kivy.graphics.texture import Texture
 from kivy.core.text import Label as CoreLabel
+from kivy.effects.scroll import ScrollEffect
+from kivy.effects.dampedscroll import DampedScrollEffect
 
 from .project import Section, CodeSection, DataSection, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
 from disapi import Loc
@@ -38,7 +40,8 @@ def find_font_height():
 
 FONT_WIDTH, FONT_HEIGHT = find_font_height()
 
-def DashedLine(points, dash_length = 5, space_length = 2):
+def DashedLine(points, dash_length = dp(5), space_length = dp(2), width = dp(1)):
+    space_length *= width
     for i in range(0, len(points) - 2, 2):
         x1, y1 = points[i], points[i + 1]
         x2, y2 = points[i + 2], points[i + 3]
@@ -49,7 +52,6 @@ def DashedLine(points, dash_length = 5, space_length = 2):
         if length == 0: continue
 
         total_dash = dash_length + space_length
-        steps = int(length / total_dash)
         unit_dx = dx / length
         unit_dy = dy / length
 
@@ -62,7 +64,7 @@ def DashedLine(points, dash_length = 5, space_length = 2):
             end_x = start_x + unit_dx * dash_end
             end_y = start_y + unit_dy * dash_end
 
-            Line(points=[start_x, start_y, end_x, end_y], width=1)
+            Line(points=[start_x, start_y, end_x, end_y], width=width)
             dist_covered += dash_length + space_length
 
 
@@ -296,19 +298,21 @@ class ArrowRenderer(Widget):
                 w = self.arrow_offsets.get(a, 0)
                 if a.cond: line = DashedLine
                 else: line = Line
+
+                tip_length = dp(5)
                 
                 if w < 0:
                     Color(*COLORS[15])
-                    offset = (MAX_OFFSET + 1) * 8
+                    offset = (MAX_OFFSET + 1) * dp(8)
                     if a.direction:
                         def render(y): 
                             line(points=[self.right, y, 
-                                 self.right - offset - 5, y,
-                                 self.right - offset - 5, y - LABEL_HEIGHT / 2])
+                                 self.right - offset - tip_length, y,
+                                 self.right - offset - tip_length, y - LABEL_HEIGHT / 2], width=dp(1))
                             
-                            Line(points=[self.right - offset - 0, y - LABEL_HEIGHT / 2 + 5, 
-                                         self.right - offset - 5, y - LABEL_HEIGHT / 2,
-                                         self.right - offset - 10, y - LABEL_HEIGHT / 2 + 5])
+                            Line(points=[self.right - offset - 0, y - LABEL_HEIGHT / 2 + tip_length, 
+                                         self.right - offset - tip_length, y - LABEL_HEIGHT / 2,
+                                         self.right - offset - 2*tip_length, y - LABEL_HEIGHT / 2 + tip_length], width=dp(1))
                             
                         render(y_start)
                         for tip in a.tips:
@@ -317,12 +321,12 @@ class ArrowRenderer(Widget):
                     else:
                         def render(y):
                             line(points=[self.right, y, 
-                                        self.right - offset - 5, y,
-                                        self.right - offset - 5, y + LABEL_HEIGHT / 2])
+                                        self.right - offset - tip_length, y,
+                                        self.right - offset - tip_length, y + LABEL_HEIGHT / 2], width=dp(1))
                             
-                            Line(points=[self.right - offset - 0, y + LABEL_HEIGHT / 2 - 5, 
-                                        self.right - offset - 5, y + LABEL_HEIGHT / 2,
-                                        self.right - offset - 10, y + LABEL_HEIGHT / 2 - 5])
+                            Line(points=[self.right - offset - 0, y + LABEL_HEIGHT / 2 - tip_length, 
+                                        self.right - offset - tip_length, y + LABEL_HEIGHT / 2,
+                                        self.right - offset - 2*tip_length, y + LABEL_HEIGHT / 2 - tip_length], width=dp(1))
                         render(y_end)
                         for tip in a.tips:
                             render(calc_offset(tip))
@@ -330,36 +334,36 @@ class ArrowRenderer(Widget):
                     continue
                 
                 Color(*COLORS[w])
-                left = self.right - w*8 - 15
+                left = self.right - w*dp(8) - dp(15)
                 
                 line(points=[self.right, y_start, 
                              left, y_start, 
                              left, y_end,
-                             self.right, y_end])
+                             self.right, y_end], width=dp(1))
                 
                 for tip in a.tips:
                     o = calc_offset(tip)
                     line(points=[self.right, o, 
-                                 left, o])
+                                 left, o], width=dp(1))
                 
                 if not a.direction:
-                    Line(points=[self.right - 5, y_start - 5,
+                    Line(points=[self.right - tip_length, y_start - tip_length,
                                  self.right, y_start,
-                                 self.right - 5, y_start + 5])
+                                 self.right - tip_length, y_start + tip_length], width=dp(1))
                     
                     if y_start > self.height and y_end < self.height:
-                        Line(points=[left - 5, self.height - 5,
+                        Line(points=[left - tip_length, self.height - tip_length,
                                      left, self.height,
-                                     left + 5, self.height - 5])
+                                     left + tip_length, self.height - tip_length], width=dp(1))
                 else:
-                    Line(points=[self.right - 5, y_end - 5,
+                    Line(points=[self.right - tip_length, y_end - tip_length,
                                  self.right, y_end,
-                                 self.right - 5, y_end + 5])
+                                 self.right - tip_length, y_end + tip_length], width=dp(1))
                     
                     if y_end < 0 and y_start > 9:
-                        Line(points=[left - 5, 5,
+                        Line(points=[left - tip_length, tip_length,
                                      left, 0,
-                                     left + 5, 5])
+                                     left + tip_length, tip_length], width=dp(1))
                             
 
 
@@ -576,7 +580,7 @@ class SectionMnemonic(SectionColumn):
                     Line(points=[
                         self.x + label.x, self.y + self.height - label.y - label.height + 1,
                         self.x + label.x + label.width, self.y + self.height - label.y - label.height + 1
-                    ], width=1)
+                    ], width=dp(1))
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
         if keycode == 224: 
@@ -659,6 +663,8 @@ class RV(RecycleView):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         app().rv = self
+        self.effect_x = ScrollEffect()
+        self.effect_y = DampedScrollEffect()
 
         project: Project = app().project
 
