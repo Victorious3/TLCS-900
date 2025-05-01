@@ -13,7 +13,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
-from kivy.utils import get_color_from_hex
+from kivy.utils import get_color_from_hex, escape_markup
 from kivy.core.text import Label as CoreLabel
 from kivy.effects.scroll import ScrollEffect
 from kivy.effects.dampedscroll import DampedScrollEffect
@@ -160,6 +160,7 @@ class SectionMnemonic(SectionColumn):
         self.halign = "left"
         self.labels: list[LocationLabel] = []
         self.ctrl_down = False
+        self.markup = True
 
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
@@ -168,22 +169,29 @@ class SectionMnemonic(SectionColumn):
         
         text = []
         for insn in section.instructions:
-            row = insn.entry.opcode + " "
+            row_width = len(insn.entry.opcode) + 1
+            row = f"[color=#569CD6]{insn.entry.opcode}[/color] "
             for i in range(len(insn.entry.instructions)):
                 param = insn.entry.instructions[i]
                 if isinstance(param, Loc):
-                    t = loc_to_str(param)
+                    label_text = loc_to_str(param)
+                    t = f"[color=#DCDCAA]{label_text}[/color]"
                     self.labels.append(
-                        LocationLabel(t, len(row) * FONT_WIDTH, len(text) * FONT_HEIGHT, len(t) * FONT_WIDTH, FONT_HEIGHT))
+                        LocationLabel(label_text, row_width * FONT_WIDTH, len(text) * FONT_HEIGHT, len(label_text) * FONT_WIDTH, FONT_HEIGHT))
                     row += t
+                    row_width += len(label_text)
                 elif isinstance(param, bytearray):
                     res = param.decode("ascii", "replace")
                     res = "".join(x if 0x6F > ord(x) > 0x20 else "." for x in res)
-                    row += '"' + res + '"'
+                    row += '"' + escape_markup(res) + '"'
+                    row_width += len(res) + 2
                 else:
-                    row += str(param)
+                    insn_text = str(param)
+                    row += escape_markup(insn_text)
+                    row_width += len(insn_text)
                 if i < len(insn.entry.instructions) - 1:
                     row += ", "
+                    row_width += 2
 
             text.append(row)
 
