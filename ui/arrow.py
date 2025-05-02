@@ -217,7 +217,7 @@ class ArrowRenderer(Widget):
         
             def calc_offset(x):
                 e = self.height - get_offset(x) + (vstart - self.height)
-                return max(-50, min(self.height + 50, e)) - LABEL_HEIGHT / 2
+                return e - LABEL_HEIGHT / 2
 
             for a in arrows_to_render:
                 y_start = calc_offset(a.start)

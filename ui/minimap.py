@@ -5,7 +5,7 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.utils import get_color_from_hex
 
-from .main import app, FONT_HEIGHT, LABEL_HEIGHT, DATA_PER_ROW
+from .main import app, FONT_HEIGHT, LABEL_HEIGHT, BG_COLOR
 from .project import Section, CodeSection
 
 class Minimap(Widget):
@@ -26,6 +26,8 @@ class Minimap(Widget):
         
         self.canvas.after.clear()
         with self.canvas.after:
+            Color(*BG_COLOR)
+            Rectangle(pos=(self.x, self.y), size=(self.width, self.height))
             offset = 0
             Color(*get_color_from_hex("#66BB6A"))
             for key, group in groupby(sections, key=type):

@@ -1,5 +1,5 @@
 import math, weakref
-from itertools import groupby
+from itertools import chain
 
 from kivy.app import App
 from kivy.metrics import dp
@@ -10,13 +10,13 @@ from kivy.uix.widget import Widget
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.utils import get_color_from_hex, escape_markup
 from kivy.core.text import Label as CoreLabel
 from kivy.effects.scroll import ScrollEffect
-from kivy.effects.dampedscroll import DampedScrollEffect
 
 FONT_SIZE = dp(15)
 LABEL_HEIGHT = FONT_SIZE + dp(5)
@@ -55,7 +55,7 @@ class LabelRow(TextInput):
         self.background_color = 0, 0, 0, 0
         self.foreground_color = 1, 1, 1, 1
         self.text = label
-        self.padding = [dp(100), 0, 0, 0]
+        self.padding = [dp(250), 0, 0, 0]
         self.multiline = False
 
 class SectionColumn(Label):
@@ -78,39 +78,54 @@ class SectionColumn(Label):
     def on_touch_down(self, touch):
         return
     
+    def redraw(self): pass
+    
     def __init_subclass__(cls):
         cls.objects: set[SectionColumn] = weakref.WeakSet()
 
-    def calculate_selection(pos: tuple[int, int]):
+    @classmethod
+    def calculate_selection(cls, pos: tuple[int, int]):
         for panel in SectionData.objects:
             x, y = panel.to_window(panel.x, panel.y)
+            x1 = math.floor((pos[0] - x) / (FONT_WIDTH * 3))
             if y <= pos[1] <= y + panel.height:
                 section = panel.section
                 y1 = y - pos[1]
                 rows = len(section.instructions)
                 row = math.floor(rows + y1 / FONT_HEIGHT)
-                offset = section.instructions[row].entry.pc
-
+                insn = section.instructions[row]
+                x1 = min(insn.entry.length - 1, max(x1, 0))
+                offset = insn.entry.pc + x1
                 return offset
                 
         return -1
-
-    @classmethod
-    def on_touch_move_section(cls, window, pos):
-        end = cls.calculate_selection((pos.x, pos.y))
-        if end > 0: cls.selection_end = end
-        print(format(cls.selection_end, "X"))
     
     @classmethod
-    def on_mouse_down(cls, window, x, y, button, modifiers):
-        selection_end = cls.calculate_selection((x, y))
+    def redraw_children(cls):
+        for subcls in cls.__subclasses__():
+            for panel in subcls.objects:
+                panel.redraw()
+
+    @classmethod
+    def on_touch_move_section(cls, window, touch):
+        if touch.button != "left": return
+        end = cls.calculate_selection((touch.x, touch.y))
+        if end > 0: cls.selection_end = end
+        cls.redraw_children()
+    
+    @classmethod
+    def on_touch_down_selection(cls, window, touch):
+        if touch.button != "left": return
+        selection_end = cls.calculate_selection((touch.x, touch.y))
         cls.selection_end = selection_end
         cls.selection_start = selection_end
+        cls.redraw_children()
 
 class SectionAddresses(SectionColumn):
     def __init__(self, section: Section, **kwargs):
         super().__init__(section, **kwargs)
         self.width = dp(240)
+        self.pos = (0, 0)
         self.halign = "right"
         self.text = "\n".join(format(x, "X") for x in map(lambda i: i.entry.pc, section.instructions))
         self.resize()
@@ -120,7 +135,7 @@ class SectionData(SectionColumn):
         super().__init__(section, **kwargs)
         self.width = DATA_PER_ROW * dp(40)
         self.halign = "left"
-        self.padding = [dp(30), 0, 0, 0]
+        self.pos = (dp(270), 0)
         self.color = get_color_from_hex("#B5CEA8")
 
         lines = []
@@ -132,6 +147,59 @@ class SectionData(SectionColumn):
 
         self.text = "\n".join(lines)
         self.resize()
+
+    def redraw(self):
+        start, end = SectionColumn.selection_start, SectionColumn.selection_end
+        if end < start: start, end = end, start
+
+        self.canvas.before.clear()
+
+        if (self.section.offset <= start <= self.section.offset + self.section.length or
+            self.section.offset <= end <= self.section.offset + self.section.length or
+            start < self.section.offset and end > self.section.offset + self.section.length):
+
+            row_start = len(self.section.instructions)
+            row_end = 0
+            start_column = 0
+            end_column = 0
+            for i, insn in enumerate(self.section.instructions):
+                if insn.entry.pc > start:
+                    last = self.section.instructions[i - 1]
+                    start_column = last.entry.length - insn.entry.pc + start
+                    row_start = i
+                    break
+            else: 
+                start_column = self.section.instructions[-1].entry.length - (self.section.offset + self.section.length - start)
+
+            end_length = 0
+            for i, insn in reversed(list(enumerate(self.section.instructions))):
+                if insn.entry.pc <= end: 
+                    end_column = end - insn.entry.pc + 1
+                    end_length = insn.entry.length
+                    row_end = i
+                    break
+
+            with self.canvas.before:
+                Color(*get_color_from_hex("#264F78"))
+                if self.section.offset <= start < self.section.offset + self.section.length: 
+                    start_x = start_column * 3 * FONT_WIDTH
+                    if start_column == 0:
+                        Rectangle(pos=(self.parent.x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(self.parent.width, FONT_HEIGHT))
+                    else:
+                        Rectangle(pos=(self.x + start_x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(self.parent.width - start_x, FONT_HEIGHT))
+                if self.section.offset <= end < self.section.offset + self.section.length and row_end >= row_start:
+                    end_x = end_column * 3 * FONT_WIDTH
+                    if end_column < end_length:
+                        Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + 1) * FONT_HEIGHT)), size=(self.x + end_x, FONT_HEIGHT))
+                    else:
+                        Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + 1) * FONT_HEIGHT)), size=(self.parent.width, FONT_HEIGHT))
+
+
+                if row_start <= row_end:
+                    off_y = 0
+                    if end >= self.section.offset + self.section.length: off_y = 1
+                    Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + off_y) * FONT_HEIGHT)), size=(self.parent.width, (row_end + off_y - row_start) * FONT_HEIGHT))
+
 
 
 def loc_to_str(insn: Loc):
@@ -155,6 +223,7 @@ class SectionMnemonic(SectionColumn):
 
     def __init__(self, section: Section, **kwargs):
         super().__init__(section, **kwargs)
+        self.pos = (dp(550), 0)
         self.width = dp(200)
         self.size_hint = None, 1
         self.halign = "left"
@@ -273,9 +342,9 @@ class SectionPanel(BoxLayout, RecycleDataViewBehavior):
         for label in section.labels:
             self.add_widget(LabelRow(section, label.name))
 
-        rows = BoxLayout(orientation = "horizontal", size_hint=(None, 1))
-        rows.add_widget(SectionAddresses(section))
+        rows = RelativeLayout(size_hint=(1, 1))
         rows.add_widget(SectionData(section))
+        rows.add_widget(SectionAddresses(section))
         rows.add_widget(SectionMnemonic(section))
 
         self.add_widget(rows)
@@ -330,7 +399,6 @@ class RV(RecycleView):
         super().__init__(**kwargs)
         app().rv = self
         self.effect_x = ScrollEffect()
-        self.effect_y = DampedScrollEffect()
 
         project: Project = app().project
 
@@ -369,7 +437,7 @@ class DisApp(App):
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
         Window.bind(on_touch_move=SectionColumn.on_touch_move_section)
-        Window.bind(on_mouse_down=SectionColumn.on_mouse_down)
+        Window.bind(on_touch_down=SectionColumn.on_touch_down_selection)
     
     def build(self):
         Window.clearcolor = BG_COLOR
