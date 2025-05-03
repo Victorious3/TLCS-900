@@ -61,6 +61,7 @@ class LabelRow(TextInput):
 class SectionColumn(Label):
     selection_start = 0
     selection_end = 0
+    outside_bounds = False
 
     def __init__(self, section: Section, **kwargs):
         super().__init__(**kwargs)
@@ -68,26 +69,20 @@ class SectionColumn(Label):
         self.size_hint = None, None
         self.font_size = FONT_SIZE
         self.font_name = FONT_NAME
-        self.__class__.objects.add(self)
 
     def resize(self):
         self.texture_update()
         self.height = self.texture_size[1]
         self.text_size = self.size
-
-    def on_touch_down(self, touch):
-        return
     
     def redraw(self): pass
-    
-    def __init_subclass__(cls):
-        cls.objects: set[SectionColumn] = weakref.WeakSet()
 
     @classmethod
     def calculate_selection(cls, pos: tuple[int, int]):
         for panel in SectionData.objects:
             x, y = panel.to_window(panel.x, panel.y)
-            x1 = math.floor((pos[0] - x) / (FONT_WIDTH * 3))
+            if pos[0] > x + panel.width: x1 = 0
+            else: x1 = math.floor((pos[0] - x) / (FONT_WIDTH * 3))
             if y <= pos[1] <= y + panel.height:
                 section = panel.section
                 y1 = y - pos[1]
@@ -102,23 +97,54 @@ class SectionColumn(Label):
     
     @classmethod
     def redraw_children(cls):
-        for subcls in cls.__subclasses__():
-            for panel in subcls.objects:
-                panel.redraw()
+        for panel in SectionData.objects:
+            panel.redraw()
 
     @classmethod
     def on_touch_move_section(cls, window, touch):
+        if cls.outside_bounds: return
         if touch.button != "left": return
-        end = cls.calculate_selection((touch.x, touch.y))
-        if end > 0: cls.selection_end = end
+
+        panel = next(iter(SectionData.objects))
+        x, y = panel.to_window(panel.x, panel.y)
+        if touch.x > x + panel.width:
+            end = cls.calculate_selection((x + panel.width, touch.y))
+        else:
+            end = cls.calculate_selection((touch.x, touch.y))
+
+        if end > 0:
+            cls.selection_end = end
+
         cls.redraw_children()
     
     @classmethod
     def on_touch_down_selection(cls, window, touch):
         if touch.button != "left": return
-        selection_end = cls.calculate_selection((touch.x, touch.y))
-        cls.selection_end = selection_end
-        cls.selection_start = selection_end
+        cls.outside_bounds = touch.x > app().minimap.x
+        if cls.outside_bounds: return
+
+        panel = next(iter(SectionData.objects))
+        x, y = panel.to_window(panel.x, panel.y)
+        if touch.x > x + panel.width:
+            selection_end = cls.calculate_selection((x + panel.width, touch.y))
+            selection_start = cls.calculate_selection((x, touch.y))
+        else:
+            selection_end = cls.calculate_selection((touch.x, touch.y))
+            selection_start = selection_end
+
+        if not app().shift_down: 
+            cls.selection_end = selection_end
+            cls.selection_start = selection_start
+        else:
+            start = cls.selection_start
+            end = cls.selection_end
+            if start > end:
+                if selection_end < start: cls.selection_end = selection_end
+                else: cls.selection_start = selection_start
+            else:
+                if selection_end < end: cls.selection_start = selection_start
+                else: cls.selection_end = selection_end
+
         cls.redraw_children()
 
 class SectionAddresses(SectionColumn):
@@ -131,6 +157,8 @@ class SectionAddresses(SectionColumn):
         self.resize()
 
 class SectionData(SectionColumn):
+    objects: set[SectionColumn] = weakref.WeakSet()
+
     def __init__(self, section: Section, **kwargs):
         super().__init__(section, **kwargs)
         self.width = DATA_PER_ROW * dp(40)
@@ -147,6 +175,7 @@ class SectionData(SectionColumn):
 
         self.text = "\n".join(lines)
         self.resize()
+        SectionData.objects.add(self)
 
     def redraw(self):
         start, end = SectionColumn.selection_start, SectionColumn.selection_end
@@ -181,24 +210,33 @@ class SectionData(SectionColumn):
 
             with self.canvas.before:
                 Color(*get_color_from_hex("#264F78"))
-                if self.section.offset <= start < self.section.offset + self.section.length: 
-                    start_x = start_column * 3 * FONT_WIDTH
+
+                start_x = start_column * 3 * FONT_WIDTH
+                end_x = end_column * 3 * FONT_WIDTH
+                width = app().rv.width - app().minimap.width
+
+                if self.section.offset <= start < self.section.offset + self.section.length and row_start - 1 == row_end and end_column < end_length:
                     if start_column == 0:
-                        Rectangle(pos=(self.parent.x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(self.parent.width, FONT_HEIGHT))
+                        Rectangle(pos=(self.parent.x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(self.x + 3 * FONT_WIDTH, FONT_HEIGHT))
                     else:
-                        Rectangle(pos=(self.x + start_x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(self.parent.width - start_x, FONT_HEIGHT))
-                if self.section.offset <= end < self.section.offset + self.section.length and row_end >= row_start:
-                    end_x = end_column * 3 * FONT_WIDTH
-                    if end_column < end_length:
-                        Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + 1) * FONT_HEIGHT)), size=(self.x + end_x, FONT_HEIGHT))
-                    else:
-                        Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + 1) * FONT_HEIGHT)), size=(self.parent.width, FONT_HEIGHT))
+                        Rectangle(pos=(self.x + start_x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(end_x - start_x, FONT_HEIGHT))
+                else:
+                    if self.section.offset <= start < self.section.offset + self.section.length: 
+                        if start_column == 0:
+                            Rectangle(pos=(self.parent.x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(width, FONT_HEIGHT))
+                        else:
+                            Rectangle(pos=(self.x + start_x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(width - start_x, FONT_HEIGHT))
+                    if self.section.offset <= end < self.section.offset + self.section.length and row_end >= row_start:
+                        if end_column < end_length:
+                            Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + 1) * FONT_HEIGHT)), size=(self.x + end_x, FONT_HEIGHT))
+                        else:
+                            Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + 1) * FONT_HEIGHT)), size=(width, FONT_HEIGHT))
 
 
-                if row_start <= row_end:
-                    off_y = 0
-                    if end >= self.section.offset + self.section.length: off_y = 1
-                    Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + off_y) * FONT_HEIGHT)), size=(self.parent.width, (row_end + off_y - row_start) * FONT_HEIGHT))
+                    if row_start <= row_end:
+                        off_y = 0
+                        if end >= self.section.offset + self.section.length: off_y = 1
+                        Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + off_y) * FONT_HEIGHT)), size=(width, (row_end + off_y - row_start) * FONT_HEIGHT))
 
 
 
@@ -410,6 +448,7 @@ class RV(RecycleView):
                          "width": dp(1500) })
 
         self.data = data
+        self.bind(size=lambda *args: SectionColumn.redraw_children())
 
     def update_from_scroll(self, *largs):
         super().update_from_scroll(*largs)
@@ -432,6 +471,7 @@ class DisApp(App):
         self.arrows: ArrowRenderer = None
 
         self.ctrl_down = False
+        self.shift_down = False
 
         Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
         Window.bind(on_key_down=self._keydown)
@@ -477,6 +517,7 @@ class DisApp(App):
         raise ValueError("Invalid location")
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
+        if keycode == 225: self.shift_down = True
         if keycode == 224: 
             self.ctrl_down = True
             SectionMnemonic.update_cursor()
@@ -485,6 +526,7 @@ class DisApp(App):
             return True
     
     def _keyup(self, window, keyboard: int, keycode: int):
+        if keycode == 225: self.shift_down = False
         if keycode == 224: 
             self.ctrl_down = False
             SectionMnemonic.update_cursor()

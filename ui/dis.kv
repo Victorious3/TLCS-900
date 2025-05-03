@@ -1,7 +1,7 @@
 <MainWindow>:
+    Minimap
     RV
     ArrowRenderer
-    Minimap
     
     GotoPosition:
         id: goto_position
@@ -9,7 +9,7 @@
         disabled: True
         size_hint: None, None
         width: dp(240)
-        height: dp(32)
+        height: self.minimum_height
         pos_hint: { "center_x": 0.5, "top": 1 }
 
     Keyboard
