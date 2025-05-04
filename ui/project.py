@@ -22,13 +22,14 @@ class Section(ABC):
         return f"{self.__class__.__name__}: {list(map(str, self.labels))} {self.offset:X} -> {self.offset + self.length:X}"
 
 class DataSection(Section): 
-    def __init__(self, offset, length, labels, data):
-        instructions = []
-        for i in range(0, length, DATA_PER_ROW):
-            width = min(DATA_PER_ROW, length - i)
-            res = data[i:i+width]
-            instructions.append(Instruction(InsnEntry(offset + i, width, ".db", (res,))))
-            
+    def __init__(self, offset, length, labels, data, instructions = None):
+        if instructions is None:
+            instructions = []
+            for i in range(0, length, DATA_PER_ROW):
+                width = min(DATA_PER_ROW, length - i)
+                res = data[i:i+width]
+                instructions.append(Instruction(InsnEntry(offset + i, width, ".db", (res,))))
+                
         super().__init__(offset, length, labels, data, instructions)
 
 class CodeSection(Section): pass
@@ -40,7 +41,9 @@ class Project:
         self.ib: InputBuffer = InputBuffer
         self.ob: OutputBuffer = None
 
-    def rescan(self, ep: int, org: int, oneshot = False):
+    def disassemble(self, ep: int): pass
+
+    def rescan(self, ep: int, org: int):
         self.sections = [] # TODO Only update parts that changed
 
         file_len = os.path.getsize(self.path)
@@ -136,32 +139,26 @@ class Project:
             if section.length < MAX_SECTION_LENGTH:
                 return [section]
             
+            ctor = section.__class__
             res = []
-            if isinstance(section, DataSection):
-                labels = section.labels
-                for i in range(0, section.length, MAX_SECTION_LENGTH):
-                    diff = min(MAX_SECTION_LENGTH, section.length - i)
-                    res.append(DataSection(section.offset + i, diff, labels, section.data[i:i + diff + 1]))
+            labels = section.labels
+            last = 0
+            last_i = 0
+            i = 0
+            offset = 0
+            for insn in section.instructions:
+                offset += insn.entry.length
+                if offset - last > MAX_SECTION_LENGTH:
+                    data = section.data[last:offset]
+                    res.append(ctor(section.offset + last, offset - last, labels, data, section.instructions[last_i:i]))
+                    last = offset - insn.entry.length
+                    last_i = i
                     labels = []
-            elif isinstance(section, CodeSection):
-                labels = section.labels
-                last = 0
-                last_i = 0
-                i = 0
-                offset = 0
-                for insn in section.instructions:
-                    offset += insn.entry.length
-                    if offset - last > MAX_SECTION_LENGTH:
-                        data = section.data[last:offset]
-                        res.append(CodeSection(section.offset + last, offset - last, labels, data, section.instructions[last_i:i]))
-                        last = offset - insn.entry.length
-                        last_i = i
-                        labels = []
 
-                    i += 1
-                
-                if last < section.length:
-                    res.append(CodeSection(section.offset + last, section.length - last, labels, section.data[last:], section.instructions[last_i:]))
+                i += 1
+            
+            if last < section.length:
+                res.append(ctor(section.offset + last, section.length - last, labels, section.data[last:], section.instructions[last_i:]))
 
             return res
 

@@ -1,10 +1,10 @@
 import math, weakref
-from itertools import chain
 
 from kivy.app import App
 from kivy.metrics import dp
 from kivy.clock import Clock
 from kivy.core.window import Window
+from kivy.core.window.window_sdl2 import WindowSDL
 from kivy.graphics import Color, Line, Rectangle
 from kivy.uix.widget import Widget
 from kivy.uix.label import Label
@@ -40,6 +40,7 @@ FONT_WIDTH, FONT_HEIGHT = find_font_height()
 from .project import Section, CodeSection, DataSection, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
 from .arrow import ArrowRenderer
 from .minimap import Minimap
+from .context_menu import show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
 class MainWindow(FloatLayout): pass
@@ -146,6 +147,21 @@ class SectionColumn(Label):
                 else: cls.selection_end = selection_end
 
         cls.redraw_children()
+
+    @classmethod
+    def on_touch_up_selection(cls, window, touch):
+        if (touch.button == "right" and 
+            touch.x < app().rv.width - app().minimap.width):
+
+            class Handler(MenuHandler):
+                def on_select(self, item):
+                    if item == "dis": app().project.disassemble(cls.selection_start)
+                
+            show_context_menu(Handler(), [
+                MenuItem("label", "Insert Label"),
+                MenuItem("dis", "Disassmeble from here"),
+                MenuItem("dis_selected", "Disassemble selected"),
+            ])
 
 class SectionAddresses(SectionColumn):
     def __init__(self, section: Section, **kwargs):
@@ -478,6 +494,7 @@ class DisApp(App):
         Window.bind(on_key_up=self._keyup)
         Window.bind(on_touch_move=SectionColumn.on_touch_move_section)
         Window.bind(on_touch_down=SectionColumn.on_touch_down_selection)
+        Window.bind(on_touch_up=SectionColumn.on_touch_up_selection)
     
     def build(self):
         Window.clearcolor = BG_COLOR

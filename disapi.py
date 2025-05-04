@@ -35,10 +35,11 @@ class Loc:
         return str(self.loc)
 
 class Branch:
-    def __init__(self, ep, to, conditional):
+    def __init__(self, ep, to, conditional, call = False):
         self.ep = ep # int or Label
         self.to = to # int or Label
         self.conditional = conditional
+        self.call = call
 
     def __str__(self):
         ret = label_to_str(self.ep) + " -> " + label_to_str(self.to)
@@ -47,10 +48,13 @@ class Branch:
         return ret
 
 class Label:
-    def __init__(self, location, count = 1, name = None):
+    def __init__(self, location, count = 1, name = None, call = False):
         self.location = location
         self.count = count
-        self.name = name or "label_" + format(location, "X")
+        if name is None:
+           if call: name = "fun_"
+           else: name = "label_"
+        self.name = name + format(location, "X")
 
     def __str__(self):
         return self.name
@@ -66,6 +70,7 @@ class OutputBuffer:
     def __init__(self, ofile):
         self.insnmap = {}
         self.branchlist = deque()
+        self.calls = set()
         self.ofile = ofile
         self.labels = {} # List of labels, compute with compute_labels
 
@@ -77,14 +82,15 @@ class OutputBuffer:
         name = "data_" + format(ep, "X")
         self.labels[ep] = name
 
-    def branch(self, ep, to, conditional = False):
-        self.branchlist.append(Branch(ep, to, conditional))
+    def branch(self, ep, to, conditional = False, call = False):
+        self.branchlist.append(Branch(ep, to, conditional, call))
+        if call: self.calls.add(to)
 
     def compute_labels(self, lower = 0, upper = sys.maxsize, min_occurance = 0):
         # Count occurrences of branch
         labels = Counter(map(lambda v: v.to, self.branchlist)).items()
         labels = filter(lambda v: v[1] > min_occurance and lower <= v[0] <= upper, labels)
-        labels = dict(map(lambda v: (v[0], Label(v[0], v[1])), labels))
+        labels = dict(map(lambda v: (v[0], Label(v[0], v[1], call = v[0] in self.calls)), labels))
 
         self.labels = labels
 
@@ -171,9 +177,13 @@ class InsnPool:
         self.max_threads = max_threads
         self.queue = Queue()
         self.proc = proc
+        self.locations = set()
 
         # A lock used to wake up the polling thread if asynchronous
         self.lock = threading.Semaphore()
+
+    def clear_visited_locations(self):
+        self.locations.clear()
 
     def query(self, insn):
         self.queue.put(insn)
@@ -212,13 +222,12 @@ class InsnPool:
         # one has finished. It is only possible to jump to a location once.
         if not self.has_cycled(): return
 
-        locations = set()
         while self.numThreads < self.max_threads and not self.queue.empty():
             insn = self.queue.get_nowait()
-            if insn.pc in locations:
+            if insn.pc in self.locations:
                 continue
             else:
-                locations.add(insn.pc)
+                self.locations.add(insn.pc)
 
             insn.start()
             self.numThreads += 1
@@ -304,10 +313,10 @@ class Insn(threading.Thread):
         return q
 
     # Used by JR, JP/etc to branch
-    def branch(self, to, conditional = False):
+    def branch(self, to, conditional = False, call = False):
         to = int(to)
         if to < 0: return # We don't want to start jumping to invalid addresses
-        self.obuffer.branch(self.pc, to, conditional)
+        self.obuffer.branch(self.pc, to, conditional, call)
         # We don't need this one anymore if we know that we have to branch
         if not conditional: self.kill()
         if not self.ibuffer.was_read(to):

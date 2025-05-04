@@ -791,12 +791,12 @@ def JRL_cc(insn):
 def CALL_nn(insn):
     insn.pop()
     to = Loc(insn.popw())
-    insn.branch(to, True)
+    insn.branch(to, True, call = True)
     return "CALL", to
 def CALL_nnn(insn):
     insn.pop()
     to = Loc(insn.popw() | (insn.pop() << 16))
-    insn.branch(to, True)
+    insn.branch(to, True, call = True)
     return "CALL", to
 def CALL_cc_mem(insn): 
     return "CALL", popcc(insn), insn.lastmem
@@ -806,7 +806,7 @@ def CALR(insn):
     if offset > 32767:
         offset -= 65536
     to = Loc(insn.pc + offset)
-    insn.branch(to, True)
+    insn.branch(to, True, call = True)
     return "CALR", to
 
 #DJNZ
