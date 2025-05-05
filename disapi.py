@@ -229,8 +229,8 @@ class InsnPool:
             else:
                 self.locations.add(insn.pc)
 
-            insn.start()
             self.numThreads += 1
+            insn.start()
 
 class InsnEntry:
     def __init__(self, pc, length, opcode, instructions):

@@ -34,18 +34,110 @@ class DataSection(Section):
 
 class CodeSection(Section): pass
 
+def label_list(label):
+    if label is None: return []
+    return [label]
+
 class Project:
     def __init__(self, path: str):
         self.path = path
         self.sections: list[Section] = []
         self.ib: InputBuffer = InputBuffer
         self.ob: OutputBuffer = None
+        self.pool: InsnPool = None
 
-    def disassemble(self, ep: int): pass
+    def disassemble(self, ep: int):
+        old_map = self.ob.insnmap
+        new_map = {}
+        self.ob.insnmap = new_map # Reset instruction map to get a diff later
+        self.pool.query(Insn(self.pool, self.ib, self.ob, ep))
+        self.pool.poll_all()
+
+        sections = []
+        for k, v in sorted(new_map.items()):
+            v = list(v)
+            self.extract_sections(v, sections)
+
+        sections = reduce(list.__add__, map(self.split_section, sections))
+        for i in range(len(self.sections)): pass
+
+        old_map.update(new_map)
+        self.ob.insnmap = old_map
+
+    def extract_sections(self, v: list[InsnEntry], out_list: list[Section]) -> int:
+        org = self.ib.entry_point
+        i = 1
+        start = 0
+        last_label = self.ob.label(v[start].pc)
+        label = None
+
+        if len(v) == 1:
+            v1 = v[start]
+            out_list.append(
+                CodeSection(v1.pc, v1.length, 
+                            label_list(last_label), 
+                            self.ib.buffer[v1.pc - org:v1.pc + v1.length + 1 - org], 
+                            list(map(Instruction, v[start:start+1]))))
+            
+            return v1.pc + v1.length
+        
+        while True:
+            while label is None:
+                label = self.ob.label(v[i].pc)
+                i += 1
+                if i > len(v) - 1: break
+        
+            if label is not None:
+                vs = v[start]
+                ve = v[i - 2]
+                s = vs.pc
+                e = ve.pc + ve.length - vs.pc
+                data = self.ib.buffer[s - org:s + e + 1 - org]
+                out_list.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:i - 1]))))
+
+                start = i - 1
+                last_label = label
+                label = None
+            
+            if i > len(v) - 1:
+                break
+        
+        s = v[start].pc
+        e = v[-1].pc + v[-1].length - s
+        data = self.ib.buffer[s - org:s + e + 1 - org]
+        out_list.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:]))))
+
+        return s + e
+    
+    def split_section(self, section: Section):
+        if section.length < MAX_SECTION_LENGTH:
+            return [section]
+        
+        ctor = section.__class__
+        res = []
+        labels = section.labels
+        last = 0
+        last_i = 0
+        i = 0
+        offset = 0
+        for insn in section.instructions:
+            offset += insn.entry.length
+            if offset - last > MAX_SECTION_LENGTH:
+                data = section.data[last:offset]
+                res.append(ctor(section.offset + last, offset - last, labels, data, section.instructions[last_i:i]))
+                last = offset - insn.entry.length
+                last_i = i
+                labels = []
+
+            i += 1
+        
+        if last < section.length:
+            res.append(ctor(section.offset + last, section.length - last, labels, section.data[last:], section.instructions[last_i:]))
+
+        return res
 
     def rescan(self, ep: int, org: int):
-        self.sections = [] # TODO Only update parts that changed
-
+        self.sections = []
         file_len = os.path.getsize(self.path)
 
         with open(self.path, 'rb') as f:
@@ -56,17 +148,13 @@ class Project:
 
             from tcls_900 import tlcs_900 as proc
 
-            pool = InsnPool(proc)
-            insn = Insn(pool, ib, ob, ep)
+            self.pool = InsnPool(proc)
+            insn = Insn(self.pool, ib, ob, ep)
 
-        pool.query(insn)
-        pool.poll_all()
+        self.pool.query(insn)
+        self.pool.poll_all()
 
         ob.compute_labels(org, file_len + org)
-
-        def label_list(label):
-            if label is None: return []
-            return [label]
 
         def output_db(nxt: int, last: int):
             diff = nxt - last
@@ -94,75 +182,11 @@ class Project:
         for k, v in sorted(ob.insnmap.items()):
             v = list(v)
             output_db(v[0].pc, last)
-
-            i = 1
-            start = 0
-            last_label = ob.label(v[start].pc)
-            label = None
-
-            if len(v) == 1:
-                v1 = v[start]
-                self.sections.append(CodeSection(v1.pc, v1.length, label_list(last_label), ib.buffer[v1.pc - org:v1.pc + v1.length + 1 - org], list(map(Instruction, v[start:start+1]))))
-                last = v1.pc + v1.length
-            else:  
-                while True:
-                    while label is None:
-                        label = ob.label(v[i].pc)
-                        i += 1
-                        if i > len(v) - 1: break
-                
-                    if label is not None:
-                        vs = v[start]
-                        ve = v[i - 2]
-                        s = vs.pc
-                        e = ve.pc + ve.length - vs.pc
-                        data = ib.buffer[s - org:s + e + 1 - org]
-                        self.sections.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:i - 1]))))
-
-                        start = i - 1
-                        last_label = label
-                        label = None
-                    
-                    if i > len(v) - 1:
-                        break
-                
-                s = v[start].pc
-                e = v[-1].pc + v[-1].length - s
-                data = ib.buffer[s - org:s + e + 1 - org]
-                self.sections.append(CodeSection(s, e, label_list(last_label), data, list(map(Instruction, v[start:]))))
-
-                last = s + e
+            last = self.extract_sections(v, self.sections)
         
         output_db(file_len + org, last)
 
-        def split_section(section: Section):
-            if section.length < MAX_SECTION_LENGTH:
-                return [section]
-            
-            ctor = section.__class__
-            res = []
-            labels = section.labels
-            last = 0
-            last_i = 0
-            i = 0
-            offset = 0
-            for insn in section.instructions:
-                offset += insn.entry.length
-                if offset - last > MAX_SECTION_LENGTH:
-                    data = section.data[last:offset]
-                    res.append(ctor(section.offset + last, offset - last, labels, data, section.instructions[last_i:i]))
-                    last = offset - insn.entry.length
-                    last_i = i
-                    labels = []
-
-                i += 1
-            
-            if last < section.length:
-                res.append(ctor(section.offset + last, section.length - last, labels, section.data[last:], section.instructions[last_i:]))
-
-            return res
-
-        self.sections = reduce(list.__add__, map(split_section, self.sections))
+        self.sections = reduce(list.__add__, map(self.split_section, self.sections))
 
         #for section in self.sections:
         #    print(section)
