@@ -37,7 +37,7 @@ def find_font_height():
 
 FONT_WIDTH, FONT_HEIGHT = find_font_height()
 
-from .project import Section, CodeSection, DataSection, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
+from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
 from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .context_menu import show_context_menu, MenuHandler, MenuItem
@@ -102,7 +102,7 @@ class SectionColumn(Label):
             panel.redraw()
 
     @classmethod
-    def on_touch_move_section(cls, window, touch):
+    def on_touch_move_section(cls, touch):
         if cls.outside_bounds: return
         if touch.button != "left": return
 
@@ -119,7 +119,7 @@ class SectionColumn(Label):
         cls.redraw_children()
     
     @classmethod
-    def on_touch_down_selection(cls, window, touch):
+    def on_touch_down_selection(cls, touch):
         if touch.button != "left": return
         cls.outside_bounds = touch.x > app().minimap.x
         if cls.outside_bounds: return
@@ -149,7 +149,7 @@ class SectionColumn(Label):
         cls.redraw_children()
 
     @classmethod
-    def on_touch_up_selection(cls, window, touch):
+    def on_touch_up_selection(cls, touch):
         if (touch.button == "right" and 
             touch.x < app().rv.width - app().minimap.width):
 
@@ -436,18 +436,7 @@ class GotoPosition(TextInput):
         self.opacity = 0
         self.disabled = True
         self.text = ""
-
-class Keyboard(Widget):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        Window.bind(on_key_down=self._keydown)
-
-    def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
-        if "ctrl" in modifiers and keycode == 10: # ctrl + g
-            app().goto_position.disabled = False
-            app().goto_position.opacity = 1
-            app().goto_position.focus = True
-
+ 
 class RV(RecycleView):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -475,6 +464,18 @@ class RV(RecycleView):
         scroll_pos = self.scroll_y * content_height
 
         return scroll_pos, scroll_pos + self.height
+    
+    def on_touch_down(self, touch):
+        if super().on_touch_down(touch): return True
+        SectionColumn.on_touch_down_selection(touch)
+    
+    def on_touch_move(self, touch):
+        if super().on_touch_move(touch): return True
+        SectionColumn.on_touch_move_section(touch)
+    
+    def on_touch_up(self, touch):
+        if super().on_touch_up(touch): return True
+        SectionColumn.on_touch_up_selection(touch)
 
 class DisApp(App):
     def __init__(self, project: Project):
@@ -485,6 +486,7 @@ class DisApp(App):
         self.rv: RV = None
         self.minimap: Minimap = None
         self.arrows: ArrowRenderer = None
+        self.window: MainWindow = None
 
         self.ctrl_down = False
         self.shift_down = False
@@ -492,15 +494,12 @@ class DisApp(App):
         Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
-        Window.bind(on_touch_move=SectionColumn.on_touch_move_section)
-        Window.bind(on_touch_down=SectionColumn.on_touch_down_selection)
-        Window.bind(on_touch_up=SectionColumn.on_touch_up_selection)
     
     def build(self):
         Window.clearcolor = BG_COLOR
 
-        window = MainWindow()
-        return window
+        self.window = MainWindow()
+        return self.window
     
     def after_layout_is_ready(self, dt):
         self.minimap.redraw()
@@ -534,8 +533,13 @@ class DisApp(App):
         raise ValueError("Invalid location")
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
-        if keycode == 225: self.shift_down = True
-        if keycode == 224: 
+        if "ctrl" in modifiers and keycode == 10: # ctrl + g
+            self.goto_position.disabled = False
+            self.goto_position.opacity = 1
+            self.goto_position.focus = True
+
+        elif keycode == 225: self.shift_down = True
+        elif keycode == 224: 
             self.ctrl_down = True
             SectionMnemonic.update_cursor()
         elif keycode == 41: 
