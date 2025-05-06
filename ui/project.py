@@ -58,8 +58,18 @@ class Project:
             v = list(v)
             self.extract_sections(v, sections)
 
-        sections = reduce(list.__add__, map(self.split_section, sections))
-        for i in range(len(self.sections)): pass
+        sections = reduce(list.__add__, map(self.split_section, sections), [])
+        if len(sections) > 0:
+            j = 0
+            section: Section = sections[j]
+            total = len(self.sections)
+            i = 0
+            while i < total:
+                in_section = self.sections[i]
+                if in_section.offset + in_section.length >= section.offset:
+                    if section.offset + section.length < in_section.offset + in_section.length:
+                        # Case 1: split in two
+                        self.sections[i] = in_section.__class__(in_section.offset, section.offset - in_section.offset, in_section.labels, None)
 
         old_map.update(new_map)
         self.ob.insnmap = old_map
@@ -186,7 +196,7 @@ class Project:
         
         output_db(file_len + org, last)
 
-        self.sections = reduce(list.__add__, map(self.split_section, self.sections))
+        self.sections = reduce(list.__add__, map(self.split_section, self.sections, []))
 
         #for section in self.sections:
         #    print(section)
