@@ -58,18 +58,50 @@ class Project:
             v = list(v)
             self.extract_sections(v, sections)
 
-        sections = reduce(list.__add__, map(self.split_section, sections), [])
+        sections: list[Section] = reduce(list.__add__, map(self.split_section, sections), [])
         if len(sections) > 0:
-            j = 0
-            section: Section = sections[j]
+            i, j = 0, 0
             total = len(self.sections)
-            i = 0
             while i < total:
                 in_section = self.sections[i]
+                if j > len(sections): break
+                section = sections[j]
                 if in_section.offset + in_section.length >= section.offset:
+                    # Case 1: split in two
                     if section.offset + section.length < in_section.offset + in_section.length:
-                        # Case 1: split in two
-                        self.sections[i] = in_section.__class__(in_section.offset, section.offset - in_section.offset, in_section.labels, None)
+                        insn: list[Instruction] = list(filter(lambda i: i.entry.pc < section.offset, in_section.instructions))
+                        insn_after = in_section.instructions[len(insn):]
+                        # If the last instruction is cut in half, we need to add a data section to accomodate it
+                        data_section_after: DataSection = None
+                        if len(insn) > 0:
+                            last_insn = insn[-1]
+                            if last_insn.entry.pc + last_insn.entry.length > section.offset:
+                                ln = section.offset - last_insn.entry.pc
+                                off = last_insn.entry.pc - in_section.offset
+                                # if its a data section, we only need to make the instruction shorter
+                                if isinstance(in_section, DataSection):
+                                    insn[-1] = Instruction(InsnEntry(last_insn.entry.pc, ln, ".db", (in_section.data[off:off + ln + 1],)))
+                                # otherwise we are in trouble and need to create a data section
+                                else:
+                                    data_section_after = DataSection(last_insn.entry.pc, ln, [], in_section.data[off:off + ln + 1])
+
+                        # Section before
+                        self.sections[i] = in_section.__class__(in_section.offset, section.offset - in_section.offset, in_section.labels, insn)
+                        if data_section_after:
+                            self.sections.insert(i + 1, data_section_after)
+                            i += 1; total += 1
+                        # New section
+                        self.sections.insert(i + 1, section)
+                        i += 1; total += 1
+                        # Section after
+                        self.sections.insert(i + 1, in_section.__class__(section.offset + section.length, in_section.length - section.offset - in_section.offset, [], insn_after))
+                        j += 1; total += 1
+                        # TODO We might want to merge sections together if the result is smaller than MAX_SECTION_LENGTH
+                    # Case 2: insert before
+                    else:
+                        self.sections.insert(i, section)
+                        j += 1; total += 1
+                i += 1
 
         old_map.update(new_map)
         self.ob.insnmap = old_map
