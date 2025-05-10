@@ -43,6 +43,12 @@ from .minimap import Minimap
 from .context_menu import show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
+def iter_all_children_of_type(widget: Widget, widget_type: type):
+    if isinstance(widget, widget_type):
+        yield widget
+    for child in widget.children:
+        yield from iter_all_children_of_type(child, widget_type)
+
 class MainWindow(FloatLayout): pass
 
 class LabelRow(TextInput):
@@ -80,7 +86,7 @@ class SectionColumn(Label):
 
     @classmethod
     def calculate_selection(cls, pos: tuple[int, int]):
-        for panel in SectionData.objects:
+        for panel in cls.find_children():
             x, y = panel.to_window(panel.x, panel.y)
             if pos[0] > x + panel.width: x1 = 0
             else: x1 = math.floor((pos[0] - x) / (FONT_WIDTH * 3))
@@ -98,8 +104,18 @@ class SectionColumn(Label):
         return -1
     
     @classmethod
+    def find_children(cls):
+        yield from iter_all_children_of_type(app().rv.children[0], SectionData)
+    
+    @classmethod
+    def reset_selection(cls):
+        cls.selection_start = 0
+        cls.selection_end = 0
+        cls.redraw_children()
+
+    @classmethod
     def redraw_children(cls):
-        for panel in SectionData.objects:
+        for panel in cls.find_children():
             panel.redraw()
 
     @classmethod
@@ -107,7 +123,7 @@ class SectionColumn(Label):
         if cls.outside_bounds: return
         if touch.button != "left": return
 
-        panel = next(iter(SectionData.objects))
+        panel = next(cls.find_children())
         x, y = panel.to_window(panel.x, panel.y)
         if touch.x > x + panel.width:
             end = cls.calculate_selection((x + panel.width, touch.y))
@@ -125,7 +141,7 @@ class SectionColumn(Label):
         cls.outside_bounds = touch.x > app().minimap.x
         if cls.outside_bounds: return
 
-        panel = next(iter(SectionData.objects))
+        panel = next(cls.find_children())
         x, y = panel.to_window(panel.x, panel.y)
         if touch.x > x + panel.width:
             selection_end = cls.calculate_selection((x + panel.width, touch.y))
@@ -165,6 +181,7 @@ class SectionColumn(Label):
                             a.arrows.redraw()
                 
                         a.project.disassemble(cls.selection_start, callback)
+                        a.scroll_to_offset(cls.selection_start)
                         
             show_context_menu(Handler(), [
                 MenuItem("label", "Insert Label"),
@@ -183,8 +200,6 @@ class SectionAddresses(SectionColumn):
         self.resize()
 
 class SectionData(SectionColumn):
-    objects: set[SectionColumn] = weakref.WeakSet()
-
     def __init__(self, section: Section, **kwargs):
         super().__init__(section, **kwargs)
         self.width = DATA_PER_ROW * dp(40)
@@ -201,7 +216,6 @@ class SectionData(SectionColumn):
 
         self.text = "\n".join(lines)
         self.resize()
-        SectionData.objects.add(self)
 
     def redraw(self):
         start, end = SectionColumn.selection_start, SectionColumn.selection_end
@@ -537,6 +551,7 @@ class DisApp(App):
                 if section.labels: scroll_pos += LABEL_HEIGHT
                 scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
                 self.rv.scroll_y = 1 - (scroll_pos / total_height)
+                SectionData.reset_selection()
                 return
 
             scroll_pos += data["height"]
