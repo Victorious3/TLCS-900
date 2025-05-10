@@ -57,11 +57,15 @@ def call_opc(insn, x, y, optable):
         #print(hex(insn.pc) + ":", hex(x), hex(y), "UNDEFINED")
         # Pop it off the stack...
         insn.pop()
+        if insn.exit_on_invalid:
+            insn.kill(error = True)
         return ("UNDEFINED",)
     else:
         #print(hex(insn.pc) + ":", hex(x), hex(y), opc.__name__)
         asm = opc(insn)
-        if type(asm) is tuple: 
+        if type(asm) is tuple:
+            if insn.exit_on_invalid and asm[0] in ("INVALID", "UNDEFINED"):
+                insn.kill(error = True)
             return asm
         elif asm is None:
             raise Exception("Not implemented") 

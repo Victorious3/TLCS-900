@@ -88,7 +88,7 @@ class OutputBuffer:
 
     def compute_labels(self, lower = 0, upper = sys.maxsize, min_occurance = 0):
         # Count occurrences of branch
-        labels = Counter(map(lambda v: v.to, self.branchlist)).items()
+        labels = Counter(map(lambda v: int(v.to), self.branchlist)).items()
         labels = filter(lambda v: v[1] > min_occurance and lower <= v[0] <= upper, labels)
         labels = dict(map(lambda v: (v[0], Label(v[0], v[1], call = v[0] in self.calls)), labels))
 
@@ -105,7 +105,7 @@ class OutputBuffer:
 
 
 class InputBuffer:
-    def __init__(self, data, available, bounds = None, entry_point = 0):
+    def __init__(self, data, available, bounds = None, entry_point = 0, exit_on_invalid = False):
         self.min = 0
         self.max = available
         if bounds is not None:
@@ -126,6 +126,7 @@ class InputBuffer:
         # Stores which bytes have already been read
         self.access = bytearray(math.ceil(available / 8))
         self.entry_point = entry_point
+        self.exit_on_invalid = exit_on_invalid
         data.readinto(self.buffer)
 
     def was_read(self, o):
@@ -178,6 +179,7 @@ class InsnPool:
         self.queue = Queue()
         self.proc = proc
         self.locations = set()
+        self.__error = False
 
         # A lock used to wake up the polling thread if asynchronous
         self.lock = threading.Semaphore()
@@ -188,8 +190,11 @@ class InsnPool:
     def query(self, insn):
         self.queue.put(insn)
 
-    def signal(self):
+    # Error might point at a PC where it encountered an invalid instruction
+    def signal(self, error = -1):
         self.numThreads -= 1
+        # Kill all threads
+        if error > 0: self.__error = error
         if self.has_cycled():
             # Wake up the polling thread if batch is done processing
             self.lock.release()
@@ -200,6 +205,8 @@ class InsnPool:
     def has_finished(self):
         return self.has_cycled() and self.queue.empty()
 
+    # Returns a location if there has been an error and blocking,
+    # otherwise calls the callback with the location
     def poll_all(self, blocking = True, callback = None):
         if not blocking and callback is None:
             raise ValueError("If called in a non blocking way you must provide a callback function.")
@@ -209,10 +216,11 @@ class InsnPool:
                 self.poll()
                 self.lock.acquire()  # Pauses the current thread and waits till batch is processed
             if callback:
-                callback()
+                callback(self.__error)
 
         if blocking:
             poll_all_impl()
+            return self.__error
         else:
             thread = threading.Thread(daemon = True, target = poll_all_impl)
             thread.start()
@@ -256,6 +264,7 @@ class Insn(threading.Thread):
         self.lastsize = 0
         self.lastr = "INVALID"
         self.lastmem = "INVALID"
+        self.exit_on_invalid = ibuffer.exit_on_invalid
 
         # List of processed instructions to insert at the entry point
         self.__instructions = deque()
@@ -266,6 +275,7 @@ class Insn(threading.Thread):
         # This is used if the Insn runs into an already processed segment,
         # In this case the last byte is -1 and should not be written.
         self.__nowrite = False
+        self.__error = False
 
     def run(self):
         while not self.__dead:
@@ -275,11 +285,12 @@ class Insn(threading.Thread):
         if self.__nowrite:
             self.__instructions.pop()
         self.obuffer.insert(self.ep, self.__instructions)
-        self.pool.signal()
+        self.pool.signal(self.pc if self.__error else -1)
 
-    def kill(self, nowrite = False):
+    def kill(self, nowrite = False, error = False):
         self.__dead = True
         self.__nowrite = nowrite
+        self.__error = error
 
     def peek(self, n = 0):
         return self.ibuffer.byte(self, n, True)
@@ -315,7 +326,10 @@ class Insn(threading.Thread):
     # Used by JR, JP/etc to branch
     def branch(self, to, conditional = False, call = False):
         to = int(to)
-        if to < 0: return # We don't want to start jumping to invalid addresses
+
+        # We don't want to start jumping to invalid addresses
+        if to < self.ibuffer.min or to > self.ibuffer.max: return
+
         self.obuffer.branch(self.pc, to, conditional, call)
         # We don't need this one anymore if we know that we have to branch
         if not conditional: self.kill()

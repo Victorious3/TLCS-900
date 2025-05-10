@@ -84,11 +84,12 @@ class SectionColumn(Label):
             x, y = panel.to_window(panel.x, panel.y)
             if pos[0] > x + panel.width: x1 = 0
             else: x1 = math.floor((pos[0] - x) / (FONT_WIDTH * 3))
-            if y <= pos[1] <= y + panel.height:
+            if y <= pos[1] < y + panel.height:
                 section = panel.section
                 y1 = y - pos[1]
                 rows = len(section.instructions)
                 row = math.floor(rows + y1 / FONT_HEIGHT)
+                if row >= len(section.instructions): continue
                 insn = section.instructions[row]
                 x1 = min(insn.entry.length - 1, max(x1, 0))
                 offset = insn.entry.pc + x1
@@ -155,11 +156,20 @@ class SectionColumn(Label):
 
             class Handler(MenuHandler):
                 def on_select(self, item):
-                    if item == "dis": app().project.disassemble(cls.selection_start)
+                    if item == "dis": 
+                        a = app()
+                        def callback():
+                            a.rv.update_data()
+                            a.minimap.redraw()
+                            a.arrows.recompute_arrows()
+                            a.arrows.redraw()
                 
+                        a.project.disassemble(cls.selection_start, callback)
+                        
             show_context_menu(Handler(), [
                 MenuItem("label", "Insert Label"),
-                MenuItem("dis", "Disassmeble from here"),
+                MenuItem("dis", "Disassemble from here"),
+                MenuItem("dis_oneshot", "Disassemble oneshot"),
                 MenuItem("dis_selected", "Disassemble selected"),
             ])
 
@@ -278,7 +288,7 @@ class SectionMnemonic(SectionColumn):
     def __init__(self, section: Section, **kwargs):
         super().__init__(section, **kwargs)
         self.pos = (dp(550), 0)
-        self.width = dp(200)
+        self.width = dp(400)
         self.size_hint = None, 1
         self.halign = "left"
         self.labels: list[LocationLabel] = []
@@ -442,18 +452,18 @@ class RV(RecycleView):
         super().__init__(**kwargs)
         app().rv = self
         self.effect_x = ScrollEffect()
+        self.update_data()
+        self.bind(size=lambda *args: SectionColumn.redraw_children())
 
-        project: Project = app().project
-
+    def update_data(self):
         data = []
-        for section in project.sections:
+        for section in app().project.sections:
             columns = len(section.instructions)
             data.append({"section": section, 
                          "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),
                          "width": dp(1500) })
 
         self.data = data
-        self.bind(size=lambda *args: SectionColumn.redraw_children())
 
     def update_from_scroll(self, *largs):
         super().update_from_scroll(*largs)

@@ -3,6 +3,8 @@ from abc import ABC
 from functools import reduce
 from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label
 
+from .popup import InvalidInsnPopup
+
 DATA_PER_ROW = 7
 MAX_SECTION_LENGTH = DATA_PER_ROW * 40
 
@@ -45,13 +47,43 @@ class Project:
         self.ib: InputBuffer = InputBuffer
         self.ob: OutputBuffer = None
         self.pool: InsnPool = None
+        self.file_len = 0
 
-    def disassemble(self, ep: int):
+    def disassemble(self, ep: int, callback):
+        # TODO make this part of the API instead of messing with the internals manually
         old_map = self.ob.insnmap
+        old_locations = self.pool.locations.copy()
+        old_access = self.ib.access.copy()
+
         new_map = {}
         self.ob.insnmap = new_map # Reset instruction map to get a diff later
         self.pool.query(Insn(self.pool, self.ib, self.ob, ep))
-        self.pool.poll_all()
+        error = self.pool.poll_all()
+
+        def cont(popup):
+            self._update_data(new_map)
+
+            old_map.update(new_map)
+            self.ob.insnmap = old_map
+            callback()
+            if popup: 
+                popup.dismiss()
+
+        def close(popup):
+            self.ob.insnmap = old_map
+            self.ib.access = old_access
+            self.pool.locations = old_locations
+            popup.dismiss()
+
+        if error > 0:
+            popup = InvalidInsnPopup(instruction=error)
+            popup.bind(on_close=close)
+            popup.bind(on_continue=cont)
+            popup.open()
+        else: cont(None)
+
+    def _update_data(self, new_map: dict):
+        self.ob.compute_labels(self.ib.entry_point, self.file_len + self.ib.entry_point)
 
         sections = []
         for k, v in sorted(new_map.items()):
@@ -59,52 +91,71 @@ class Project:
             self.extract_sections(v, sections)
 
         sections: list[Section] = reduce(list.__add__, map(self.split_section, sections), [])
+        
         if len(sections) > 0:
             i, j = 0, 0
             total = len(self.sections)
             while i < total:
                 in_section = self.sections[i]
-                if j > len(sections): break
+                if j >= len(sections): break
                 section = sections[j]
-                if in_section.offset + in_section.length >= section.offset:
-                    # Case 1: split in two
-                    if section.offset + section.length < in_section.offset + in_section.length:
-                        insn: list[Instruction] = list(filter(lambda i: i.entry.pc < section.offset, in_section.instructions))
-                        insn_after = in_section.instructions[len(insn):]
-                        # If the last instruction is cut in half, we need to add a data section to accomodate it
-                        data_section_after: DataSection = None
-                        if len(insn) > 0:
-                            last_insn = insn[-1]
-                            if last_insn.entry.pc + last_insn.entry.length > section.offset:
-                                ln = section.offset - last_insn.entry.pc
-                                off = last_insn.entry.pc - in_section.offset
-                                # if its a data section, we only need to make the instruction shorter
-                                if isinstance(in_section, DataSection):
-                                    insn[-1] = Instruction(InsnEntry(last_insn.entry.pc, ln, ".db", (in_section.data[off:off + ln + 1],)))
-                                # otherwise we are in trouble and need to create a data section
-                                else:
-                                    data_section_after = DataSection(last_insn.entry.pc, ln, [], in_section.data[off:off + ln + 1])
+                # Note: Only data sections can get replaced. Code sections need to be marked as data sections first before they can be considered for replacement
+                if isinstance(in_section, DataSection) and in_section.offset + in_section.length > section.offset:
+                    insn: list[Instruction] = list(filter(lambda i: i.entry.pc < section.offset, in_section.instructions))
+                    if len(insn) > 0:
+                        last_insn = insn[-1]
+                        if last_insn.entry.pc + last_insn.entry.length > section.offset:
+                            ln = section.offset - last_insn.entry.pc
+                            off = last_insn.entry.pc - in_section.offset
+                            insn[-1] = Instruction(InsnEntry(last_insn.entry.pc, ln, ".db", (in_section.data[off:off + ln + 1],)))
 
-                        # Section before
-                        self.sections[i] = in_section.__class__(in_section.offset, section.offset - in_section.offset, in_section.labels, insn)
-                        if data_section_after:
-                            self.sections.insert(i + 1, data_section_after)
-                            i += 1; total += 1
+                    # Section before
+                    if section.offset - in_section.offset > 0:
+                        ln = section.offset - in_section.offset
+                        self.sections[i] = in_section.__class__(in_section.offset, ln, in_section.labels, in_section.data[:ln + 1], insn)
+                    
                         # New section
                         self.sections.insert(i + 1, section)
                         i += 1; total += 1
-                        # Section after
-                        self.sections.insert(i + 1, in_section.__class__(section.offset + section.length, in_section.length - section.offset - in_section.offset, [], insn_after))
-                        j += 1; total += 1
-                        # TODO We might want to merge sections together if the result is smaller than MAX_SECTION_LENGTH
-                    # Case 2: insert before
                     else:
-                        self.sections.insert(i, section)
-                        j += 1; total += 1
-                i += 1
+                        self.sections[i] = section
 
-        old_map.update(new_map)
-        self.ob.insnmap = old_map
+                    # Section after
+                    ln = in_section.length - section.length - (section.offset - in_section.offset)
+                    if ln > 0:
+                        insn_after: list[Instruction] = list(filter(lambda i: i.entry.pc + i.entry.length > section.offset + section.length, in_section.instructions))
+                        # Shorten first data
+                        ln2 = insn_after[0].entry.pc + insn_after[0].entry.length - (section.offset + section.length)
+                        off = (section.offset + section.length) - in_section.offset
+
+                        insn_after[0] = Instruction(InsnEntry(section.offset + section.length, ln2, ".db", (in_section.data[off:off + ln2],)))
+                        self.sections.insert(i + 1, DataSection(section.offset + section.length, ln, [], in_section.data[off:], insn_after))
+                        
+                        total += 1
+
+                    # Remove overlaps
+                    while i + 1 < len(self.sections):
+                        next_section = self.sections[i + 1]
+                        #print(f"{section.offset:X} {section.length} {next_section.offset:X} {next_section.length}")
+                        
+                        if next_section.offset >= section.offset:
+                            # Remove whole section if new section covers it completely
+                            if next_section.offset + next_section.length <= section.offset + section.length:
+                                del self.sections[i + 1]
+                                total -= 1
+                            elif next_section.offset < section.offset + section.length:
+                                #print(f"{section.offset:X} {section.length} {next_section.offset:X} {next_section.length}")
+                                # Partial overlap
+                                ln3 = next_section.length - (section.offset + section.length - next_section.offset)
+                                self.sections[i + 1] = DataSection(section.offset + section.length, ln3, [], next_section.data[next_section.length - ln3:])
+                                break
+                            else: break
+                        else: break
+
+                    j += 1
+                    # TODO We might want to merge sections together if the result is smaller than MAX_SECTION_LENGTH
+                i += 1
+                
 
     def extract_sections(self, v: list[InsnEntry], out_list: list[Section]) -> int:
         org = self.ib.entry_point
@@ -166,7 +217,7 @@ class Project:
             offset += insn.entry.length
             if offset - last > MAX_SECTION_LENGTH:
                 data = section.data[last:offset]
-                res.append(ctor(section.offset + last, offset - last, labels, data, section.instructions[last_i:i]))
+                res.append(ctor(section.offset + last, offset - insn.entry.length - last, labels, data, section.instructions[last_i:i]))
                 last = offset - insn.entry.length
                 last_i = i
                 labels = []
@@ -180,10 +231,10 @@ class Project:
 
     def rescan(self, ep: int, org: int):
         self.sections = []
-        file_len = os.path.getsize(self.path)
+        self.file_len = os.path.getsize(self.path)
 
         with open(self.path, 'rb') as f:
-            ib = InputBuffer(f, file_len, entry_point=org)
+            ib = InputBuffer(f, self.file_len, entry_point=org, exit_on_invalid=True)
             ob = OutputBuffer(None)
             self.ob = ob
             self.ib = ib
@@ -196,7 +247,7 @@ class Project:
         self.pool.query(insn)
         self.pool.poll_all()
 
-        ob.compute_labels(org, file_len + org)
+        ob.compute_labels(org, self.file_len + org)
 
         def output_db(nxt: int, last: int):
             diff = nxt - last
@@ -226,9 +277,9 @@ class Project:
             output_db(v[0].pc, last)
             last = self.extract_sections(v, self.sections)
         
-        output_db(file_len + org, last)
+        output_db(self.file_len + org, last)
 
-        self.sections = reduce(list.__add__, map(self.split_section, self.sections, []))
+        self.sections = reduce(list.__add__, map(self.split_section, self.sections), [])
 
         #for section in self.sections:
         #    print(section)

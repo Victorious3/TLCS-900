@@ -826,6 +826,8 @@ def RET(insn):
     insn.kill()
     return "RET"
 def RET_cc(insn):
+    if insn.lastinsn != 0xB0: 
+        return "INVALID",
     insn.pop()
     insn.kill()
     return "RET", popcc(insn)

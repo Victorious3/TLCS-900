@@ -45,3 +45,30 @@
     #    Line:
     #        width: 2
     #        rectangle: self.x, self.y, self.width, self.height
+
+<InvalidInsnPopup>:
+    auto_dismiss: False
+    title: "Invalid instruction"
+    size_hint: None, None
+    width: dp(300)
+    height: dp(200)
+
+    BoxLayout:
+        orientation: 'vertical'
+        Label:
+            text: f"Hit an invalid instruction at {root.instruction:X}.\nYou can discard the active disassembly or keep the changes."
+            text_size: self.width, None
+            size_hint_y: 1
+            height: self.texture_size[1]
+            halign: 'center'
+            valign: 'top'
+
+        BoxLayout:
+            size_hint: 1, None
+            height: dp(40)
+            Button:
+                text: "Discard"
+                on_release: root.dispatch("on_close")
+            Button:
+                text: "Keep"
+                on_release: root.dispatch("on_continue")
