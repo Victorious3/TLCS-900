@@ -179,9 +179,9 @@ class SectionColumn(Label):
                             a.minimap.redraw()
                             a.arrows.recompute_arrows()
                             a.arrows.redraw()
+                            Clock.schedule_once(lambda dt: a.scroll_to_offset(cls.selection_start), 0)
                 
                         a.project.disassemble(cls.selection_start, callback)
-                        a.scroll_to_offset(cls.selection_start)
                         
             show_context_menu(Handler(), [
                 MenuItem("label", "Insert Label"),
@@ -198,6 +198,28 @@ class SectionAddresses(SectionColumn):
         self.halign = "right"
         self.text = "\n".join(format(x, "X") for x in map(lambda i: i.entry.pc, section.instructions))
         self.resize()
+
+    @classmethod
+    def redraw_children(cls):
+        for panel in iter_all_children_of_type(app().rv.children[0], SectionAddresses):
+            panel.redraw()
+    
+    def redraw(self):
+        super().redraw()
+        self.canvas.before.clear()
+
+        last_position = app().last_position
+        if self.section.offset <= last_position < self.section.offset + self.section.length:
+            # Draw background on location that has been jumped to
+            for i, insn in enumerate(self.section.instructions):
+                if insn.entry.pc + insn.entry.length >= last_position:
+                    y = self.height - i * FONT_HEIGHT
+                    width = len(format(insn.entry.pc, "X")) * FONT_WIDTH
+                    with self.canvas.before:
+                        Color(*get_color_from_hex("#E69533"))
+                        Rectangle(pos=(self.x + self.width - width, self.y + (self.height - i * FONT_HEIGHT) - FONT_HEIGHT), size=(width, FONT_HEIGHT))
+                    break
+        
 
 class SectionData(SectionColumn):
     def __init__(self, section: Section, **kwargs):
@@ -258,14 +280,13 @@ class SectionData(SectionColumn):
                 if self.section.offset <= start < self.section.offset + self.section.length and row_start - 1 == row_end and end_column < end_length:
                     if start_column == 0:
                         Rectangle(pos=(self.parent.x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(self.x + 3 * FONT_WIDTH, FONT_HEIGHT))
-                    else:
-                        Rectangle(pos=(self.x + start_x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(end_x - start_x, FONT_HEIGHT))
+                    Rectangle(pos=(self.x + start_x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(end_x - start_x, FONT_HEIGHT))
                 else:
                     if self.section.offset <= start < self.section.offset + self.section.length: 
                         if start_column == 0:
                             Rectangle(pos=(self.parent.x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(width, FONT_HEIGHT))
                         else:
-                            Rectangle(pos=(self.x + start_x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(width - start_x, FONT_HEIGHT))
+                            Rectangle(pos=(self.x + start_x, self.y + self.height - (row_start * FONT_HEIGHT)), size=(width - start_x - self.x, FONT_HEIGHT))
                     if self.section.offset <= end < self.section.offset + self.section.length and row_end >= row_start:
                         if end_column < end_length:
                             Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + 1) * FONT_HEIGHT)), size=(self.x + end_x, FONT_HEIGHT))
@@ -511,6 +532,7 @@ class DisApp(App):
         self.minimap: Minimap = None
         self.arrows: ArrowRenderer = None
         self.window: MainWindow = None
+        self.last_position = -1
 
         self.ctrl_down = False
         self.shift_down = False
@@ -552,6 +574,8 @@ class DisApp(App):
                 scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
                 self.rv.scroll_y = 1 - (scroll_pos / total_height)
                 SectionData.reset_selection()
+                self.last_position = offset
+                Clock.schedule_once(lambda dt: SectionAddresses.redraw_children(), 0)
                 return
 
             scroll_pos += data["height"]
