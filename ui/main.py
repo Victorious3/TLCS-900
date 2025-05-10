@@ -20,7 +20,7 @@ from kivy.effects.scroll import ScrollEffect
 
 FONT_SIZE = dp(15)
 LABEL_HEIGHT = FONT_SIZE + dp(5)
-FONT_NAME = "ui/FiraMono"
+FONT_NAME = "ui/RobotoMono"
 BG_COLOR = get_color_from_hex("#1F1F1F")
 
 def app() -> "DisApp":
@@ -315,7 +315,7 @@ class SectionMnemonic(SectionColumn):
                     row_width += len(label_text)
                 elif isinstance(param, bytearray):
                     res = param.decode("ascii", "replace")
-                    res = "".join(x if 0x6F > ord(x) > 0x20 else "." for x in res)
+                    res = "".join(x if 0x7E >= ord(x) >= 0x20 else "." for x in res)
                     row += '"' + escape_markup(res) + '"'
                     row_width += len(res) + 2
                 else:
