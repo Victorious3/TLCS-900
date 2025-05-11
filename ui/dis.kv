@@ -1,8 +1,43 @@
 <MainWindow>:
-    Minimap
-    RV
-    ArrowRenderer
-    
+    id: main_window
+
+    RelativeLayout:
+        size_hint: 1, 1
+        
+        id: main_panel
+        RelativeLayout:
+            size_hint: 1, 1
+            pos: 0, main_panel.height - self.height - app_menu.height
+
+            Minimap
+            RV
+            ArrowRenderer
+
+        FloatLayout:
+            pos: 0, main_panel.height - app_menu.height
+            size_hint: 1, None
+            height: app_menu.height
+
+            AppMenu:
+                top: root.height
+                id: app_menu
+                cancel_handler_widget: main_window
+
+            BoxLayout:
+                id: navigation_menu
+                pos_hint: { "right": 1, "top": 1 }
+                size_hint: None, 1
+                width: dp(70)
+                
+                IconButton:
+                    id: back_button
+                    source: "ui/left_arrow.png"
+                    disabled: True
+                IconButton:
+                    id: forward_button
+                    source: "ui/right_arrow.png"
+                    disabled: True
+
     GotoPosition:
         id: goto_position
         opacity: 0
@@ -11,6 +46,26 @@
         width: dp(240)
         height: self.minimum_height
         pos_hint: { "center_x": 0.5, "top": 1 }
+
+<IconButton>:
+    background_normal: ""
+    background_down: ""
+    background_disabled_normal: ""
+    background_disabled_down: ""
+
+    default_color: 0.2, 0.2, 0.2, 1
+    hover_color: 0.25, 0.25, 0.25, 1
+    icon_default_color: 0.8, 0.8, 0.8, 1
+    icon_disabled_color: 0.5, 0.5, 0.5, 1
+
+    border: 0, 0, 0, 0
+    
+    Icon:
+        source: self.parent.source
+        color: self.parent.icon_color if not self.parent.disabled else self.parent.icon_disabled_color
+        height: dp(20)
+        center_x: self.parent.center_x
+        center_y: self.parent.center_y
 
 <ArrowRenderer>:
     size_hint: None, 1

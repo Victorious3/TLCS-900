@@ -4,20 +4,10 @@ from kivy.clock import Clock
 from kivy.core.window import Window
 
 from .main import app
-
-class MenuHandler(ABC):
-    def on_close(self): pass
-    @abstractmethod
-    def on_select(self, item: str): pass
-
-class MenuItem:
-    def __init__(self, id: str, text: str):
-        self.id = id
-        self.text = text
-
+from .main_menu import MenuItem, MenuHandler
 
 if sys.platform == "darwin":
-    # Native MacOS contex menu
+    # Native MacOS context menu
 
     import objc
     from AppKit import NSMenu, NSMenuItem, NSEvent
@@ -83,5 +73,6 @@ else:
             menu.add_item(widget)
         
         app().window.add_widget(menu)
+        menu._setup_hover_timer()
         menu.show(*app().root_window.mouse_pos)
 

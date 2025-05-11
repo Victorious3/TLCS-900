@@ -6,6 +6,8 @@ from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.core.window.window_sdl2 import WindowSDL
 from kivy.graphics import Color, Line, Rectangle
+from kivy.uix.image import Image
+from kivy.uix.button import Button
 from kivy.uix.widget import Widget
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
@@ -17,6 +19,9 @@ from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.utils import get_color_from_hex, escape_markup
 from kivy.core.text import Label as CoreLabel
 from kivy.effects.scroll import ScrollEffect
+from kivy.properties import ListProperty, StringProperty
+
+from kivy_garden.contextmenu import AppMenu
 
 FONT_SIZE = dp(15)
 LABEL_HEIGHT = FONT_SIZE + dp(5)
@@ -40,7 +45,8 @@ FONT_WIDTH, FONT_HEIGHT = find_font_height()
 from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
 from .arrow import ArrowRenderer
 from .minimap import Minimap
-from .context_menu import show_context_menu, MenuHandler, MenuItem
+from .context_menu import show_context_menu
+from .main_menu import MenuHandler, MenuItem, build_menu
 from disapi import Loc
 
 def iter_all_children_of_type(widget: Widget, widget_type: type):
@@ -48,6 +54,31 @@ def iter_all_children_of_type(widget: Widget, widget_type: type):
         yield widget
     for child in widget.children:
         yield from iter_all_children_of_type(child, widget_type)
+
+class Icon(Image):
+    def on_touch_down(self, touch):
+        return False
+    def on_touch_up(self, touch):
+        return False
+
+class IconButton(Button):
+    icon_color = ListProperty([1, 1, 1, 1])
+    default_color = ListProperty([0.2, 0.2, 0.2, 1])
+    hover_color = ListProperty([0.25, 0.25, 0.25, 1])
+    source = StringProperty("")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.background_color = self.default_color
+        Window.bind(mouse_pos=self.on_mouse_pos)
+
+    def on_mouse_pos(self, widget, pos):
+        if self.get_root_window():
+            inside = self.collide_point(*self.to_widget(*pos))
+            if inside and not self.disabled:
+                self.background_color = self.hover_color
+            else:
+                self.background_color = self.default_color
 
 class MainWindow(FloatLayout): pass
 
@@ -122,13 +153,14 @@ class SectionColumn(Label):
     def on_touch_move_section(cls, touch):
         if cls.outside_bounds: return
         if touch.button != "left": return
+        tx, ty = app().rv.to_window(touch.x, touch.y)
 
         panel = next(cls.find_children())
         x, y = panel.to_window(panel.x, panel.y)
         if touch.x > x + panel.width:
-            end = cls.calculate_selection((x + panel.width, touch.y))
+            end = cls.calculate_selection((x + panel.width, ty))
         else:
-            end = cls.calculate_selection((touch.x, touch.y))
+            end = cls.calculate_selection((tx, ty))
 
         if end > 0:
             cls.selection_end = end
@@ -140,14 +172,15 @@ class SectionColumn(Label):
         if touch.button != "left": return
         cls.outside_bounds = touch.x > app().minimap.x
         if cls.outside_bounds: return
+        tx, ty = app().rv.to_window(touch.x, touch.y)
 
         panel = next(cls.find_children())
         x, y = panel.to_window(panel.x, panel.y)
         if touch.x > x + panel.width:
-            selection_end = cls.calculate_selection((x + panel.width, touch.y))
-            selection_start = cls.calculate_selection((x, touch.y))
+            selection_end = cls.calculate_selection((x + panel.width, ty))
+            selection_start = cls.calculate_selection((x, ty))
         else:
-            selection_end = cls.calculate_selection((touch.x, touch.y))
+            selection_end = cls.calculate_selection((tx, ty))
             selection_start = selection_end
 
         if not app().shift_down: 
@@ -212,8 +245,7 @@ class SectionAddresses(SectionColumn):
         if self.section.offset <= last_position < self.section.offset + self.section.length:
             # Draw background on location that has been jumped to
             for i, insn in enumerate(self.section.instructions):
-                if insn.entry.pc + insn.entry.length >= last_position:
-                    y = self.height - i * FONT_HEIGHT
+                if insn.entry.pc + insn.entry.length > last_position:
                     width = len(format(insn.entry.pc, "X")) * FONT_WIDTH
                     with self.canvas.before:
                         Color(*get_color_from_hex("#E69533"))
@@ -532,7 +564,13 @@ class DisApp(App):
         self.minimap: Minimap = None
         self.arrows: ArrowRenderer = None
         self.window: MainWindow = None
+        self.app_menu: AppMenu = None
+        self.back_button: IconButton = None
+        self.forward_button: IconButton = None
+
         self.last_position = -1
+        self.position_history: list[int] = []
+        self.position = 0
 
         self.ctrl_down = False
         self.shift_down = False
@@ -545,6 +583,14 @@ class DisApp(App):
         Window.clearcolor = BG_COLOR
 
         self.window = MainWindow()
+        self.app_menu = self.window.ids["app_menu"]
+        self.back_button = self.window.ids["back_button"]
+        self.forward_button = self.window.ids["forward_button"]
+
+        self.back_button.bind(on_press=lambda w: self.go_back())
+        self.forward_button.bind(on_press=lambda w: self.go_forward())
+
+        build_menu()
         return self.window
     
     def after_layout_is_ready(self, dt):
@@ -563,7 +609,32 @@ class DisApp(App):
                 return
         raise ValueError("Invalid label")
     
-    def scroll_to_offset(self, offset: int):
+    def update_position_history(self, offset):
+        if self.position > 0:
+            ln = len(self.position_history)
+            self.position_history = self.position_history[:ln - self.position]
+            self.position = 0
+
+        self.position_history.append(offset)
+        self.update_position_buttons()
+
+    def update_position_buttons(self):
+        self.forward_button.disabled = self.position == 0
+        self.back_button.disabled = self.position == len(self.position_history) - 1
+
+    def go_back(self):
+        if self.position < len(self.position_history) - 1:
+            self.position += 1
+        self.scroll_to_offset(self.position_history[len(self.position_history) - self.position - 1], history=False)
+        self.update_position_buttons()
+
+    def go_forward(self):
+        if self.position > 0:
+            self.position -= 1
+        self.scroll_to_offset(self.position_history[len(self.position_history) - self.position - 1], history=False)
+        self.update_position_buttons()
+    
+    def scroll_to_offset(self, offset: int, history = True):
         scroll_pos = 0
         for i in range(len(self.rv.data)):
             total_height = self.rv.children[0].height - self.rv.height
@@ -574,8 +645,10 @@ class DisApp(App):
                 scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
                 self.rv.scroll_y = 1 - (scroll_pos / total_height)
                 SectionData.reset_selection()
+                if history: self.update_position_history(offset)
                 self.last_position = offset
                 Clock.schedule_once(lambda dt: SectionAddresses.redraw_children(), 0)
+                
                 return
 
             scroll_pos += data["height"]
