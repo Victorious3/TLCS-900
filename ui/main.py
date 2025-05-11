@@ -534,6 +534,13 @@ class RV(RecycleView):
 
     def update_from_scroll(self, *largs):
         super().update_from_scroll(*largs)
+
+        def update(dt):
+            SectionAddresses.redraw_children()
+            SectionData.redraw_children()
+
+        Clock.schedule_once(update, 0)
+        
         app().arrows.redraw()
 
     def get_visible_range(self):
@@ -604,7 +611,7 @@ class DisApp(App):
     def scroll_to_label(self, label: str):
         for section in self.project.sections:
             if section.labels and section.labels[0].name == label:
-                print("Goto label:", label, "at", hex(section.offset))
+                print("Goto label:", label, "at", format(section.offset, "X"))
                 self.scroll_to_offset(section.offset)
                 return
         raise ValueError("Invalid label")
@@ -643,11 +650,10 @@ class DisApp(App):
             if section.offset <= offset < section.offset + section.length:
                 if section.labels: scroll_pos += LABEL_HEIGHT
                 scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
-                self.rv.scroll_y = 1 - (scroll_pos / total_height)
+                self.rv.scroll_y = 1 - (scroll_pos / total_height)                
                 SectionData.reset_selection()
                 if history: self.update_position_history(offset)
                 self.last_position = offset
-                Clock.schedule_once(lambda dt: SectionAddresses.redraw_children(), 0)
                 
                 return
 
