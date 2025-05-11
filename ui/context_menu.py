@@ -19,6 +19,7 @@ class MenuItem:
 if sys.platform == "darwin":
     # Native MacOS contex menu
 
+    import objc
     from AppKit import NSMenu, NSMenuItem, NSEvent
     from Foundation import NSObject
 
