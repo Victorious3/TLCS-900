@@ -1,0 +1,210 @@
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.recycleview import RecycleView
+from kivy.uix.label import Label
+from kivy.uix.behaviors import ButtonBehavior
+from kivy.uix.widget import Widget
+from kivy.uix.recycleview.views import RecycleDataViewBehavior
+from kivy.uix.image import Image
+from kivy.properties import ListProperty, NumericProperty
+from kivy.factory import Factory
+from kivy.lang import Builder
+from kivy.graphics import Color, Line, Rectangle
+from kivy.core.window import Window
+from kivy.metrics import dp
+
+Builder.load_file("table.kv")
+
+class ColumnLabel(Label): pass
+
+class SortableHeader(ButtonBehavior, Label):
+    col_index = NumericProperty(0)
+    direction = NumericProperty(0)
+
+    def __init__(self, table, **kwargs):
+        super().__init__(**kwargs)
+        self.table = table
+
+    def on_press(self):
+        self.table.sort_by_column(self.col_index)
+        
+class ColumnResizer(ButtonBehavior, Widget):
+    col_index = NumericProperty(0)
+
+    def __init__(self, table, **kwargs):
+        super().__init__(**kwargs)
+        self.table = table
+        self.size_hint_x = None
+        self.width = 5
+        self._start_x = None
+        self._cursor_set = False
+
+        Window.bind(mouse_pos=self.on_mouse_pos)
+
+    def on_enter(self):
+        if not self._cursor_set:
+            Window.set_system_cursor("size_we")  # horizontal resize cursor
+            self._cursor_set = True
+
+    def on_leave(self):
+        if self._cursor_set and not self._start_x:
+            Window.set_system_cursor("arrow")  # reset to default
+            self._cursor_set = False
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            self._start_x = touch.x
+            return True
+        return super().on_touch_down(touch)
+
+    def on_touch_move(self, touch):
+        if self._start_x is not None:
+            delta = touch.x - self._start_x
+            self._start_x = touch.x
+            self.table.resize_column(self.col_index, delta)
+            return True
+        return super().on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+        self._start_x = None
+        return super().on_touch_up(touch)
+    
+    def on_mouse_pos(self, window, pos):
+        inside = self.collide_point(*self.to_widget(*pos))
+        if inside:
+            self.on_enter()
+        else:
+            self.on_leave()
+
+
+class TableRow(RecycleDataViewBehavior, BoxLayout):
+    row = ListProperty()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = 'horizontal'
+        self.size_hint = 1, None
+
+    def refresh_view_attrs(self, rv, index, data):
+        super().refresh_view_attrs(rv, index, data)
+
+        self.clear_widgets()
+        self.row = data['row']
+
+        height = 0
+        for i, cell in enumerate(self.row):
+            label = ColumnLabel(text=str(cell), size_hint_x=None, width=rv.table.column_widths[i])
+            self.add_widget(label)
+            label.texture_update()
+            label.height = label.texture_size[1]
+            height = max(height, label.height)
+
+            if i < len(self.row) - 1:
+                self.add_widget(Widget(size_hint_x=None, width=5))
+
+        self.height = height + dp(10)
+        
+class TableBody(RecycleView):
+    def __init__(self, table, **kwargs):
+        super().__init__(**kwargs)
+        self.table = table
+
+    def update_data(self):
+        self.data = [{
+            'row': row
+        } for row in self.table.data]
+        self.refresh_from_data()
+
+
+class ResizableRecycleTable(BoxLayout):
+    column_widths = ListProperty([])
+
+    def __init__(self, headers, data, column_widths = None, **kwargs):
+        super().__init__(orientation='vertical', **kwargs)
+        self.headers = headers
+        self.data = data
+        self.column_widths = column_widths or [dp(150) for _ in headers]
+
+        self.header_row = self._build_header()
+        self.add_widget(self.header_row)
+
+        self.body = TableBody(self)
+        self.add_widget(self.body)
+        self.reverse = -1
+        self.ordered_by = -1
+
+        self.bind(column_widths=self._on_column_widths)
+        self._rebuild_ui()
+
+    def _on_column_widths(self, instance, value):
+        self._update_ui()
+
+    def _build_header(self):
+        header = BoxLayout(orientation='horizontal', size_hint_y=None, height=30)
+        for i, header_text in enumerate(self.headers):
+            header.add_widget(SortableHeader(text=header_text, col_index=i, table=self, size_hint_x=None, width=self.column_widths[i]))
+            if i < len(self.headers) - 1:
+                header.add_widget(ColumnResizer(self, col_index=i))
+        return header
+
+    def resize_column(self, index, delta):
+        # Only adjust if not the last column
+        if index >= len(self.column_widths) - 1:
+            return
+
+        new_width = self.column_widths[index] + delta
+        next_width = self.column_widths[index + 1] - delta
+
+        # Prevent columns from being too narrow
+        if new_width < 50 or next_width < 50:
+            return
+
+        self.column_widths[index] = new_width
+        self.column_widths[index + 1] = next_width
+        self._update_ui()
+
+    def _update_ui(self):
+        self._update_header()
+        self.body.update_data()
+
+    def _update_header(self):
+        i = 0
+        for widget in reversed(self.header_row.children):
+            if isinstance(widget, SortableHeader):
+                widget.width = self.column_widths[i]
+                if self.ordered_by == i:
+                    widget.direction = -1 if self.reverse == i else 1
+                else: widget.direction = 0
+                i += 1
+
+    def _rebuild_ui(self):
+        self.remove_widget(self.header_row)
+        self.header_row = self._build_header()
+        self.add_widget(self.header_row, index=1)
+        self.body.update_data()
+
+    def sort_by_column(self, col_index):
+        self.data.sort(key=lambda row: row[col_index], reverse=self.reverse == col_index)
+        self.reverse = -1 if self.reverse == col_index else col_index
+        self.ordered_by = col_index
+        self._update_ui()
+
+
+class MyApp(App):
+    def build(self):
+        headers = ['Name', 'Age', 'City']
+        data = [
+            ['Alice', 30, 'New York'],
+            ['Bob', 25, 'San Francisco'],
+            ['Charlie', 35, 'Los Angeles'],
+            ['Diana', 28, 'Chicago'],
+            ['Eve', 31, 'Miami'],
+            ['Frank', 29, 'Houston'],
+            ['Grace', 32, 'Boston'],
+            ['Heidi', 27, 'Denver'],
+            ['Ivan', 40, 'Seattle'],
+        ]
+        return ResizableRecycleTable(headers, data)
+
+if __name__ == '__main__':
+    MyApp().run()
