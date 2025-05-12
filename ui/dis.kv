@@ -6,8 +6,9 @@
         
         id: main_panel
         RelativeLayout:
-            size_hint: 1, 1
+            size_hint: 1, None
             pos: 0, main_panel.height - self.height - app_menu.height
+            height: self.parent.height - app_menu.height
 
             Minimap
             RV

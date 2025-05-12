@@ -288,7 +288,7 @@ class ArrowRenderer(Widget):
                                  self.right, y_end,
                                  self.right - tip_length, y_end + tip_length], width=dp(1))
                     
-                    if y_end < 0 and y_start > 9:
+                    if y_end < 0 and y_start > 0:
                         Line(points=[left - tip_length, tip_length,
                                      left, 0,
                                      left + tip_length, tip_length], width=dp(1))
