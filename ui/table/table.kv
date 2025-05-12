@@ -1,0 +1,36 @@
+<TableBody>:
+    viewclass: 'TableRow'
+    RecycleBoxLayout:
+        default_size: None, None
+        default_size_hint: 1, None
+        size_hint_y: None
+        height: self.minimum_height
+        orientation: 'vertical'
+                    
+<ColumnResizer>:
+    canvas.before:
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Rectangle:
+            pos: self.center_x, self.y
+            size: dp(1), self.height
+
+<SortableHeader>:
+    halign: "left"
+    padding: dp(5), 0
+    text_size: self.width, None
+    Image:
+        source: "ui/triangle_up.png" if self.parent.direction == -1 else "ui/triangle_down.png"
+        opacity: 1 if self.parent.direction != 0 else 0
+        center_y: self.parent.center_y
+        height: dp(12)
+        width: dp(12)
+        x: self.parent.right - self.width
+
+<ColumnLabel>:
+    halign: "left"
+    valign: "top"
+    text_size: self.width, None
+    size_hint_y: None
+    height: self.texture_size[1]
+    padding: dp(5), 0
