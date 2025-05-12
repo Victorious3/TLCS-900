@@ -11,32 +11,7 @@ if sys.platform == "darwin":
 
     import objc
     from AppKit import NSMenu, NSMenuItem, NSEvent
-    from Foundation import NSObject
-
-    NSMenuDelegate = objc.protocolNamed("NSMenuDelegate")
-
-    class NativeMenuDelegate(NSObject, protocols=[NSMenuDelegate]):
-        def initWithHandler_(self, handler):
-            self = objc.super(NativeMenuDelegate, self).init()
-            if self is None: return None
-            self.handler = handler
-            return self
-
-        @objc.selector
-        def menuDidClose_(self, menu):
-            Clock.schedule_once(lambda dt: self.handler.on_close(), 0)
-
-    class NativeMenuHandler(NSObject):
-        def initWithItem_handler_(self, item, handler):
-            self = objc.super(NativeMenuHandler, self).init()
-            if self is None: return None
-            self.item = item
-            self.handler = handler
-            return self
-            
-        @objc.selector
-        def select_(self, sender):
-            Clock.schedule_once(lambda dt: self.handler.on_select(self.item), 0)
+    from .main_menu import NativeMenuDelegate, NativeMenuHandler
 
     def show_context_menu(handler: MenuHandler, menu_items: list[MenuItem]):
         menu = NSMenu.alloc().init() 
