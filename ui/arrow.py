@@ -92,6 +92,9 @@ class ArrowRenderer(Widget):
                 if insn.entry.opcode == "JP":
                     if len(insn.entry.instructions) == 1:
                         location = insn.entry.instructions[0]
+                elif insn.entry.opcode == "DJNZ":
+                    cond = True
+                    location = insn.entry.instructions[1]
                 elif insn.entry.opcode == "JR" or insn.entry.opcode == "JRL":
                     cc = insn.entry.instructions[0]
                     if cc != "T": cond = True

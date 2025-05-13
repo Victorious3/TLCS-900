@@ -25,10 +25,16 @@ main_menu = [
         MenuItem("new", "New Project"),
         MenuItem("save", "Save"),
         MenuItem("exit", "Close Window")
+    ]),
+    MenuItem(None, "Analyze", [
+        MenuItem("functions", "Functions")
     ])
 ]
 class MainMenuHandler(MenuHandler):
     def on_select(self, item):
+        if item == "functions":
+            pass
+
         app().app_menu.close_all()
         
 main_menu_handler = MainMenuHandler()
