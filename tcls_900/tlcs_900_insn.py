@@ -799,7 +799,7 @@ def CALL_nnn(insn):
     insn.branch(to, True, call = True)
     return "CALL", to
 def CALL_cc_mem(insn): 
-    return "CALL", popcc(insn), insn.lastmem
+    return "CALL", cctable[popcc(insn)], insn.lastmem
 def CALR(insn): 
     insn.pop()
     offset = insn.popw()
@@ -828,9 +828,10 @@ def RET(insn):
 def RET_cc(insn):
     if insn.lastinsn != 0xB0: 
         return "INVALID",
-    insn.pop()
-    insn.kill()
-    return "RET", popcc(insn)
+    cc = cctable[popcc(insn)]
+    if cc == "T":
+        insn.kill()
+    return "RET", cc
 def RETD(insn): 
     insn.pop()
     insn.kill()
