@@ -108,7 +108,7 @@ class RV(RecycleView):
 
     def update_data(self):
         data = []
-        for section in app().project.sections:
+        for section in app().project.sections.values():
             columns = len(section.instructions)
             data.append({"section": section, 
                          "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),

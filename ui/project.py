@@ -1,4 +1,5 @@
 import os
+from pytreemap import TreeMap
 from abc import ABC
 from functools import reduce
 from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label
@@ -43,7 +44,7 @@ def label_list(label):
 class Project:
     def __init__(self, path: str):
         self.path = path
-        self.sections: list[Section] = []
+        self.sections: TreeMap[int, Section] = TreeMap()
         self.ib: InputBuffer = InputBuffer
         self.ob: OutputBuffer = None
         self.pool: InsnPool = None
@@ -91,12 +92,13 @@ class Project:
             self.extract_sections(v, sections)
 
         sections: list[Section] = reduce(list.__add__, map(self.split_section, sections), [])
+        in_sections = list(self.sections.values())
         
         if len(sections) > 0:
             i, j = 0, 0
-            total = len(self.sections)
+            total = len(in_sections)
             while i < total:
-                in_section = self.sections[i]
+                in_section = in_sections[i]
                 if j >= len(sections): break
                 section = sections[j]
                 # Note: Only data sections can get replaced. Code sections need to be marked as data sections first before they can be considered for replacement
@@ -112,13 +114,13 @@ class Project:
                     # Section before
                     if section.offset - in_section.offset > 0:
                         ln = section.offset - in_section.offset
-                        self.sections[i] = in_section.__class__(in_section.offset, ln, in_section.labels, in_section.data[:ln + 1], insn)
+                        in_sections[i] = in_section.__class__(in_section.offset, ln, in_section.labels, in_section.data[:ln + 1], insn)
                     
                         # New section
-                        self.sections.insert(i + 1, section)
+                        in_sections.insert(i + 1, section)
                         i += 1; total += 1
                     else:
-                        self.sections[i] = section
+                        in_sections[i] = section
 
                     # Section after
                     ln = in_section.length - section.length - (section.offset - in_section.offset)
@@ -129,25 +131,25 @@ class Project:
                         off = (section.offset + section.length) - in_section.offset
 
                         insn_after[0] = Instruction(InsnEntry(section.offset + section.length, ln2, ".db", (in_section.data[off:off + ln2],)))
-                        self.sections.insert(i + 1, DataSection(section.offset + section.length, ln, [], in_section.data[off:], insn_after))
+                        in_sections.insert(i + 1, DataSection(section.offset + section.length, ln, [], in_section.data[off:], insn_after))
                         
                         total += 1
 
                     # Remove overlaps
-                    while i + 1 < len(self.sections):
-                        next_section = self.sections[i + 1]
+                    while i + 1 < len(in_sections):
+                        next_section = in_sections[i + 1]
                         #print(f"{section.offset:X} {section.length} {next_section.offset:X} {next_section.length}")
                         
                         if next_section.offset >= section.offset:
                             # Remove whole section if new section covers it completely
                             if next_section.offset + next_section.length <= section.offset + section.length:
-                                del self.sections[i + 1]
+                                del in_sections[i + 1]
                                 total -= 1
                             elif next_section.offset < section.offset + section.length:
                                 #print(f"{section.offset:X} {section.length} {next_section.offset:X} {next_section.length}")
                                 # Partial overlap
                                 ln3 = next_section.length - (section.offset + section.length - next_section.offset)
-                                self.sections[i + 1] = DataSection(section.offset + section.length, ln3, [], next_section.data[next_section.length - ln3:])
+                                in_sections[i + 1] = DataSection(section.offset + section.length, ln3, [], next_section.data[next_section.length - ln3:])
                                 break
                             else: break
                         else: break
@@ -155,6 +157,11 @@ class Project:
                     j += 1
                     # TODO We might want to merge sections together if the result is smaller than MAX_SECTION_LENGTH
                 i += 1
+
+            # TODO Don't recreate the map from scratch, this only makes things slower and not faster
+            self.sections.clear()
+            for section in in_sections:
+                self.sections[section.offset] = section
                 
 
     def extract_sections(self, v: list[InsnEntry], out_list: list[Section]) -> int:
@@ -230,7 +237,7 @@ class Project:
         return res
 
     def rescan(self, ep: int, org: int):
-        self.sections = []
+        self.sections.clear()
         self.file_len = os.path.getsize(self.path)
 
         with open(self.path, 'rb') as f:
@@ -249,6 +256,7 @@ class Project:
 
         ob.compute_labels(org, self.file_len + org)
 
+        sections: list[Section] = list()
         def output_db(nxt: int, last: int):
             diff = nxt - last
             if diff < 1: return
@@ -260,14 +268,14 @@ class Project:
                 if label is not None:
                     length = i - start
                     buf = ib.buffer[start - org:i - org]
-                    self.sections.append(DataSection(start, length, label_list(last_label), buf))
+                    sections.append(DataSection(start, length, label_list(last_label), buf))
                     last_label = label
                     start = i
             
             length = nxt - start
             if length > 0:
                 buf = ib.buffer[start - org:nxt - org]
-                self.sections.append(DataSection(start, length, label_list(last_label), buf))
+                sections.append(DataSection(start, length, label_list(last_label), buf))
         
         last = org
 
@@ -275,11 +283,14 @@ class Project:
         for k, v in sorted(ob.insnmap.items()):
             v = list(v)
             output_db(v[0].pc, last)
-            last = self.extract_sections(v, self.sections)
+            last = self.extract_sections(v, sections)
         
         output_db(self.file_len + org, last)
 
-        self.sections = reduce(list.__add__, map(self.split_section, self.sections), [])
+        sections = reduce(list.__add__, map(self.split_section, sections), [])
+
+        for section in sections:
+            self.sections[section.offset] = section
 
         #for section in self.sections:
         #    print(section)

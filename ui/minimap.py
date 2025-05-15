@@ -16,7 +16,7 @@ class Minimap(Widget):
         self.bind(pos=self.redraw, size=self.redraw)
 
     def redraw(self, *args):        
-        sections = app().project.sections
+        sections = app().project.sections.values()
         if not app().rv: return
         total_height = app().rv.children[0].height
         if total_height == 0: return

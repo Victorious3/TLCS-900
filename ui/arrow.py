@@ -84,7 +84,7 @@ class ArrowRenderer(Widget):
 
     def recompute_arrows(self):
         arrows = []
-        for section in app().project.sections:
+        for section in app().project.sections.values():
             if not isinstance(section, CodeSection): continue
             for insn in section.instructions:
                 location: Loc = None
