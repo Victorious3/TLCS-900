@@ -33,7 +33,7 @@ main_menu = [
 class MainMenuHandler(MenuHandler):
     def on_select(self, item):
         if item == "functions":
-            pass
+            app().project.analyze_functions()
 
         app().app_menu.close_all()
         

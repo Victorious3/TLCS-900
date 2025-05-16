@@ -44,7 +44,7 @@ def label_list(label):
 class Project:
     def __init__(self, path: str):
         self.path = path
-        self.sections: TreeMap[int, Section] = TreeMap()
+        self.sections = TreeMap()
         self.ib: InputBuffer = InputBuffer
         self.ob: OutputBuffer = None
         self.pool: InsnPool = None
@@ -294,7 +294,18 @@ class Project:
 
         #for section in self.sections:
         #    print(section)
-            
+    
+    def analyze_functions(self):
+        # Find all functions
+        for ep in self.ob.calls:
+            self.analyze_function(ep)
+        print(len(self.ob.calls))
+
+    def analyze_function(self, ep: int):
+        section: Section = self.sections.get(ep)
+        if not section: return
+        name = section.labels[0]
+        print(name)
 
 
 def load_project(path: str, ep: int, org: int) -> Project:
