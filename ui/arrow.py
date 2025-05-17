@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
 from kivy.uix.widget import Widget
-from kivy.graphics import Color, Line
+from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, StencilUnUse, Rectangle
 
 from .project import Section, CodeSection
 from .main import LABEL_HEIGHT, app, FONT_HEIGHT
@@ -196,6 +196,10 @@ class ArrowRenderer(Widget):
         self.canvas.after.clear()
 
         with self.canvas.after:
+            StencilPush()
+            Rectangle(pos=self.pos, size=self.size)
+            StencilUse()
+
             @cache
             def get_offset(pc):
                 offset = 0
@@ -295,4 +299,6 @@ class ArrowRenderer(Widget):
                         Line(points=[left - tip_length, tip_length,
                                      left, 0,
                                      left + tip_length, tip_length], width=dp(1))
+            StencilUnUse()
+            StencilPop()
                             

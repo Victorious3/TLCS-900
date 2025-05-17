@@ -349,8 +349,7 @@ class SectionMnemonic(SectionColumn):
     def update_cursor(cls):
         if cls.any_hovered and app().ctrl_down:
             Window.set_system_cursor('hand')
-        else:
-            Window.set_system_cursor('arrow')
+            app().set_hover()
 
     def _on_mouse_move(self, window, pos):
         x, y = pos

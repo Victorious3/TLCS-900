@@ -5,15 +5,14 @@ from kivy.uix.label import Label
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.widget import Widget
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
-from kivy.uix.image import Image
 from kivy.properties import ListProperty, NumericProperty
-from kivy.factory import Factory
 from kivy.lang import Builder
-from kivy.graphics import Color, Line, Rectangle
 from kivy.core.window import Window
 from kivy.metrics import dp
 
-Builder.load_file("table.kv")
+from ui.main import app
+
+Builder.load_file("ui/table/table.kv")
 
 class ColumnLabel(Label): pass
 
@@ -48,7 +47,6 @@ class ColumnResizer(ButtonBehavior, Widget):
 
     def on_leave(self):
         if self._cursor_set and not self._start_x:
-            Window.set_system_cursor("arrow")  # reset to default
             self._cursor_set = False
 
     def on_touch_down(self, touch):
@@ -76,36 +74,54 @@ class ColumnResizer(ButtonBehavior, Widget):
         else:
             self.on_leave()
 
+        if self._cursor_set: app().set_hover()
+
 
 class TableRow(RecycleDataViewBehavior, BoxLayout):
     row = ListProperty()
+    index = NumericProperty(0)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.orientation = 'horizontal'
         self.size_hint = 1, None
+        self.rv = None
 
     def refresh_view_attrs(self, rv, index, data):
         super().refresh_view_attrs(rv, index, data)
 
         self.clear_widgets()
         self.row = data['row']
+        self.index = index
+        self.rv = rv
 
         height = 0
         for i, cell in enumerate(self.row):
-            label = ColumnLabel(text=str(cell), size_hint_x=None, width=rv.table.column_widths[i])
+            label = ColumnLabel(text=str(cell), width=rv.table.column_widths[i])
             self.add_widget(label)
             label.texture_update()
-            label.height = label.texture_size[1]
-            height = max(height, label.height)
+            height = max(height, label.texture_size[1])
 
             if i < len(self.row) - 1:
                 self.add_widget(Widget(size_hint_x=None, width=5))
 
         self.height = height + dp(10)
+
+    def update_widths(self):
+        i = 0
+        height = 0
+        for child in reversed(self.children):
+            if isinstance(child, ColumnLabel):
+                child.width = self.rv.table.column_widths[i]
+                child.texture_update()
+                height = max(height, child.texture_size[1])
+
+                i += 1
+
+        self.height = height + dp(10)
         
 class TableBody(RecycleView):
-    def __init__(self, table, **kwargs):
+    def __init__(self, table: "ResizableRecycleTable", **kwargs):
         super().__init__(**kwargs)
         self.table = table
 
@@ -133,11 +149,7 @@ class ResizableRecycleTable(BoxLayout):
         self.reverse = -1
         self.ordered_by = -1
 
-        self.bind(column_widths=self._on_column_widths)
         self._rebuild_ui()
-
-    def _on_column_widths(self, instance, value):
-        self._update_ui()
 
     def _build_header(self):
         header = BoxLayout(orientation='horizontal', size_hint_y=None, height=30)
@@ -161,7 +173,11 @@ class ResizableRecycleTable(BoxLayout):
 
         self.column_widths[index] = new_width
         self.column_widths[index + 1] = next_width
-        self._update_ui()
+
+        for child in self.body.children[0].children:
+            child.update_widths()
+        
+        self._update_header()
 
     def _update_ui(self):
         self._update_header()
@@ -188,23 +204,3 @@ class ResizableRecycleTable(BoxLayout):
         self.reverse = -1 if self.reverse == col_index else col_index
         self.ordered_by = col_index
         self._update_ui()
-
-
-class MyApp(App):
-    def build(self):
-        headers = ['Name', 'Age', 'City']
-        data = [
-            ['Alice', 30, 'New York'],
-            ['Bob', 25, 'San Francisco'],
-            ['Charlie', 35, 'Los Angeles'],
-            ['Diana', 28, 'Chicago'],
-            ['Eve', 31, 'Miami'],
-            ['Frank', 29, 'Houston'],
-            ['Grace', 32, 'Boston'],
-            ['Heidi', 27, 'Denver'],
-            ['Ivan', 40, 'Seattle'],
-        ]
-        return ResizableRecycleTable(headers, data)
-
-if __name__ == '__main__':
-    MyApp().run()

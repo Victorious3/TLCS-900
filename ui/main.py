@@ -8,7 +8,9 @@ from kivy.uix.image import Image
 from kivy.uix.button import Button
 from kivy.uix.widget import Widget
 from kivy.uix.label import Label
+from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
+from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.utils import get_color_from_hex, escape_markup
@@ -36,12 +38,15 @@ def find_font_height():
 
 FONT_WIDTH, FONT_HEIGHT = find_font_height()
 
+from tcls_900.tlcs_900 import Reg, Mem
+
 from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
 from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
 from .sections import SectionColumn, SectionAddresses, SectionData, SectionMnemonic
-from disapi import Loc
+from .table.table import ResizableRecycleTable
+
 
 class Icon(Image):
     def on_touch_down(self, touch):
@@ -69,6 +74,40 @@ class IconButton(Button):
                 self.background_color = self.default_color
 
 class MainWindow(FloatLayout): pass
+
+HEADER_NAMES = ["name", "address", "input", "clobber", "output"]
+COLUMN_WIDTHS = [dp(100), dp(100), dp(250), dp(250), dp(250)]
+
+class AnalyzerTable(ResizableRecycleTable):
+    def __init__(self, **kwargs):
+        super().__init__(headers = HEADER_NAMES, data = [], column_widths=COLUMN_WIDTHS, **kwargs)
+        self.update_data()
+
+    def update_data(self):
+        project = app().project
+        self.data = []
+        for fun in project.functions.values():
+            row = []
+            # name
+            row.append(fun.name)
+            # address
+            row.append(format(fun.ep, "X"))
+            # callers
+            #callers = set(map(lambda c: c[1], fun.callers))
+            #row.append(", ".join(map(lambda c: c.name, callers)))
+            # callees
+            #callees = set(map(lambda c: c[1], fun.callers))
+            #row.append(", ".join(map(lambda c: c.name, callees)))
+            #input registers
+            row.append(", ".join(map(str, filter(lambda r: isinstance(r, Reg), fun.state.input))))
+            #clobber registers
+            row.append(", ".join(map(lambda x: str(x[1]), filter(lambda r: isinstance(r[1], Reg), fun.state.clobbers))))
+            #ouput registers
+            row.append(", ".join(map(str, filter(lambda r: isinstance(r, Reg), fun.state.output))))
+
+            self.data.append(row)
+
+        self.body.update_data()
 
 class GotoPosition(TextInput):
     def __init__(self, **kwargs):
@@ -146,6 +185,8 @@ class RV(RecycleView):
         SectionColumn.on_touch_up_selection(touch)
 
 class DisApp(App):
+    any_hovered = False
+
     def __init__(self, project: Project):
         super().__init__()
         self.project = project
@@ -158,6 +199,9 @@ class DisApp(App):
         self.app_menu: AppMenu = None
         self.back_button: IconButton = None
         self.forward_button: IconButton = None
+        self.content_panel: BoxLayout = None
+        self.y_splitter: Splitter = None
+        self.analyzer_table: AnalyzerTable = None
 
         self.last_position = -1
         self.position_history: list[int] = []
@@ -166,6 +210,7 @@ class DisApp(App):
         self.ctrl_down = False
         self.shift_down = False
 
+        Window.bind(mouse_pos=DisApp.on_mouse_move)
         Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
@@ -177,6 +222,7 @@ class DisApp(App):
         self.app_menu = self.window.ids["app_menu"]
         self.back_button = self.window.ids["back_button"]
         self.forward_button = self.window.ids["forward_button"]
+        self.content_panel = self.window.ids["content_panel"]
 
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
@@ -265,6 +311,32 @@ class DisApp(App):
             SectionMnemonic.update_cursor()
         elif keycode == 41:
             return True
+        
+    def open_function_list(self):
+        if not self.analyzer_table:
+            self.analyzer_table = AnalyzerTable()
+        if self.analyzer_table.get_root_window() is None:
+            content_panel = self.content_panel
+            self.y_splitter = Splitter(
+                keep_within_parent = True,
+                min_size = dp(100),
+                max_size = dp(10e10),
+                sizable_from = "top"
+            )
+            self.y_splitter.add_widget(self.analyzer_table)
+            self.content_panel.add_widget(self.y_splitter)
+    
+    @classmethod
+    def on_mouse_move(cls, window, pos):
+        cls.any_hovered = False
+        def post(dt):
+            if not cls.any_hovered:
+                Window.set_system_cursor('arrow')
+
+        Clock.schedule_once(post, 0)
+
+    def set_hover(self):
+        DisApp.any_hovered = True
 
 def main(path: str, ep: int, org: int):
     project = load_project(path, ep, org)

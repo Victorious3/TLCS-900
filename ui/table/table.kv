@@ -1,5 +1,9 @@
 <TableBody>:
     viewclass: 'TableRow'
+    bar_width: dp(15)
+    scroll_wheel_distance: 50
+    scroll_type: ['bars']
+
     RecycleBoxLayout:
         default_size: None, None
         default_size_hint: 1, None
@@ -18,6 +22,8 @@
 <SortableHeader>:
     halign: "left"
     padding: dp(5), 0
+    shorten: True
+    shorten_from: "right"
     text_size: self.width, None
     Image:
         source: "ui/triangle_up.png" if self.parent.direction == -1 else "ui/triangle_down.png"
@@ -31,6 +37,14 @@
     halign: "left"
     valign: "top"
     text_size: self.width, None
-    size_hint_y: None
-    height: self.texture_size[1]
+    size_hint: None, 1
     padding: dp(5), 0
+
+<TableRow>:
+    size_hint: 1, None
+    canvas.before:
+        Color:
+            rgba: (0.1216, 0.1216, 0.1216, 1.0) if (self.index % 2 == 0) else (0.2, 0.2, 0.2, 1)
+        Rectangle:
+            pos: self.pos
+            size: self.size

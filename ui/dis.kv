@@ -10,9 +10,11 @@
             pos: 0, main_panel.height - self.height - app_menu.height
             height: self.parent.height - app_menu.height
 
-            Minimap
-            RV
-            ArrowRenderer
+            BoxLayout:
+                id: content_panel
+                size_hint: 1, 1
+                orientation: "vertical"
+                MainPanel
 
         FloatLayout:
             pos: 0, main_panel.height - app_menu.height
@@ -47,6 +49,13 @@
         width: dp(240)
         height: self.minimum_height
         pos_hint: { "center_x": 0.5, "top": 1 }
+
+<MainPanel@RelativeLayout>:
+    size_hint: 1, 1
+
+    Minimap
+    RV
+    ArrowRenderer
 
 <IconButton>:
     background_normal: ""
