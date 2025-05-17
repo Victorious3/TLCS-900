@@ -193,7 +193,7 @@ class DisApp(App):
         Clock.schedule_once(self.after_layout_is_ready, 0)
     
     def scroll_to_label(self, label: str):
-        for section in self.project.sections:
+        for section in self.project.sections.values():
             if section.labels and section.labels[0].name == label:
                 print("Goto label:", label, "at", format(section.offset, "X"))
                 self.scroll_to_offset(section.offset)

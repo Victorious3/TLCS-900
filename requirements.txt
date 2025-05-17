@@ -1,3 +1,4 @@
 kivy_garden.contextmenu
 kivy
 pytreemap
+graphviz

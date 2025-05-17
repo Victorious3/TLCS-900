@@ -103,9 +103,13 @@ def POPW_mem(insn):
 
 #LDA
 def LDAW_R_mem(insn): 
-    return "LDA", popR(insn, '?', WORD), insn.lastmem
+    lastmem = insn.lastmem
+    lastmem.plain_addr = True
+    return "LDA", popR(insn, '?', WORD), lastmem
 def LDAL_R_mem(insn):
-    return "LDA", popR(insn, '?', LWORD), insn.lastmem
+    lastmem = insn.lastmem
+    lastmem.plain_addr = True
+    return "LDA", popR(insn, '?', LWORD), lastmem
     
 #LDAR
 # Couldn't find it in the documentation, did they forget about this or is it not implemented?
