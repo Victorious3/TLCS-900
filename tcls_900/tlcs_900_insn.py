@@ -406,7 +406,7 @@ def OR_mem_R(insn):
     return "OR", insn.lastmem, reg
 def OR_mem_X(insn):
     insn.pop() 
-    return ("ORW" if insn.lastsize == WORD else "OR"), popn_sz(insn, insn.lastsize)
+    return ("ORW" if insn.lastsize == WORD else "OR"), insn.lastmem, popn_sz(insn, insn.lastsize)
 
 #XOR
 def XOR_R_r(insn):
@@ -422,7 +422,7 @@ def XOR_mem_R(insn):
     return "XOR", insn.lastmem, reg
 def XOR_mem_X(insn):
     insn.pop() 
-    return ("XORW" if insn.lastsize == WORD else "XOR"), popn_sz(insn, insn.lastsize)
+    return ("XORW" if insn.lastsize == WORD else "XOR"), insn.lastmem, popn_sz(insn, insn.lastsize)
 
 #CPL
 def CPL_r(insn): 

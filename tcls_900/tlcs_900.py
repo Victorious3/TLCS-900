@@ -9,15 +9,27 @@ LWORD = 2
 class Reg:
     def __init__(self, ext, size, reg):
         self.ext = ext
-        self.size = size
+        self._size = size
         self.reg = reg
     
     def __str__(self):
         return regname(self)
     
     @property
+    def size(self):
+        return self._size
+    
+    @property
     def addr(self):
         return reg_addr[str(self)]
+    
+    def __hash__(self):
+        return hash((self.size, self.addr))
+    
+    def __eq__(self, value):
+        if isinstance(value, Reg):
+            return self.size == value.size and self.addr == value.addr
+        return False
 
 # Class to hold command registers
 class CReg(Reg):
@@ -36,6 +48,12 @@ class RReg(Reg):
     
     def __str__(self):
         return rregname(self)
+    
+    @property
+    def size(self):
+        if self._size == BYTE: return WORD
+        if self._size == WORD: return LWORD
+        assert False, "Invalid size"
 
 # Class that holds memory addresses
 class Mem:
@@ -55,6 +73,14 @@ class Mem:
         
     def __str__(self):
         return f"{self.name}" if self.plain_addr else f"({self.name})"
+    
+    def __hash__(self):
+        return self.address
+    
+    def __eq__(self, value):
+        if isinstance(value, Mem):
+            return self.address == value.address
+        return False
 
 class MemReg(Mem):
     def __init__(self, insn, address, name, reg1, reg2 = None):
@@ -127,7 +153,7 @@ def popmem(insn):
     if (mem & 0x40) == 0:
         reg = (mem & 0x7)
         name = Rregtable[LWORD][reg]
-        r = RReg(Reg(False, LWORD, reg))
+        r = RReg(Reg(False, WORD, reg))
         if (mem & 0x8) == 0:
             # XWA to XSP
             return MemReg(insn, 0xE0 + reg, name, r)
@@ -146,12 +172,13 @@ def popmem(insn):
         c = (mem2 & 0x2)
         c = 1 if c == 0 else c * 2
         reg = (mem2 & 0xFC)
-        name = regname(Reg(True, LWORD, reg))
+        r = Reg(True, LWORD, reg)
+        name = regname(r)
 
         if (mem & 0x1) == 0:
-            return Mem(insn, reg - c, "-" + name) # -r32
+            return MemReg(insn, reg - c, "-" + name, r) # -r32
         else:
-            return Mem(insn, reg + c, name + "+") # r32+
+            return MemReg(insn, reg + c, name + "+", r) # r32+
     else:
         n = mem & 0x3
         if n == 0: 
@@ -207,7 +234,7 @@ def popn_sz(insn, sz):
 
 def rregname(register):
     ext = register.ext
-    size = register.size
+    size = register._size
     reg = register.reg
     
     if not ext:
@@ -215,9 +242,10 @@ def rregname(register):
             return rrtable_8[reg]
         elif size == WORD:
             return Rregtable[LWORD][reg]
-        else: return str(reg)
-    else:
-        return regname(register)                
+        else: return "INVALID"
+    elif size == BYTE:
+        return regname(Reg(True, WORD, reg))      
+    else: return "INVALID"
     
 bnames = ["A", "W", "C", "B", "E", "D", "L", "H"]
 wnames = ["WA", "BC", "DE", "HL"]
@@ -228,7 +256,7 @@ extnames = ["X", "Y", "Z", "P"]
 # returns a register name or the address if its an invalid register
 def regname(register):
     ext = register.ext
-    size = register.size
+    size = register._size
     reg = register.reg
     
     if size < 0 or size > 2:
@@ -237,9 +265,9 @@ def regname(register):
         return Rregtable[size][reg]
     
     if (size == WORD and reg & 1) != 0: 
-        return str(reg) # Check if divisible by 2
+        return "INVALID" # Check if divisible by 2
     elif (size == LWORD and reg & 0b11) != 0: 
-        return str(reg) # Check if divisible by 4
+        return "INVALID" # Check if divisible by 4
     
     rname = ""
     if reg <= 0x7F: # Normal banks
@@ -263,8 +291,8 @@ def regname(register):
             rname += lnames[(reg & 0b1100) >> 2]
         if reg <= 0xDC:
             rname += "'"
-        elif reg <= 0xE0:
-            return str(reg)
+        #elif reg <= 0xE0:
+        #    return "INVALID"
     elif 0xF0 <= reg <= 0xFF:
         if size == BYTE:
             if (reg & 0b0010) != 0: rname += "Q"
@@ -277,7 +305,7 @@ def regname(register):
         if size == BYTE:
             rname += "H" if (reg & 0b0010) != 0 else "L"
     else:
-        return str(reg)
+        return "INVALID"
     
     return rname
     
@@ -366,6 +394,7 @@ Rregtable = [
 cctable = ["F", "LT", "LE", "ULE", "PE/OV", "M", "Z/EQ", "C", "T", "GE", "GT", "UGT", "PO/NOV", "P", "NZ/NE", "NC"]
 
 reg_addr = {
+    "INVALID": -1,
     # normal registers
     "RA0": 0x00, "RWA0": 0x00, "XWA0": 0x00, "RW0": 0x01, "QA0": 0x02, "QWA0": 0x02, "QW0": 0x03,
     "RC0": 0x04, "RBC0": 0x04, "XBC0": 0x04, "RB0": 0x05, "QC0": 0x06, "QBC0": 0x06, "QB0": 0x07,

@@ -5,9 +5,10 @@ from abc import ABC
 from functools import reduce
 from itertools import takewhile
 from graphviz import Digraph
+from copy import deepcopy
 
 from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label, Loc, insnentry_to_str
-from tcls_900.tlcs_900 import Reg, Mem, MemReg, LWORD, WORD # TODO Specific import
+from tcls_900.tlcs_900 import Reg, Mem, MemReg, LWORD, WORD, BYTE # TODO Specific import
 from .popup import InvalidInsnPopup
 
 DATA_PER_ROW = 7
@@ -51,22 +52,6 @@ class CodeBlock:
         self.pred = pred or []
         self.succ = succ or []
 
-# Wrapper around Reg to supply equals
-class WReg:
-    def __init__(self, r: Reg):
-        self.r =r
-
-    def __str__(self):
-        return str(self.r)
-    
-    def __hash__(self):
-        return self.r.reg
-    
-    def __eq__(self, value):
-        if isinstance(value, WReg):
-            return self.r.addr == value.r.addr
-        return False
-
 def is_jump_insn(insn: Instruction):
     return insn.entry.opcode in ("JR", "JRL", "JP", "DJNZ")
 
@@ -80,59 +65,86 @@ def get_jump_location(insn: Instruction) -> Loc:
 
     return None
 
-def get_registers(value: Reg | Mem) -> list[WReg]:
-    if isinstance(value, Reg): return [WReg(value)]
+def get_loc(value: Reg | Mem) -> list[Reg | int]:
+    if isinstance(value, Reg): return [value]
     elif isinstance(value, MemReg):
-        if value.reg2: return [WReg(value.reg1), WReg(value.reg2)]
-        else: return [WReg(value.reg1)]
-    else: return []
+        if value.reg2: return [value.reg1, value.reg2]
+        else: return [value.reg1]
+    elif isinstance(value, Mem):
+        return [value]
+    return []
 
-def get_load_register(insn: Instruction) -> list[WReg]:
+def get_load(insn: Instruction) -> list[Reg | int]:
     if insn.entry.opcode in ("BS1B", "BS1F", "DJNZ", "DEC", "INC", "LD", "LDC", "LDCF", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "ORCF", "RL", "RLC", "RR", "RRC", "SET", "TSET", "XORCF"): #second argument
-        return get_registers(insn.entry.instructions[1])
+        return get_loc(insn.entry.instructions[1])
     elif insn.entry.opcode in ("CPL", "DAA", "EXTS", "EXTZ", "MIRR", "NEG", "PAA"): # first argument
-        return get_registers(insn.entry.instructions[0])
+        return get_loc(insn.entry.instructions[0])
     elif insn.entry.opcode in ("ADC", "ADD", "AND", "ANDCF", "BIT", "DIV", "DIVS", "EX", "MUL", "MULS", "OR", "RLD", "RRD", "SBC", "SLA", "SLL", "SRA", "SRL", "SUB", "XOR"): #first and second argument
-        return get_registers(insn.entry.instructions[0]) + get_registers(insn.entry.instructions[1])
+        return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1])
     elif insn.entry.opcode in ("CPD", "CPDR", "CPI", "CPIR"):
-        return get_registers(insn.entry.instructions[0]) + get_registers(insn.entry.instructions[1]) + [Reg(False, WORD, 0xE4)] # BC
+        return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1]) + [Reg(True, WORD, 0xE4)] # BC
     elif insn.entry.opcode == "MULA":
-        return get_registers(insn.entry.instructions[0]) + [Reg(False, LWORD, 0xEC), Reg(False, LWORD, 0xE8)] # XHL, XDE
+        return get_loc(insn.entry.instructions[0]) + [Reg(True, LWORD, 0xEC), Reg(True, LWORD, 0xE8)] # XHL, XDE
     elif insn.entry.opcode == "SWI":
-        return [Reg(False, LWORD, 0xFC)] # XSP
+        return [Reg(True, LWORD, 0xFC)] # XSP
     elif insn.entry.opcode in ("UNLK", "LINK"):
-        return get_registers(insn.entry.instructions[0]) + [Reg(False, LWORD, 0xFC)] # XSP
+        return get_loc(insn.entry.instructions[0]) + [Reg(True, LWORD, 0xFC)] # XSP
     elif insn.entry.opcode in ("LDD", "LDDR", "LDI", "LDIR", "LDDR"):
-        return get_registers(insn.entry.instructions[1]) + [Reg(False, WORD, 0xE4)] # BC
+        return get_loc(insn.entry.instructions[1]) + [Reg(True, WORD, 0xE4)] # BC
     return []
         
-def get_store_register(insn: Instruction) -> list[WReg]:
+def get_store(insn: Instruction) -> list[Reg | int]:
     if insn.entry.opcode in ("ADC", "ADD", "AND", "BS1B", "BS1F", "CHG", "CPL", "DAA", "DIV", "DIVS", "DJNZ", "EXTS", "EXTZ", "LD", "LDA", "LDC", "MIRR", "MUL", "MULA", "MULS", "NEG", "OR", "PAA", "SBC", "SUB", "XOR"): # first argument
-        return get_registers(insn.entry.instructions[0])
+        return get_loc(insn.entry.instructions[0])
     elif insn.entry.opcode in ("DEC", "INC", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "RES", "RL", "RLC", "RR", "RRC", "SCC", "SET", "SLA", "SLL", "SRA", "SRL", "STCF", "TSET", "XORCF"): # second arument
-        return get_registers(insn.entry.instructions[1])
+        return get_loc(insn.entry.instructions[1])
     elif insn.entry.opcode in ("EX", "RLD", "RRD"):  #first and second argument
-        return get_registers(insn.entry.instructions[0]) + get_registers(insn.entry.instructions[1])
+        return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1])
     elif insn.entry.opcode == "SWI":
-        return [Reg(False, LWORD, 0xFC)] # XSP
+        return [Reg(True, LWORD, 0xFC)] # XSP
     elif insn.entry.opcode in ("UNLK", "LINK"):
-        return get_registers(insn.entry.instructions[0]) + [Reg(False, LWORD, 0xFC)] # XSP
+        return get_loc(insn.entry.instructions[0]) + [Reg(True, LWORD, 0xFC)] # XSP
     elif insn.entry.opcode in ("LDD", "LDDR", "LDI", "LDIR", "LDDR"):
-        return get_registers(insn.entry.instructions[0]) + [Reg(False, WORD, 0xE4)] # BC    
+        return get_loc(insn.entry.instructions[0]) + [Reg(True, WORD, 0xE4)] # BC    
     elif insn.entry.opcode in ("CPD", "CPDR", "CPI", "CPIR"):
-        return [Reg(False, WORD, 0xE4)] # BC
+        return [Reg(True, WORD, 0xE4)] # BC
     return []
+
+def overlaps(r1: Reg | Mem, r2: Reg | Mem):
+    if isinstance(r1, Reg) and isinstance(r2, Reg):
+        if r1.size == r2.size: return r1.addr == r2.addr
+        if r1.size > r2.size:
+            r1, r2 = r2, r1
+        if r1.size == BYTE:
+            if r2.size == WORD: 
+                return r2.addr <= r1.addr <= r2.addr + 1
+            elif r2.size == LWORD:
+                return r2.addr <= r1.addr <= r2.addr + 3
+        elif r1.size == WORD and r2.size == LWORD:
+            return r2.addr <= r1.addr <= r2.addr + 3
+
+        assert False, "Invalid register sizes"
+    elif isinstance(r1, Mem) and isinstance(r2, Mem):
+        return r1.address == r2.address
+    else: return False
+
+def overlaps_and_covers(r1: Reg | Mem, r2: Reg | Mem):
+    if isinstance(r1, Reg) and isinstance(r2, Reg):
+        return overlaps(r1, r2) and r1.size <= r2.size
+    return overlaps(r1, r2)
 
 @dataclass
 class FunctionState:
-    clobbers: set[(int, WReg)] = field(default_factory=set)
-    input: set[WReg] = field(default_factory=set)
-    output: set[WReg] = field(default_factory=set)
-    stack: list[(int, WReg | Loc | int)] = field(default_factory=list)
+    clobbers: set[tuple[int, Reg]] = field(default_factory=set)
+    input: set[Reg | int] = field(default_factory=set)
+    output: set[Reg | int] = field(default_factory=set)
+    stack: list[tuple[int, Reg | int]] = field(default_factory=list)
+    fun_stack : list[tuple["Function", set[Reg | int], set[Reg | int]]] = field(default_factory=list)
+
     pc: int = 0
 
     @property
-    def used(self) -> list[WReg]:
+    def used(self) -> list[Reg]:
         return self.clobbers + self.input + self.output
 
     def __str__(self):
@@ -140,24 +152,85 @@ class FunctionState:
         input = ", ".join(map(str, self.input))
         output = ", ".join(map(str, self.output))
         stack = ", ".join(map(str, self.stack))
-        return f"{clobbers=}\n{input=}\n{output=}\n{stack=}"
+        return f"{{\n\t{clobbers=}\n\t{input=}\n\t{output=}\n\t{stack=}\n}}"
     
-    def is_clobbered(self, pc: int, reg: WReg) -> bool:
+    def is_clobbered(self, pc: int, reg: Reg) -> bool:
         for c, r in self.clobbers:
-            if c < pc and r == reg: return True
+            if c < pc and overlaps(r, reg): return True
         return False
     
-    def unclobber(self, reg: WReg):
-        self.clobbers = set(filter(lambda ir: ir[1] == reg, self.clobbers))
+    def unclobber(self, reg: Reg):
+        self.clobbers = set(filter(lambda ir: not overlaps_and_covers(ir[1], reg), self.clobbers))
 
-    def add_input(self, reg: WReg):
+    def add_input(self, pc: int, reg: Reg):
+        for fun, in_in, in_out in reversed(self.fun_stack):
+            for i in in_in: 
+                if overlaps(reg, i): in_out.add(i)
+
+        if self.is_clobbered(pc, reg): return
+        if any(map(lambda r2: overlaps_and_covers(reg, r2), self.input)): return
+        self.input = set(filter(lambda r2: not overlaps_and_covers(r2, reg), self.input))
         self.input.add(reg)
 
-    def add_clobber(self, pc: int, reg: WReg):
-        if any(map(lambda ir: ir[1] == reg, self.clobbers)): return
+    def add_clobber(self, pc: int, reg: Reg):
+        for fun, in_in, in_out in reversed(self.fun_stack):
+            for r in in_in.copy():
+                if overlaps(r, reg): in_in.remove(r)
+        self.fun_stack = list(filter(lambda s: len(s[1]) > 0, self.fun_stack))
+
+        if any(map(lambda ir: overlaps_and_covers(reg, ir[1]), self.clobbers)): return
         self.clobbers.add((pc, reg))
+
+    def push_function(self, pc: int, fun: "Function"):
+        input = set(map(lambda c: c[1], fun.state.clobbers))
+        for c in fun.state.input:
+            self.add_input(pc, c)
+        for c in input:
+            self.add_clobber(pc, c)
+        self.fun_stack.append((fun, input, set()))
+
+    def clear_functions(self):
+        for fun, in_in, in_out in self.fun_stack:
+            fun.state.output.update(in_out)
+        self.fun_stack.clear()
+
+    @staticmethod
+    def merge(a: "FunctionState", b: "FunctionState") -> "FunctionState":
+        if a is None:
+            b.clear_functions()
+            return b.copy()
+        elif b is None:
+            a.clear_functions()
+            return a.copy()
+        
+        a.clear_functions()
+        b.clear_functions()
+
+        state = FunctionState(
+            clobbers = a.clobbers.copy(),
+            input = a.input.copy(),
+            stack = a.stack if len(a.stack) >= len(b.stack) else b.stack,
+            pc = max(a.pc, b.pc)
+        )
+        for pc, cl in b.clobbers: state.add_clobber(pc, cl)
+        for i in b.input: state.add_input(a.pc, i)
+        return state
     
-    
+    def copy(self) -> "FunctionState":
+        fun_stack = list()
+        for fun, in_in, in_out in self.fun_stack:
+            fun_stack.append((fun, in_in.copy(), in_out.copy()))
+
+        return FunctionState(
+            self.clobbers.copy(), 
+            self.input.copy(), 
+            self.output.copy(), 
+            self.stack.copy(), 
+            fun_stack, 
+            self.pc
+        )
+
+
 class Underflow(Exception): pass
 
 class Function:
@@ -165,7 +238,10 @@ class Function:
         self.ep = ep
         self.name = name
         self.start = start
-        self.state = FunctionState()
+        self.state: FunctionState = None
+        self.underflow = False
+        self.callers: list[tuple[int, Function]] = None
+        self.callees: list[tuple[int, Function]] = None
 
     def _graph(self, block: CodeBlock, visited: set[CodeBlock], dig: Digraph, ob: OutputBuffer):
         if block in visited: return
@@ -183,75 +259,79 @@ class Function:
         self._graph(self.start, visited, dig, ob)
         dig.render(directory=out_folder, format="svg")
 
-    def analyze(self):
+    def analyze(self, proj: "Project"):
+        if self.state: return
+        self.state = FunctionState()
+        self.underflow = False
+        self.callers = []
+        self.callees = []
+
         states: dict[CodeBlock, FunctionState] = {}
         queue: list[CodeBlock] = [self.start]
         done: set[CodeBlock] = set()
 
         res: list[FunctionState] = list()
 
-        def merge(a: FunctionState, b: FunctionState) -> FunctionState:
-            if a is None: return b
-            elif b is None: return a
+        try: 
+            while len(queue) > 0:
+                block = next(filter(lambda pre: all(map(lambda p: p in done, pre.pred)), reversed(queue)), None)
+                if block is not None:
+                    # This means we have an item that has been reached by all predecessors
+                    queue.remove(block)
+                else: 
+                    # In case of a cycle, we have to start somewhere
+                    block = queue.pop()
 
-            state = FunctionState(
-                clobbers = a.clobbers.copy(),
-                input = a.input | b.input,
-                stack = a.stack if len(a.stack) >= len(b.stack) else b.stack,
-                pc = max(a.pc, b.pc)
-            )
-            for pc, cl in b.clobbers: state.add_clobber(pc, cl)
-            return state
+                if block in done: continue
+                done.add(block)
 
-        while len(queue) > 0:
-            block = next(filter(lambda pre: all(map(lambda p: p in done, pre.pred)), reversed(queue)), None)
-            if block is not None:
-                # This means we have an item that has been reached by all predecessors
-                queue.remove(block)
-            else: 
-                # In case of a cycle, we have to start somewhere
-                block = queue.pop()
+                # Merge results of all predecessors
+                if len(block.pred) == 1:
+                    state = states.get(block.pred[0], FunctionState()).copy()
+                else: state = reduce(FunctionState.merge, map(lambda p: states.get(p), block.pred), FunctionState())
+                states[block] = state
 
-            if block in done: continue
-            done.add(block)
+                pc = state.pc
+                # Update state
+                for insn in block.insn:
+                    if insn.entry.opcode in ("RET", "RETD", "RETI"):
+                        res.append(state)
+                    elif insn.entry.opcode == "PUSH":
+                        state.stack.append((pc, insn.entry.instructions[0]))
+                    elif insn.entry.opcode == "POP":
+                        if len(state.stack) > 0:
+                            pc, last = state.stack.pop()
+                            #print("unclobber", last, pc, state.is_clobbered(pc, last))
+                            if last == insn.entry.instructions[0] and not state.is_clobbered(pc, last):
+                                state.unclobber(last)
+                        else: raise Underflow()
+                    elif insn.entry.opcode in ("CALL", "CALR"):
+                        if len(insn.entry.instructions) == 1:
+                            fun = proj.functions.get(int(insn.entry.instructions[0]))
+                            if fun:
+                                if not fun.state: fun.analyze(proj)
+                                fun.callers.append((insn.entry.pc, self))
+                                self.callees.append((insn.entry.pc, fun))
+                                state.push_function(pc, fun)
+                    else:
+                        load = get_load(insn)
+                        for r in load:
+                            #print("input", pc, r)
+                            state.add_input(pc, r)
 
-            # Merge results of all predecessors
-            state: FunctionState = reduce(merge, map(lambda p: states[p], block.pred), FunctionState())
-            states[block] = state
+                        store = get_store(insn)
+                        for r in store:
+                            #print("clobber", pc, r)
+                            state.add_clobber(pc, r)
+                    pc += 1
 
-            pc = state.pc
-            # Update state
-            for insn in block.insn:
-                if insn.entry.opcode in ("RET", "RETD", "RETI"):
-                    res.append(state)
-                elif insn.entry.opcode == "PUSH":
-                    state.stack.append((pc, insn.entry.instructions[0]))
-                elif insn.entry.opcode == "POP":
-                    if len(state.stack) > 0:
-                        pc, last = state.stack.pop()
-                        if last == insn.entry.instructions[0] and not state.is_clobbered(pc, last):
-                            state.unclobber(last)
+                state.pc = pc
+                for succ in block.succ:
+                    queue.append(succ[0])
 
-                    else: raise Underflow()
-                else:
-                    load = get_load_register(insn)
-                    for r in load:
-                        if not state.is_clobbered(pc, r):
-                            print("input", pc, r)
-                            state.add_input(r)
-
-                    store = get_store_register(insn)
-                    for r in store:
-                        print("clobber", pc, r)
-                        state.add_clobber(pc, r)
-                pc += 1
-
-            state.pc = pc
-            for succ in block.succ:
-                queue.append(succ[0])
-
-        self.state = reduce(merge, res, FunctionState())
-        print(self.state)
+            self.state = reduce(FunctionState.merge, res, FunctionState())
+        except Underflow:
+            self.underflow = True
 
 def label_list(label):
     if label is None: return []
@@ -518,6 +598,14 @@ class Project:
         for ep in self.ob.calls:
             fun = self.extract_function(ep)
             self.functions[ep] = fun
+        
+        for fun in self.functions.values():
+            fun.analyze(self)
+
+        for fun in self.functions.values():
+            print(fun.name, ":", str(fun.state))
+            print("callers: ", list(map(lambda c: f"{c[0]}: {c[1].name}", fun.callers)))
+            print("callees: ", list(map(lambda c: f"{c[0]}: {c[1].name}", fun.callees)))
 
     def extract_function(self, ep: int):
         section: Section = self.sections.get(ep)
@@ -594,9 +682,6 @@ class Project:
 
         start = next_block(ep)
         fun = Function(ep, name, start)
-        if ep == 0xF39A32:
-            fun.graph("out", self.ob)
-            fun.analyze()
         return fun
 
 def load_project(path: str, ep: int, org: int) -> Project:
