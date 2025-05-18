@@ -80,7 +80,7 @@ COLUMN_WIDTHS = [dp(100), dp(100), dp(250), dp(250), dp(250)]
 
 class AnalyzerTable(ResizableRecycleTable):
     def __init__(self, **kwargs):
-        super().__init__(headers = HEADER_NAMES, data = [], column_widths=COLUMN_WIDTHS, **kwargs)
+        super().__init__(headers = HEADER_NAMES, data = [], column_widths=COLUMN_WIDTHS, cols=5, **kwargs)
         self.update_data()
 
     def update_data(self):

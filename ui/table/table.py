@@ -1,11 +1,12 @@
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
+from kivy.uix.recyclegridlayout import RecycleGridLayout
 from kivy.uix.label import Label
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.widget import Widget
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
-from kivy.properties import ListProperty, NumericProperty
+from kivy.properties import ListProperty, NumericProperty, StringProperty, ObjectProperty
 from kivy.lang import Builder
 from kivy.core.window import Window
 from kivy.metrics import dp
@@ -15,6 +16,16 @@ from ui.main import app
 Builder.load_file("ui/table/table.kv")
 
 class ColumnLabel(Label): pass
+
+class TableGridLayout(RecycleGridLayout):
+    @property
+    def _cols(self):
+        widths = self.recycleview.table.column_widths.copy()
+        for i in range(len(widths)): widths[i] += dp(5)
+        return widths
+    
+    @_cols.setter
+    def _cols(self, value): pass
 
 class SortableHeader(ButtonBehavior, Label):
     col_index = NumericProperty(0)
@@ -34,7 +45,7 @@ class ColumnResizer(ButtonBehavior, Widget):
         super().__init__(**kwargs)
         self.table = table
         self.size_hint_x = None
-        self.width = 5
+        self.width = dp(5)
         self._start_x = None
         self._cursor_set = False
 
@@ -77,63 +88,33 @@ class ColumnResizer(ButtonBehavior, Widget):
         if self._cursor_set: app().set_hover()
 
 
-class TableRow(RecycleDataViewBehavior, BoxLayout):
-    row = ListProperty()
+class DataTableCell(RecycleDataViewBehavior, BoxLayout):
+    text = StringProperty("")
     index = NumericProperty(0)
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.orientation = 'horizontal'
-        self.size_hint = 1, None
-        self.rv = None
-
-    def refresh_view_attrs(self, rv, index, data):
-        super().refresh_view_attrs(rv, index, data)
-
-        self.clear_widgets()
-        self.row = data['row']
-        self.index = index
-        self.rv = rv
-
-        height = 0
-        for i, cell in enumerate(self.row):
-            label = ColumnLabel(text=str(cell), width=rv.table.column_widths[i])
-            self.add_widget(label)
-            label.texture_update()
-            height = max(height, label.texture_size[1])
-
-            if i < len(self.row) - 1:
-                self.add_widget(Widget(size_hint_x=None, width=5))
-
-        self.height = height + dp(10)
+    column = NumericProperty(0)
 
     def update_widths(self):
-        i = 0
-        height = 0
-        for child in reversed(self.children):
-            if isinstance(child, ColumnLabel):
-                child.width = self.rv.table.column_widths[i]
-                child.texture_update()
-                height = max(height, child.texture_size[1])
-
-                i += 1
-
-        self.height = height + dp(10)
+        pass
         
 class TableBody(RecycleView):
+    table = ObjectProperty(None)
+
     def __init__(self, table: "ResizableRecycleTable", **kwargs):
-        super().__init__(**kwargs)
         self.table = table
+        super().__init__(**kwargs)
 
     def update_data(self):
-        self.data = [{
-            'row': row
-        } for row in self.table.data]
-        self.refresh_from_data()
+        data = []
+        for i, row in enumerate(self.table.data):
+            for c, col in enumerate(row):
+                data.append({"text": str(col), "index": i, "column": c})
+
+        self.data = data
 
 
 class ResizableRecycleTable(BoxLayout):
     column_widths = ListProperty([])
+    cols = NumericProperty(0)
 
     def __init__(self, headers, data, column_widths = None, **kwargs):
         super().__init__(orientation='vertical', **kwargs)
@@ -173,11 +154,9 @@ class ResizableRecycleTable(BoxLayout):
 
         self.column_widths[index] = new_width
         self.column_widths[index + 1] = next_width
-
-        for child in self.body.children[0].children:
-            child.update_widths()
         
         self._update_header()
+        self.body.refresh_from_layout()
 
     def _update_ui(self):
         self._update_header()
