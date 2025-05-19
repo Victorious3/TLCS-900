@@ -33,7 +33,8 @@ main_menu = [
 class MainMenuHandler(MenuHandler):
     def on_select(self, item):
         if item == "functions":
-            app().project.analyze_functions()
+            if app().project.functions is None:
+                app().project.analyze_functions()
             app().open_function_list()
 
         app().app_menu.close_all()

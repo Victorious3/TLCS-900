@@ -5,7 +5,6 @@ from abc import ABC
 from functools import reduce
 from itertools import takewhile
 from graphviz import Digraph
-from copy import deepcopy
 
 from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label, Loc, insnentry_to_str
 from tcls_900.tlcs_900 import Reg, Mem, MemReg, LWORD, WORD, BYTE # TODO Specific import
@@ -346,7 +345,7 @@ class Project:
         self.ob: OutputBuffer = None
         self.pool: InsnPool = None
         self.file_len = 0
-        self.functions: dict[int, Function] = {}
+        self.functions: dict[int, Function] = None
 
     def disassemble(self, ep: int, callback):
         # TODO make this part of the API instead of messing with the internals manually
@@ -594,7 +593,7 @@ class Project:
         #    print(section)
 
     def analyze_functions(self):
-        self.functions.clear()
+        self.functions = {}
         # Find all functions
         for ep in self.ob.calls:
             fun = self.extract_function(ep)

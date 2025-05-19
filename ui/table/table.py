@@ -17,16 +17,6 @@ Builder.load_file("ui/table/table.kv")
 
 class ColumnLabel(Label): pass
 
-class TableGridLayout(RecycleGridLayout):
-    @property
-    def _cols(self):
-        widths = self.recycleview.table.column_widths.copy()
-        for i in range(len(widths)): widths[i] += dp(5)
-        return widths
-    
-    @_cols.setter
-    def _cols(self, value): pass
-
 class SortableHeader(ButtonBehavior, Label):
     col_index = NumericProperty(0)
     direction = NumericProperty(0)
@@ -88,23 +78,30 @@ class ColumnResizer(ButtonBehavior, Widget):
         if self._cursor_set: app().set_hover()
 
 
-class DataTableCell(RecycleDataViewBehavior, BoxLayout):
-    text = StringProperty("")
-    index = NumericProperty(0)
+class DataTableRow(RecycleDataViewBehavior, BoxLayout):
+    data = ListProperty(None)
+    row = NumericProperty(0)
+    column_widths = ListProperty(None)
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.initialized = False
+
+    def refresh_view_attrs(self, rv, index, data):
+        super().refresh_view_attrs(rv, index, data)
+        if not self.initialized:
+            for i, column in enumerate(self.data):
+                self.add_widget(DataTableCell(column=i))
+            self.initialized = True
+    
+class DataTableCell(Label):
     column = NumericProperty(0)
         
 class TableBody(RecycleView):
-    table = ObjectProperty(None)
-
-    def __init__(self, table: "ResizableRecycleTable", **kwargs):
-        self.table = table
-        super().__init__(**kwargs)
-
     def update_data(self):
         data = []
-        for i, row in enumerate(self.table.data):
-            for c, col in enumerate(row):
-                data.append({"text": str(col), "index": i, "column": c})
+        for i, row in enumerate(self.parent.data):
+            data.append({"data": row, "row": i, "column_widths": self.parent.column_widths})
 
         self.data = data
 
@@ -112,6 +109,7 @@ class TableBody(RecycleView):
 class ResizableRecycleTable(BoxLayout):
     column_widths = ListProperty([])
     cols = NumericProperty(0)
+    viewclass = StringProperty("DataTableRow")
 
     def __init__(self, headers, data, column_widths = None, **kwargs):
         super().__init__(orientation='vertical', **kwargs)
@@ -120,14 +118,14 @@ class ResizableRecycleTable(BoxLayout):
         self.column_widths = column_widths or [dp(150) for _ in headers]
 
         self.header_row = self._build_header()
-        self.add_widget(self.header_row)
+        self.add_widget(self.header_row, index=1)
 
-        self.body = TableBody(self)
-        self.add_widget(self.body)
         self.reverse = -1
         self.ordered_by = -1
 
-        self._rebuild_ui()
+    @property
+    def body(self) -> TableBody:
+        return self.children[0] 
 
     def _build_header(self):
         header = BoxLayout(orientation='horizontal', size_hint_y=None, height=30)
@@ -153,7 +151,7 @@ class ResizableRecycleTable(BoxLayout):
         self.column_widths[index + 1] = next_width
         
         self._update_header()
-        self.body.refresh_from_layout()
+        self.body.refresh_from_data()
 
     def _update_ui(self):
         self._update_header()
@@ -168,12 +166,6 @@ class ResizableRecycleTable(BoxLayout):
                     widget.direction = -1 if self.reverse == i else 1
                 else: widget.direction = 0
                 i += 1
-
-    def _rebuild_ui(self):
-        self.remove_widget(self.header_row)
-        self.header_row = self._build_header()
-        self.add_widget(self.header_row, index=1)
-        self.body.update_data()
 
     def sort_by_column(self, col_index):
         self.data.sort(key=lambda row: row[col_index], reverse=self.reverse == col_index)

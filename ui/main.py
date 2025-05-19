@@ -10,12 +10,13 @@ from kivy.uix.widget import Widget
 from kivy.uix.label import Label
 from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
+from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.utils import get_color_from_hex, escape_markup
 from kivy.effects.scroll import ScrollEffect
-from kivy.properties import ListProperty, StringProperty
+from kivy.properties import ListProperty, StringProperty, NumericProperty
 
 from kivy_garden.contextmenu import AppMenu
 
@@ -45,7 +46,7 @@ from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
 from .sections import SectionColumn, SectionAddresses, SectionData, SectionMnemonic
-from .table.table import ResizableRecycleTable
+from .table.table import ResizableRecycleTable, DataTableRow
 
 
 class Icon(Image):
@@ -59,6 +60,7 @@ class IconButton(Button):
     default_color = ListProperty([0.2, 0.2, 0.2, 1])
     hover_color = ListProperty([0.25, 0.25, 0.25, 1])
     source = StringProperty("")
+    icon_height = NumericProperty(dp(20))
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -78,9 +80,35 @@ class MainWindow(FloatLayout): pass
 HEADER_NAMES = ["name", "address", "input", "clobber", "output"]
 COLUMN_WIDTHS = [dp(100), dp(100), dp(250), dp(250), dp(250)]
 
+class AnalyzerTableRow(DataTableRow):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        Window.bind(mouse_pos=self.on_mouse_move)
+
+    def on_touch_down(self, touch):
+        inside = self.collide_point(touch.x, touch.y)
+        if inside:
+            app().scroll_to_label(self.data[0])
+            return True
+        return super().on_touch_down(touch)
+    
+    def on_mouse_move(self, window, pos):
+        inside = self.collide_point(*self.to_widget(*pos))
+        if inside:
+            app().set_hover()
+            Window.set_system_cursor('hand')
+    
+class AnalyzerPanel(RelativeLayout):
+    def close_panel(self):
+        app().content_panel.remove_widget(app().y_splitter)
+
 class AnalyzerTable(ResizableRecycleTable):
     def __init__(self, **kwargs):
         super().__init__(headers = HEADER_NAMES, data = [], column_widths=COLUMN_WIDTHS, cols=5, **kwargs)
+        self.viewclass = "AnalyzerTableRow"
+
+    def on_kv_post(self, base_widget):
+        super().on_kv_post(base_widget)
         self.update_data()
 
     def update_data(self):
@@ -202,7 +230,7 @@ class DisApp(App):
         self.forward_button: IconButton = None
         self.content_panel: BoxLayout = None
         self.y_splitter: Splitter = None
-        self.analyzer_table: AnalyzerTable = None
+        self.analyzer_panel: AnalyzerPanel = None
 
         self.last_position = -1
         self.position_history: list[int] = []
@@ -314,17 +342,16 @@ class DisApp(App):
             return True
         
     def open_function_list(self):
-        if not self.analyzer_table:
-            self.analyzer_table = AnalyzerTable()
-        if self.analyzer_table.get_root_window() is None:
-            content_panel = self.content_panel
+        if not self.y_splitter:
+            self.analyzer_panel = AnalyzerPanel()
             self.y_splitter = Splitter(
                 keep_within_parent = True,
                 min_size = dp(100),
                 max_size = dp(10e10),
                 sizable_from = "top"
             )
-            self.y_splitter.add_widget(self.analyzer_table)
+            self.y_splitter.add_widget(self.analyzer_panel)
+        if self.y_splitter.get_root_window() is None:
             self.content_panel.add_widget(self.y_splitter)
     
     @classmethod

@@ -1,16 +1,17 @@
-<TableBody>:
-    viewclass: 'DataTableCell'
-    bar_width: dp(15)
-    scroll_wheel_distance: 50
-    scroll_type: ['bars']
+<ResizableRecycleTable>:
+    TableBody:
+        viewclass: root.viewclass
+        bar_width: dp(15)
+        scroll_wheel_distance: 50
+        scroll_type: ['bars']
 
-    TableGridLayout:
-        cols: root.table.cols
-        default_size: None, 40
-        default_size_hint: 1, None
-        size_hint_y: None
-        height: self.minimum_height
-        orientation: 'lr-tb'
+        RecycleBoxLayout:
+            cols: root.cols
+            default_size: None, dp(40)
+            default_size_hint: 1, None
+            size_hint_y: None
+            height: self.minimum_height
+            orientation: "vertical"
                     
 <ColumnResizer>:
     canvas.before:
@@ -42,22 +43,25 @@
     padding: dp(5), 0
 
 <DataTableCell>:
-    size_hint: None, None
+    shorten: True
+    shorten_from: "right"
+    size_hint: None, 1
+    halign: 'left'
+    valign: 'middle'
+    text_size: self.size
+    padding_x: 10
+
+<DataTableRow>:
+    size_hint: 1, None
     height: dp(40)
     canvas.before:
         Color:
-            rgba: (0.1216, 0.1216, 0.1216, 1.0) if (self.index % 2 == 0) else (0.2, 0.2, 0.2, 1)
+            rgba: (0.1216, 0.1216, 0.1216, 1.0) if (self.row % 2 == 0) else (0.2, 0.2, 0.2, 1)
         Rectangle:
             pos: self.pos
             size: self.size
-    Label:
-        shorten: True
-        shorten_from: "right"
-        size_hint: None, 1
-        text: root.text
-        width: root.width
-        pos: root.pos
-        halign: 'left'
-        valign: 'middle'
-        text_size: self.size
-        padding_x: 10
+
+<DataTableCell>:
+    padding: dp(5), 0, 0, 0
+    width: self.parent.column_widths[self.column] + dp(5) if self.parent else dp(100)
+    text: self.parent.data[self.column] if self.parent else ""

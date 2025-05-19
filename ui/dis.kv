@@ -36,10 +36,12 @@
                     id: back_button
                     source: "ui/left_arrow.png"
                     disabled: True
+                    icon_height: dp(20)
                 IconButton:
                     id: forward_button
                     source: "ui/right_arrow.png"
                     disabled: True
+                    icon_height: dp(20)
 
     GotoPosition:
         id: goto_position
@@ -57,6 +59,22 @@
     RV
     ArrowRenderer
 
+<AnalyzerPanel>:
+    AnalyzerTable
+    BoxLayout:
+        padding: dp(5)
+        size: dp(30), dp(30)
+
+        size_hint: None, None
+        pos_hint: { "right": 1, "top": 1 }
+
+        IconButton:
+            size: dp(20), dp(20)
+            icon_height: dp(20)
+            default_color: 0.1216, 0.1216, 0.1216, 1.0
+            source: "ui/x.png"
+            on_press: self.parent.parent.close_panel()
+
 <IconButton>:
     background_normal: ""
     background_down: ""
@@ -72,8 +90,8 @@
     
     Icon:
         source: self.parent.source
-        color: self.parent.icon_color if not self.parent.disabled else self.parent.icon_disabled_color
-        height: dp(20)
+        color: self.parent.icon_default_color if not self.parent.disabled else self.parent.icon_disabled_color
+        height: self.parent.icon_height
         center_x: self.parent.center_x
         center_y: self.parent.center_y
 
