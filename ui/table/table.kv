@@ -1,17 +1,20 @@
 <ResizableRecycleTable>:
-    TableBody:
-        viewclass: root.viewclass
-        bar_width: dp(15)
-        scroll_wheel_distance: 50
-        scroll_type: ['bars']
+    BoxLayout: # This is only here to provide a box that clips the table body,
+               # without it the children of the recycleview can't use hover events
+               # because they might actually be outside of the viewport. This sucks hard
+        TableBody:
+            viewclass: root.viewclass
+            bar_width: dp(15)
+            scroll_wheel_distance: 50
+            scroll_type: ['bars']
 
-        RecycleBoxLayout:
-            cols: root.cols
-            default_size: None, dp(40)
-            default_size_hint: 1, None
-            size_hint_y: None
-            height: self.minimum_height
-            orientation: "vertical"
+            RecycleBoxLayout:
+                cols: root.cols
+                default_size: None, dp(40)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
                     
 <ColumnResizer>:
     canvas.before:

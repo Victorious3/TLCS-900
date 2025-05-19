@@ -17,14 +17,8 @@ from kivy.properties import ObjectProperty
 from .main_menu import MenuItem, MenuHandler
 from .context_menu import show_context_menu
 from .project import Section, DATA_PER_ROW
-from .main import LABEL_HEIGHT,FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app
+from .main import LABEL_HEIGHT,FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
 from disapi import Loc
-
-def iter_all_children_of_type(widget: Widget, widget_type: type):
-    if isinstance(widget, widget_type):
-        yield widget
-    for child in widget.children:
-        yield from iter_all_children_of_type(child, widget_type)
 
 class LabelRow(TextInput):
     section = ObjectProperty(None)
@@ -344,7 +338,7 @@ class SectionMnemonic(SectionColumn):
         
     @classmethod
     def update_cursor(cls):
-        if cls.any_hovered and app().ctrl_down:
+        if cls.any_hovered and app().ctrl_down and not app().any_hovered:
             Window.set_system_cursor('hand')
             app().set_hover()
 

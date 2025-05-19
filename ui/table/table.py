@@ -42,7 +42,7 @@ class ColumnResizer(ButtonBehavior, Widget):
         Window.bind(mouse_pos=self.on_mouse_pos)
 
     def on_enter(self):
-        if not self._cursor_set:
+        if not self._cursor_set and not app().any_hovered:
             Window.set_system_cursor("size_we")  # horizontal resize cursor
             self._cursor_set = True
 
@@ -100,8 +100,8 @@ class DataTableCell(Label):
 class TableBody(RecycleView):
     def update_data(self):
         data = []
-        for i, row in enumerate(self.parent.data):
-            data.append({"data": row, "row": i, "column_widths": self.parent.column_widths})
+        for i, row in enumerate(self.parent.parent.data):
+            data.append({"data": row, "row": i, "column_widths": self.parent.parent.column_widths})
 
         self.data = data
 
@@ -123,9 +123,12 @@ class ResizableRecycleTable(BoxLayout):
         self.reverse = -1
         self.ordered_by = -1
 
+    def is_pos_inside_of_body(self, pos):
+        return self.body.parent.collide_point(*self.body.parent.to_widget(*pos))
+
     @property
     def body(self) -> TableBody:
-        return self.children[0] 
+        return self.children[0].children[0]
 
     def _build_header(self):
         header = BoxLayout(orientation='horizontal', size_hint_y=None, height=30)

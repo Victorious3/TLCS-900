@@ -39,6 +39,12 @@ def find_font_height():
 
 FONT_WIDTH, FONT_HEIGHT = find_font_height()
 
+def iter_all_children_of_type(widget: Widget, widget_type: type):
+    if isinstance(widget, widget_type):
+        yield widget
+    for child in widget.children:
+        yield from iter_all_children_of_type(child, widget_type)
+
 from tcls_900.tlcs_900 import Reg, Mem
 
 from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
@@ -46,7 +52,7 @@ from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
 from .sections import SectionColumn, SectionAddresses, SectionData, SectionMnemonic
-from .table.table import ResizableRecycleTable, DataTableRow
+from .table.table import ResizableRecycleTable, DataTableRow, TableBody
 
 
 class Icon(Image):
@@ -92,9 +98,17 @@ class AnalyzerTableRow(DataTableRow):
             return True
         return super().on_touch_down(touch)
     
+    def on_motion(self, etype, me):
+        return super().on_motion(etype, me)
+    
     def on_mouse_move(self, window, pos):
         inside = self.collide_point(*self.to_widget(*pos))
         if inside:
+            # Ugly UI hack
+            table: AnalyzerTable = next(iter_all_children_of_type(app().analyzer_panel, AnalyzerTable))
+            if not table.is_pos_inside_of_body(pos): return
+
+        if inside and not app().any_hovered:
             app().set_hover()
             Window.set_system_cursor('hand')
     
@@ -214,7 +228,7 @@ class RV(RecycleView):
         SectionColumn.on_touch_up_selection(touch)
 
 class DisApp(App):
-    any_hovered = False
+    _any_hovered = False
 
     def __init__(self, project: Project):
         super().__init__()
@@ -356,15 +370,19 @@ class DisApp(App):
     
     @classmethod
     def on_mouse_move(cls, window, pos):
-        cls.any_hovered = False
+        cls._any_hovered = False
         def post(dt):
-            if not cls.any_hovered:
+            if not cls._any_hovered:
                 Window.set_system_cursor('arrow')
 
         Clock.schedule_once(post, 0)
 
     def set_hover(self):
-        DisApp.any_hovered = True
+        DisApp._any_hovered = True
+
+    @property
+    def any_hovered(self):
+        return DisApp._any_hovered
 
 def main(path: str, ep: int, org: int):
     project = load_project(path, ep, org)
