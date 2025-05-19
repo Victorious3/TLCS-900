@@ -179,6 +179,7 @@ class FunctionState:
         self.fun_stack = list(filter(lambda s: len(s[1]) > 0, self.fun_stack))
 
         if any(map(lambda ir: overlaps_and_covers(reg, ir[1]), self.clobbers)): return
+        self.clobbers = set(filter(lambda c: not overlaps_and_covers(c[1], reg), self.clobbers))
         self.clobbers.add((pc, reg))
 
     def push_function(self, pc: int, fun: "Function"):

@@ -110,6 +110,35 @@
     #    Line:
     #        width: 2
     #        rectangle: self.x, self.y, self.width, self.height
+    
+    LabelRow:
+        id: label
+
+    RelativeLayout:
+        size_hint: 1, 1
+        SectionData:
+            halign: "left"
+            pos: dp(270), 0
+            text_size: self.width, self.height
+            height: self.parent.height
+            id: data
+        SectionAddresses:
+            width: dp(240)
+            pos: 0, 0
+            halign: "right"
+            text_size: self.width, self.height
+            height: self.parent.height
+            id: addresses
+        SectionMnemonic:
+            pos: dp(550), 0
+            width: dp(400)
+            size_hint: None, 1
+            halign: "left"
+            markup: True
+
+            text_size: self.width, self.height
+            height: self.parent.height
+            id: mnemonics
 
 <InvalidInsnPopup>:
     auto_dismiss: False

@@ -92,9 +92,6 @@ class DataTableCell(RecycleDataViewBehavior, BoxLayout):
     text = StringProperty("")
     index = NumericProperty(0)
     column = NumericProperty(0)
-
-    def update_widths(self):
-        pass
         
 class TableBody(RecycleView):
     table = ObjectProperty(None)

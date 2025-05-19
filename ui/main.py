@@ -87,6 +87,7 @@ class AnalyzerTable(ResizableRecycleTable):
         project = app().project
         self.data = []
         for fun in project.functions.values():
+            if not fun.state: continue
             row = []
             # name
             row.append(fun.name)

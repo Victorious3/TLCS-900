@@ -12,6 +12,7 @@ from kivy.metrics import dp
 from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle, Line
 from kivy.utils import get_color_from_hex, escape_markup
+from kivy.properties import ObjectProperty
 
 from .main_menu import MenuItem, MenuHandler
 from .context_menu import show_context_menu
@@ -26,35 +27,42 @@ def iter_all_children_of_type(widget: Widget, widget_type: type):
         yield from iter_all_children_of_type(child, widget_type)
 
 class LabelRow(TextInput):
-    def __init__(self, section: Section, label: str, **kwargs):
+    section = ObjectProperty(None)
+    
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.size_hint = 1, None
         self.font_size = FONT_SIZE
         self.font_name = FONT_NAME
         self.height = LABEL_HEIGHT
-        self.section = section
         self.background_color = 0, 0, 0, 0
         self.foreground_color = 1, 1, 1, 1
-        self.text = label
         self.padding = [dp(250), 0, 0, 0]
         self.multiline = False
+    
+    def on_section(self, instance, value: Section):
+        if len(value.labels) == 0:
+            self.disabled = True
+            self.opacity = 0
+            self.height = 0
+        else:
+            self.text = value.labels[0].name
+            self.disabled = False
+            self.opacity = 1
+            self.height = LABEL_HEIGHT
 
 class SectionColumn(Label):
+    section = ObjectProperty(None)
+
     selection_start = 0
     selection_end = 0
     outside_bounds = False
 
-    def __init__(self, section: Section, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.section = section
         self.size_hint = None, None
         self.font_size = FONT_SIZE
         self.font_name = FONT_NAME
-
-    def resize(self):
-        self.texture_update()
-        self.height = self.texture_size[1]
-        self.text_size = self.size
     
     def redraw(self): pass
 
@@ -167,13 +175,8 @@ class SectionColumn(Label):
             ])
 
 class SectionAddresses(SectionColumn):
-    def __init__(self, section: Section, **kwargs):
-        super().__init__(section, **kwargs)
-        self.width = dp(240)
-        self.pos = (0, 0)
-        self.halign = "right"
+    def on_section(self, instance, section: Section):
         self.text = "\n".join(format(x, "X") for x in map(lambda i: i.entry.pc, section.instructions))
-        self.resize()
 
     @classmethod
     def redraw_children(cls):
@@ -197,13 +200,12 @@ class SectionAddresses(SectionColumn):
         
 
 class SectionData(SectionColumn):
-    def __init__(self, section: Section, **kwargs):
-        super().__init__(section, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.width = DATA_PER_ROW * dp(40)
-        self.halign = "left"
-        self.pos = (dp(270), 0)
         self.color = get_color_from_hex("#B5CEA8")
 
+    def on_section(self, instance, section: Section):
         lines = []
         for insn in section.instructions:
             data = section.data[
@@ -212,7 +214,6 @@ class SectionData(SectionColumn):
             lines.append(" ".join(format(x, "0>2X") for x in data))
 
         self.text = "\n".join(lines)
-        self.resize()
 
     def redraw(self):
         start, end = SectionColumn.selection_start, SectionColumn.selection_end
@@ -295,21 +296,18 @@ class LocationLabel:
 class SectionMnemonic(SectionColumn):
     any_hovered = False
 
-    def __init__(self, section: Section, **kwargs):
-        super().__init__(section, **kwargs)
-        self.pos = (dp(550), 0)
-        self.width = dp(400)
-        self.size_hint = None, 1
-        self.halign = "left"
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.labels: list[LocationLabel] = []
         self.ctrl_down = False
-        self.markup = True
 
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
         Window.bind(on_mouse_up=self._on_mouse_up)
         Window.bind(mouse_pos=self._on_mouse_move)
         
+    def on_section(self, instance, section: Section):
+        self.labels = []
         text = []
         for insn in section.instructions:
             row_width = len(insn.entry.opcode) + 1
@@ -339,7 +337,6 @@ class SectionMnemonic(SectionColumn):
             text.append(row)
 
         self.text = "\n".join(text)
-        self.resize()
 
     @classmethod
     def on_mouse_move(cls, window, pos):
@@ -401,28 +398,20 @@ class SectionMnemonic(SectionColumn):
             self._on_update()
 
 class SectionPanel(BoxLayout, RecycleDataViewBehavior):
+    section = ObjectProperty(None)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.section: Section = None
 
     def refresh_view_attrs(self, rv, index, data):
         super().refresh_view_attrs(rv, index, data)
 
         section: Section = data["section"]
-        self.section = section
-
-        self.clear_widgets()
-        for label in section.labels:
-            self.add_widget(LabelRow(section, label.name))
-
-        rows = RelativeLayout(size_hint=(1, 1))
-        rows.add_widget(SectionData(section))
-        rows.add_widget(SectionAddresses(section))
-        rows.add_widget(SectionMnemonic(section))
-
-        self.add_widget(rows)
+        self.ids["label"].section = section
+        self.ids["data"].section = section
+        self.ids["addresses"].section = section
+        self.ids["mnemonics"].section = section
         
-
     def is_visible(self):
         visible_range = app().rv.get_visible_range()   
         window = MAX_SECTION_LENGTH * FONT_HEIGHT     
