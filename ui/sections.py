@@ -145,7 +145,9 @@ class SectionColumn(Label):
 
     @classmethod
     def on_touch_up_selection(cls, touch):
-        if (touch.button == "right" and 
+        inside = app().rv.collide_point(touch.x, touch.y)
+
+        if (touch.button == "right" and inside and
             touch.x < app().rv.width - app().minimap.width):
 
             class Handler(MenuHandler):
@@ -167,6 +169,8 @@ class SectionColumn(Label):
                 MenuItem("dis_oneshot", "Disassemble oneshot"),
                 MenuItem("dis_selected", "Disassemble selected"),
             ])
+
+            return True
 
 class SectionAddresses(SectionColumn):
     def on_section(self, instance, section: Section):

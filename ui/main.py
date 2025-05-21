@@ -94,8 +94,9 @@ class AnalyzerTableRow(DataTableRow):
     def on_touch_down(self, touch):
         inside = self.collide_point(touch.x, touch.y)
         if inside:
-            app().scroll_to_label(self.data[0])
-            return True
+            if touch.button == "left":
+                app().scroll_to_label(self.data[0])
+                return True
         return super().on_touch_down(touch)
     
     def on_motion(self, etype, me):
@@ -217,15 +218,15 @@ class RV(RecycleView):
     
     def on_touch_down(self, touch):
         if super().on_touch_down(touch): return True
-        SectionColumn.on_touch_down_selection(touch)
+        return SectionColumn.on_touch_down_selection(touch)
     
     def on_touch_move(self, touch):
         if super().on_touch_move(touch): return True
-        SectionColumn.on_touch_move_section(touch)
+        return SectionColumn.on_touch_move_section(touch)
     
     def on_touch_up(self, touch):
         if super().on_touch_up(touch): return True
-        SectionColumn.on_touch_up_selection(touch)
+        return SectionColumn.on_touch_up_selection(touch)
 
 class DisApp(App):
     _any_hovered = False
@@ -245,6 +246,7 @@ class DisApp(App):
         self.content_panel: BoxLayout = None
         self.y_splitter: Splitter = None
         self.analyzer_panel: AnalyzerPanel = None
+        self.dis_panel: Widget = None
 
         self.last_position = -1
         self.position_history: list[int] = []
@@ -253,7 +255,7 @@ class DisApp(App):
         self.ctrl_down = False
         self.shift_down = False
 
-        Window.bind(mouse_pos=DisApp.on_mouse_move)
+        Window.bind(mouse_pos=self.on_mouse_move)
         Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
@@ -266,6 +268,7 @@ class DisApp(App):
         self.back_button = self.window.ids["back_button"]
         self.forward_button = self.window.ids["forward_button"]
         self.content_panel = self.window.ids["content_panel"]
+        self.dis_panel = self.window.ids["dis_panel"]
 
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
@@ -332,6 +335,9 @@ class DisApp(App):
 
             scroll_pos += data["height"]
         raise ValueError("Invalid location")
+    
+    def open_function_graph(fun: str):
+        pass
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
         if "ctrl" in modifiers and keycode == 10: # ctrl + g
@@ -368,11 +374,10 @@ class DisApp(App):
         if self.y_splitter.get_root_window() is None:
             self.content_panel.add_widget(self.y_splitter)
     
-    @classmethod
-    def on_mouse_move(cls, window, pos):
-        cls._any_hovered = False
+    def on_mouse_move(self, window, pos):
+        DisApp._any_hovered = False
         def post(dt):
-            if not cls._any_hovered:
+            if not DisApp._any_hovered:
                 Window.set_system_cursor('arrow')
 
         Clock.schedule_once(post, 0)
