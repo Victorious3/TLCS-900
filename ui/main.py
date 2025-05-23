@@ -1,4 +1,4 @@
-import math, weakref
+import math, shutil, tempfile, json
 
 from kivy.app import App
 from kivy.metrics import dp
@@ -14,7 +14,8 @@ from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.recycleview import RecycleView
-from kivy.utils import get_color_from_hex, escape_markup
+from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
+from kivy.utils import get_color_from_hex
 from kivy.effects.scroll import ScrollEffect
 from kivy.properties import ListProperty, StringProperty, NumericProperty
 
@@ -24,6 +25,8 @@ FONT_SIZE = dp(15)
 LABEL_HEIGHT = FONT_SIZE + dp(5)
 FONT_NAME = "ui/RobotoMono"
 BG_COLOR = get_color_from_hex("#1F1F1F")
+
+graph_tmpfolder: str = None
 
 def app() -> "DisApp":
     return App.get_running_app()
@@ -47,13 +50,14 @@ def iter_all_children_of_type(widget: Widget, widget_type: type):
 
 from tcls_900.tlcs_900 import Reg, Mem
 
-from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project
+from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project, Function
 from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
 from .sections import SectionColumn, SectionAddresses, SectionData, SectionMnemonic
 from .table.table import ResizableRecycleTable, DataTableRow, TableBody
-
+from .context_menu import MenuHandler, MenuItem, show_context_menu
+from .function_graph import FunctionTabItem
 
 class Icon(Image):
     def on_touch_down(self, touch):
@@ -90,6 +94,24 @@ class AnalyzerTableRow(DataTableRow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         Window.bind(mouse_pos=self.on_mouse_move)
+    
+    def on_touch_up(self, touch):
+        inside = self.collide_point(touch.x, touch.y)
+        if inside:
+            if touch.button == "right":
+                data = self.data
+                class Handler(MenuHandler):
+                    def on_select(self, item):
+                        if item == "goto": app().scroll_to_label(data[0])
+                        elif item == "graph": app().open_function_graph(data[0])
+                
+                show_context_menu(Handler(), [
+                    MenuItem("goto", "Go to function"),
+                    MenuItem("graph", "Open function graph")
+                ])
+                return True
+            
+        return super().on_touch_up(touch)
 
     def on_touch_down(self, touch):
         inside = self.collide_point(touch.x, touch.y)
@@ -247,6 +269,7 @@ class DisApp(App):
         self.y_splitter: Splitter = None
         self.analyzer_panel: AnalyzerPanel = None
         self.dis_panel: Widget = None
+        self.dis_panel_container: BoxLayout = None
 
         self.last_position = -1
         self.position_history: list[int] = []
@@ -269,6 +292,7 @@ class DisApp(App):
         self.forward_button = self.window.ids["forward_button"]
         self.content_panel = self.window.ids["content_panel"]
         self.dis_panel = self.window.ids["dis_panel"]
+        self.dis_panel_container = self.window.ids["dis_panel_container"]
 
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
@@ -289,6 +313,11 @@ class DisApp(App):
             if section.labels and section.labels[0].name == label:
                 print("Goto label:", label, "at", format(section.offset, "X"))
                 self.scroll_to_offset(section.offset)
+
+                tab_panel = self.dis_panel_container.children[0]
+                if isinstance(tab_panel, TabbedPanel):
+                    Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[-1]))
+                
                 return
         raise ValueError("Invalid label")
     
@@ -336,8 +365,32 @@ class DisApp(App):
             scroll_pos += data["height"]
         raise ValueError("Invalid location")
     
-    def open_function_graph(fun: str):
-        pass
+    def open_function_graph(self, fun_name: str):
+        fun = next(filter(lambda f: f.name == fun_name, self.project.functions.values()))
+
+        tab_panel = self.dis_panel_container.children[0]
+        if isinstance(tab_panel, TabbedPanel):
+            # We already have tabs, just open a new one if this one hasn't been opened yet
+            tab: FunctionTabItem
+            for tab in tab_panel.tab_list[:-1]:
+                if tab.fun == fun: 
+                    Clock.schedule_once(lambda dt: tab_panel.switch_to(tab), 0)
+                    return
+        else:
+            # Open a tabbed panel
+            self.dis_panel_container.remove_widget(self.dis_panel)
+            tab_panel = TabbedPanel(do_default_tab = False)
+            item = TabbedPanelItem(text = self.project.filename)
+            item.add_widget(self.dis_panel)
+            tab_panel.add_widget(item)
+            self.dis_panel_container.add_widget(tab_panel, index=1)
+            Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[0]), 0)
+        
+        # Otherwise we open a new tab
+        tab = FunctionTabItem(fun)
+        tab_panel.add_widget(tab)
+        Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[0]), 0)
+
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
         if "ctrl" in modifiers and keycode == 10: # ctrl + g
@@ -388,9 +441,18 @@ class DisApp(App):
     @property
     def any_hovered(self):
         return DisApp._any_hovered
+    
+    def on_stop(self):
+        try:
+            shutil.rmtree(graph_tmpfolder)
+        except FileNotFoundError: pass
+
+        super().on_stop()
 
 def main(path: str, ep: int, org: int):
     project = load_project(path, ep, org)
-
+    global graph_tmpfolder
+    graph_tmpfolder = tempfile.mkdtemp()
+    
     window = DisApp(project)
     window.run()

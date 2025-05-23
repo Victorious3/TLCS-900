@@ -252,12 +252,20 @@ class Function:
             dig.edge(str(block.ep), str(succ.ep), color="red" if branch else "black")
             self._graph(succ, visited, dig, ob)
 
-    def graph(self, out_folder: str, ob: OutputBuffer):
+    def graph(self, ob: OutputBuffer) -> Digraph:
         visited: set[CodeBlock] = set()
         dig = Digraph(self.name)
         dig.attr("node", shape="box", fontname="Roboto Mono")
         self._graph(self.start, visited, dig, ob)
-        dig.render(directory=out_folder, format="svg")
+        return dig
+    
+    def graph_svg(self, out_folder: str, ob: OutputBuffer) -> str:
+        dig = self.graph(ob)
+        return dig.render(directory=out_folder, format="svg")
+
+    def graph_json(self, out_folder: str, ob: OutputBuffer) -> str:
+        dig = self.graph(ob)
+        return dig.render(directory=out_folder, format="json0")
 
     def analyze(self, proj: "Project"):
         if self.state: return
@@ -340,6 +348,7 @@ def label_list(label):
 class Project:
     def __init__(self, path: str):
         self.path = path
+        self.filename = os.path.basename(path)
         self.sections = TreeMap()
         self.ib: InputBuffer = InputBuffer
         self.ob: OutputBuffer = None

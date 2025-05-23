@@ -14,8 +14,11 @@
                 id: content_panel
                 size_hint: 1, 1
                 orientation: "vertical"
-                MainPanel
-                    id: dis_panel
+                BoxLayout:
+                    orientation: "vertical"
+                    id: dis_panel_container
+                    MainPanel
+                        id: dis_panel
 
         FloatLayout:
             pos: 0, main_panel.height - app_menu.height

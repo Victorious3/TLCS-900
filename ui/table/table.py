@@ -131,7 +131,7 @@ class ResizableRecycleTable(BoxLayout):
         return self.children[0].children[0]
 
     def _build_header(self):
-        header = BoxLayout(orientation='horizontal', size_hint_y=None, height=30)
+        header = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(30))
         for i, header_text in enumerate(self.headers):
             header.add_widget(SortableHeader(text=header_text, col_index=i, table=self, size_hint_x=None, width=self.column_widths[i]))
             if i < len(self.headers) - 1:
@@ -147,7 +147,7 @@ class ResizableRecycleTable(BoxLayout):
         next_width = self.column_widths[index + 1] - delta
 
         # Prevent columns from being too narrow
-        if new_width < 50 or next_width < 50:
+        if new_width < dp(50) or next_width < dp(50):
             return
 
         self.column_widths[index] = new_width
