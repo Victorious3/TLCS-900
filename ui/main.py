@@ -14,7 +14,7 @@ from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.recycleview import RecycleView
-from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
+from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.utils import get_color_from_hex
 from kivy.effects.scroll import ScrollEffect
 from kivy.properties import ListProperty, StringProperty, NumericProperty
@@ -59,33 +59,8 @@ from .main_menu import build_menu
 from .sections import SectionColumn, SectionAddresses, SectionData, SectionMnemonic
 from .table.table import ResizableRecycleTable, DataTableRow, TableBody
 from .context_menu import MenuHandler, MenuItem, show_context_menu
-from .function_graph import FunctionTabItem
-
-class Icon(Image):
-    def on_touch_down(self, touch):
-        return False
-    def on_touch_up(self, touch):
-        return False
-
-class IconButton(Button):
-    icon_color = ListProperty([1, 1, 1, 1])
-    default_color = ListProperty([0.2, 0.2, 0.2, 1])
-    hover_color = ListProperty([0.25, 0.25, 0.25, 1])
-    source = StringProperty("")
-    icon_height = NumericProperty(dp(20))
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.background_color = self.default_color
-        Window.bind(mouse_pos=self.on_mouse_pos)
-
-    def on_mouse_pos(self, widget, pos):
-        if self.get_root_window():
-            inside = self.collide_point(*self.to_widget(*pos))
-            if inside and not self.disabled:
-                self.background_color = self.hover_color
-            else:
-                self.background_color = self.default_color
+from .function_graph import FunctionTabItem, FunctionTabPanel
+from .buttons import IconButton
 
 class MainWindow(FloatLayout): pass
 
@@ -318,7 +293,7 @@ class DisApp(App):
                 self.scroll_to_offset(section.offset)
 
                 tab_panel = self.dis_panel_container.children[0]
-                if isinstance(tab_panel, TabbedPanel):
+                if isinstance(tab_panel, FunctionTabPanel):
                     Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[-1]))
                 
                 return
@@ -369,10 +344,11 @@ class DisApp(App):
         raise ValueError("Invalid location")
     
     def open_function_graph(self, fun_name: str):
-        fun = next(filter(lambda f: f.name == fun_name, self.project.functions.values()))
+        fun = next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
+        if not fun: raise ValueError(f"No function called {fun} exists")
 
         tab_panel = self.dis_panel_container.children[0]
-        if isinstance(tab_panel, TabbedPanel):
+        if isinstance(tab_panel, FunctionTabPanel):
             # We already have tabs, just open a new one if this one hasn't been opened yet
             tab: FunctionTabItem
             for tab in tab_panel.tab_list[:-1]:
@@ -382,8 +358,8 @@ class DisApp(App):
         else:
             # Open a tabbed panel
             self.dis_panel_container.remove_widget(self.dis_panel)
-            tab_panel = TabbedPanel(do_default_tab = False)
-            item = TabbedPanelItem(text = self.project.filename)
+            tab_panel = FunctionTabPanel(do_default_tab = False, tab_height = dp(25))
+            item = TabbedPanelItem(text = self.project.filename, size_hint_x=None, width=dp(100))
             item.add_widget(self.dis_panel)
             tab_panel.add_widget(item)
             self.dis_panel_container.add_widget(tab_panel, index=1)

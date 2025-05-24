@@ -1,11 +1,12 @@
 import math, json
 
-from kivy.uix.tabbedpanel import TabbedPanelItem
+from kivy.uix.tabbedpanel import TabbedPanelItem, TabbedPanel, TabbedPanelStrip
 from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scatter import ScatterPlane
 from kivy.uix.stencilview import StencilView
 from kivy.uix.label import Label
+from kivy.uix.floatlayout import FloatLayout
 from kivy.graphics import Triangle, Color, Line, Rectangle
 from kivy.metrics import dp
 from kivy.utils import colormap, get_color_from_hex
@@ -18,13 +19,29 @@ from kivy.graphics.transformation import Matrix
 from .project import Function
 from .main import graph_tmpfolder, app, FONT_NAME
 from .sections import section_to_markup, LocationLabel
+from .buttons import XButton
 
-class FunctionTabItem(TabbedPanelItem):
+class FunctionTabPanel(TabbedPanel):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tab_width = None
+
+class FunctionTabItem(TabbedPanelItem, FloatLayout):
     def __init__(self, fun: Function, **kwargs):
         super().__init__(**kwargs)
         self.text = fun.name
         self.fun = fun
         self.add_widget(FunctionPanel(fun))
+        box = BoxLayout(size_hint=(None, None), width=dp(22.5), height=dp(20), padding=(0, 0, dp(2.5), 0), pos_hint={"right": 1, "center_y": 0.5})
+        box.add_widget(XButton(on_press=lambda *_: self.close_tab()))
+        super(FloatLayout, self).add_widget(box)
+
+    def close_tab(self):
+        panel: FunctionTabPanel = self.parent.tabbed_panel
+        index = panel.tab_list.index(self)
+        panel.remove_widget(self)
+        Clock.schedule_once(lambda dt: panel.switch_to(panel.tab_list[index - 1 if index - 1 < len(panel.tab_list) else -1]))
+        
 
     def move_to_initial_pos(self):
         self.content.move_to_initial_pos()
@@ -60,7 +77,7 @@ def find_font_height():
     label = Label(
         text = "M",
         font_name = FONT_NAME,
-        font_size = dp(14) * SCALE_FACTOR
+        font_size = 14 * SCALE_FACTOR
     )
     label.texture_update()
     return label.texture_size
@@ -93,21 +110,32 @@ class FunctionSvg(Widget):
                 self.hovered_label = label
                 break
         if last != self.hovered_label: self.render_hover()
+        if self.hovered_label is not None and not app().any_hovered:
+            Window.set_system_cursor('hand')
+            app().set_hover()
+
+    def on_touch_down(self, touch):
+        if touch.button == "left" and self.hovered_label is not None:
+            try: app().open_function_graph(self.hovered_label.text)
+            except ValueError: pass
+            return True
+
+        return super().on_touch_down(touch)
      
     def render_hover(self):
         self.canvas.after.clear()
         if self.hovered_label:
             with self.canvas.after:
                 Color(*get_color_from_hex("#64B5F6"))
-                label = CoreLabel(font_size=dp(14) * SCALE_FACTOR, font_name=FONT_NAME)
+                label = CoreLabel(font_size=14 * SCALE_FACTOR, font_name=FONT_NAME)
                 label.text = self.hovered_label.text
                 label.refresh()
 
                 Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(self.hovered_label.x, self.hovered_label.y))
                 Line(points=[
-                        self.hovered_label.x, self.hovered_label.y - dp(0.5),
-                        self.hovered_label.x + self.hovered_label.width, self.hovered_label.y - dp(0.5)
-                    ], width=dp(0.5))
+                        self.hovered_label.x, self.hovered_label.y - 0.5,
+                        self.hovered_label.x + self.hovered_label.width, self.hovered_label.y - 0.5
+                    ], width=0.5)
 
 
     def update_graphics(self, *args):
@@ -115,8 +143,8 @@ class FunctionSvg(Widget):
             data = json.load(fp)
 
         _,_,gw,gh = data["bb"].split(",")
-        self.width = dp(float(gw))
-        self.height = dp(float(gh))
+        self.width = float(gw)
+        self.height = float(gh)
 
         def to_px(inches: float) -> float:
             return inches * 72
@@ -132,7 +160,7 @@ class FunctionSvg(Widget):
                         Color(1, 1, 1, 1)
                     else: Color(*colormap[line["color"]])
 
-                    points = [(dp(x) + self.x, dp(y) + self.y) for x, y in points]
+                    points = [(x + self.x, y + self.y) for x, y in points]
 
                     endpoint = points[0]
                     control_points = points[1:]
@@ -160,7 +188,7 @@ class FunctionSvg(Widget):
                     # Flatten for Kivy Line
                     flat_points = [coord for point in sampled_points for coord in point]
 
-                    Line(points=flat_points, width=dp(1.1))
+                    Line(points=flat_points, width=1.1)
 
                     # Draw arrowhead at endpoint using last segment
                     last_seg = segments[-1]
@@ -168,8 +196,8 @@ class FunctionSvg(Widget):
                     tx, ty = cubic_bezier_tangent(*last_seg, 1)
                     tx, ty = normalize(tx, ty)
 
-                    arrow_length = dp(12)
-                    arrow_width = dp(9)
+                    arrow_length = 12
+                    arrow_width = 9
 
                     # Arrow tip is from Graphviz's 'e,x,y' position
                     tip_x, tip_y = endpoint  # This is from 'e,x,y'
@@ -201,29 +229,29 @@ class FunctionSvg(Widget):
                 for box in data["objects"]:
                     x,y = map(float, box["pos"].split(","))
                     w,h = to_px(float(box["width"])), to_px(float(box["height"]))
-                    x = self.x + dp(x) - dp(w)/2
-                    y = self.y + dp(y) - dp(h)/2
+                    x = self.x + x - w/2
+                    y = self.y + y - h/2
                     
                     ep = int(box["name"])
                     block = self.fun.blocks[ep]
                     lines, labels = [], []
                     section_to_markup(block.insn, lines, labels)
                     for label in labels:
-                        label.x = x + label.x * SVG_FONT_WIDTH / SCALE_FACTOR + dp(8)
-                        label.y = y + ((len(lines) - label.y - 1) * SVG_FONT_HEIGHT * 1.05) / SCALE_FACTOR + dp(8)
+                        label.x = x + label.x * SVG_FONT_WIDTH / SCALE_FACTOR + 8
+                        label.y = y + ((len(lines) - label.y - 1) * SVG_FONT_HEIGHT * 1.05) / SCALE_FACTOR + 8
                         label.width = label.width * SVG_FONT_WIDTH / SCALE_FACTOR
                         label.height = label.height * SVG_FONT_HEIGHT / SCALE_FACTOR
 
                     self.labels.extend(labels)
 
                     for i, line in enumerate(lines):
-                        label = MarkupLabel(markup=True, font_size=dp(14) * SCALE_FACTOR, font_name=FONT_NAME)
+                        label = MarkupLabel(markup=True, font_size=14 * SCALE_FACTOR, font_name=FONT_NAME)
                         label.text = line
                         label.refresh()
 
-                        Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(x + dp(8), y + (len(lines) - i - 1) * SVG_FONT_HEIGHT * 1.05 / SCALE_FACTOR + dp(8)))
+                        Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(x + 8, y + (len(lines) - i - 1) * SVG_FONT_HEIGHT * 1.05 / SCALE_FACTOR + 8))
                         
-                    Line(width=dp(1.1), rectangle=(x, y, dp(w), dp(h)))
+                    Line(width=1.1, rectangle=(x, y, w, h))
 
 
 class ScatterPlaneNoTouch(ScatterPlane):

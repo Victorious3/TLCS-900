@@ -63,6 +63,12 @@
     RV
     ArrowRenderer
 
+<XButton>:
+    size: dp(20), dp(20)
+    icon_height: dp(20)
+    default_color: 0.1216, 0.1216, 0.1216, 1.0
+    source: "ui/x.png"
+
 <AnalyzerPanel>:
     AnalyzerTable
     BoxLayout:
@@ -72,11 +78,7 @@
         size_hint: None, None
         pos_hint: { "right": 1, "top": 1 }
 
-        IconButton:
-            size: dp(20), dp(20)
-            icon_height: dp(20)
-            default_color: 0.1216, 0.1216, 0.1216, 1.0
-            source: "ui/x.png"
+        XButton:
             on_press: self.parent.parent.close_panel()
 
 <IconButton>:
@@ -188,3 +190,9 @@
             Button:
                 text: "Keep"
                 on_release: root.dispatch("on_continue")
+
+<FunctionTabItem>:
+    size_hint: None, 1
+    halign: "left"
+    padding: dp(5), dp(5), dp(22.5), dp(5)
+    width: self.texture_size[0] + dp(15)
