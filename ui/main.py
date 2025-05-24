@@ -64,8 +64,8 @@ from .buttons import IconButton
 
 class MainWindow(FloatLayout): pass
 
-HEADER_NAMES = ["name", "address", "input", "clobber", "output"]
-COLUMN_WIDTHS = [dp(100), dp(100), dp(250), dp(250), dp(250)]
+HEADER_NAMES = ["name", "address", "complexity", "input", "clobber", "output"]
+COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(250), dp(250), dp(250)]
 
 class AnalyzerTableRow(DataTableRow):
     def __init__(self, **kwargs):
@@ -136,6 +136,8 @@ class AnalyzerTable(ResizableRecycleTable):
             row.append(fun.name)
             # address
             row.append(format(fun.ep, "X"))
+            #complexity
+            row.append(str(len(fun.blocks)))
             # callers
             #callers = set(map(lambda c: c[1], fun.callers))
             #row.append(", ".join(map(lambda c: c.name, callers)))

@@ -1,9 +1,11 @@
 import sys
 from abc import ABC, abstractmethod
+from threading import Thread
 
 from kivy.clock import Clock
 from kivy.metrics import dp
 from kivy.uix.widget import Widget
+from kivy.core.window import Window
 from kivy_garden.contextmenu import AppMenuTextItem, ContextMenu, ContextMenuTextItem, AbstractMenuItem
 
 from .main import app
@@ -30,12 +32,30 @@ main_menu = [
         MenuItem("functions", "Functions")
     ])
 ]
+
 class MainMenuHandler(MenuHandler):
     def on_select(self, item):
+        def interval(dt):
+            Window.set_system_cursor("wait")
+            app().set_hover()
+
+        def analyze():
+            wait = Clock.schedule_interval(interval, 0)
+            app().project.analyze_functions()
+            wait.cancel()
+            Clock.schedule_once(finish, 0)
+
+        def finish(dt):
+            sys.setswitchinterval(previ)
+            Window.set_system_cursor("arrow")
+            app().open_function_list()
+
         if item == "functions":
             if app().project.functions is None:
-                app().project.analyze_functions()
-            app().open_function_list()
+                previ = sys.getswitchinterval()
+                sys.setswitchinterval(0.0005)
+                Thread(target=analyze, daemon=True).start()
+            else: app().open_function_list()
 
         app().app_menu.close_all()
         

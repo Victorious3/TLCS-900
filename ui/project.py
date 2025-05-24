@@ -1,4 +1,4 @@
-import os
+import os, time
 from dataclasses import dataclass, field
 from pytreemap import TreeMap
 from abc import ABC
@@ -603,6 +603,7 @@ class Project:
         #    print(section)
 
     def analyze_functions(self):
+        """ This function is meant to be executed using a thread"""
         self.functions = {}
         # Find all functions
         for ep in self.ob.calls:

@@ -40,7 +40,7 @@ class FunctionTabItem(TabbedPanelItem, FloatLayout):
         panel: FunctionTabPanel = self.parent.tabbed_panel
         index = panel.tab_list.index(self)
         panel.remove_widget(self)
-        Clock.schedule_once(lambda dt: panel.switch_to(panel.tab_list[index - 1 if index - 1 < len(panel.tab_list) else -1]))
+        Clock.schedule_once(lambda dt: panel.switch_to(panel.tab_list[index - 1 if index - 1 >= 0 else 0]))
         
 
     def move_to_initial_pos(self):
