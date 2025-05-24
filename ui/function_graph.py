@@ -92,8 +92,24 @@ class FunctionSvg(Widget):
 
                 self.hovered_label = label
                 break
-        if last != self.hovered_label: self.update_graphics()
+        if last != self.hovered_label: self.render_hover()
      
+    def render_hover(self):
+        self.canvas.after.clear()
+        if self.hovered_label:
+            with self.canvas.after:
+                Color(*get_color_from_hex("#64B5F6"))
+                label = CoreLabel(font_size=dp(14) * SCALE_FACTOR, font_name=FONT_NAME)
+                label.text = self.hovered_label.text
+                label.refresh()
+
+                Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(self.hovered_label.x, self.hovered_label.y))
+                Line(points=[
+                        self.hovered_label.x, self.hovered_label.y - dp(0.5),
+                        self.hovered_label.x + self.hovered_label.width, self.hovered_label.y - dp(0.5)
+                    ], width=dp(0.5))
+
+
     def update_graphics(self, *args):
         with open(self.graphfile) as fp:
             data = json.load(fp)
@@ -112,7 +128,9 @@ class FunctionSvg(Widget):
                 for line in data["edges"]:
                     points = parse_pos(line["pos"])
 
-                    Color(*colormap[line["color"]])
+                    if line["color"] == "black":
+                        Color(1, 1, 1, 1)
+                    else: Color(*colormap[line["color"]])
 
                     points = [(dp(x) + self.x, dp(y) + self.y) for x, y in points]
 
@@ -206,18 +224,6 @@ class FunctionSvg(Widget):
                         Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(x + dp(8), y + (len(lines) - i - 1) * SVG_FONT_HEIGHT * 1.05 / SCALE_FACTOR + dp(8)))
                         
                     Line(width=dp(1.1), rectangle=(x, y, dp(w), dp(h)))
-
-            if self.hovered_label:
-                Color(*get_color_from_hex("#64B5F6"))
-                label = CoreLabel(font_size=dp(14) * SCALE_FACTOR, font_name=FONT_NAME)
-                label.text = self.hovered_label.text
-                label.refresh()
-
-                Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(self.hovered_label.x, self.hovered_label.y))
-                Line(points=[
-                        self.hovered_label.x, self.hovered_label.y - dp(0.5),
-                        self.hovered_label.x + self.hovered_label.width, self.hovered_label.y - dp(0.5)
-                    ], width=dp(0.5))
 
 
 class ScatterPlaneNoTouch(ScatterPlane):
