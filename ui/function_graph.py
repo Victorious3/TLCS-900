@@ -3,13 +3,21 @@ import math, json
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.scatter import Scatter
-from kivy.graphics import Triangle, Color, Line
+from kivy.uix.scatter import ScatterPlane
+from kivy.uix.stencilview import StencilView
+from kivy.uix.label import Label
+from kivy.graphics import Triangle, Color, Line, Rectangle
 from kivy.metrics import dp
-from kivy.utils import colormap
+from kivy.utils import colormap, get_color_from_hex
+from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.core.text import Label as CoreLabel
+from kivy.core.text.markup import MarkupLabel
+from kivy.graphics.transformation import Matrix
 
 from .project import Function
-from .main import graph_tmpfolder, app
+from .main import graph_tmpfolder, app, FONT_NAME
+from .sections import section_to_markup, LocationLabel
 
 class FunctionTabItem(TabbedPanelItem):
     def __init__(self, fun: Function, **kwargs):
@@ -17,6 +25,9 @@ class FunctionTabItem(TabbedPanelItem):
         self.text = fun.name
         self.fun = fun
         self.add_widget(FunctionPanel(fun))
+
+    def move_to_initial_pos(self):
+        self.content.move_to_initial_pos()
 
 def parse_pos(pos_str):
     parts = pos_str.split()
@@ -45,12 +56,43 @@ def normalize(vx, vy):
     return (vx/length, vy/length)
 
 
+def find_font_height():
+    label = Label(
+        text = "M",
+        font_name = FONT_NAME,
+        font_size = dp(14) * SCALE_FACTOR
+    )
+    label.texture_update()
+    return label.texture_size
+
+SCALE_FACTOR = 4
+SVG_FONT_WIDTH, SVG_FONT_HEIGHT = find_font_height()
+
+
 class FunctionSvg(Widget):
     def __init__(self, fun: Function, **kwargs):
         super().__init__(**kwargs)
+        self.fun = fun
         self.size_hint = (None, None)
-        self.graphfile = fun.graph_json(graph_tmpfolder, app().project.ob)
+        self.graphfile = fun.graph_json(graph_tmpfolder(), app().project.ob)
+        self.labels: list[LocationLabel] = []
+        self.hovered_label = None
+
         self.bind(pos=self.update_graphics, size=self.update_graphics)
+        Window.bind(mouse_pos=self.on_mouse_move)
+
+    def on_mouse_move(self, window, pos):
+        x, y = self.to_widget(*pos)
+
+        last = self.hovered_label
+        self.hovered_label = None
+        for label in self.labels:
+            if (label.x <= x <= label.x + label.width and
+                label.y <= y <= label.y + label.height):
+
+                self.hovered_label = label
+                break
+        if last != self.hovered_label: self.update_graphics()
      
     def update_graphics(self, *args):
         with open(self.graphfile) as fp:
@@ -62,8 +104,9 @@ class FunctionSvg(Widget):
 
         def to_px(inches: float) -> float:
             return inches * 72
-
+        
         self.canvas.clear()
+        self.labels.clear()
         with self.canvas:
             if "edges" in data:
                 for line in data["edges"]:
@@ -99,7 +142,7 @@ class FunctionSvg(Widget):
                     # Flatten for Kivy Line
                     flat_points = [coord for point in sampled_points for coord in point]
 
-                    Line(points=flat_points, width=dp(1))
+                    Line(points=flat_points, width=dp(1.1))
 
                     # Draw arrowhead at endpoint using last segment
                     last_seg = segments[-1]
@@ -107,8 +150,8 @@ class FunctionSvg(Widget):
                     tx, ty = cubic_bezier_tangent(*last_seg, 1)
                     tx, ty = normalize(tx, ty)
 
-                    arrow_length = dp(15)
-                    arrow_width = dp(10)
+                    arrow_length = dp(12)
+                    arrow_width = dp(9)
 
                     # Arrow tip is from Graphviz's 'e,x,y' position
                     tip_x, tip_y = endpoint  # This is from 'e,x,y'
@@ -136,15 +179,83 @@ class FunctionSvg(Widget):
 
             Color(1, 1, 1, 1)
             if "objects" in data:
+
                 for box in data["objects"]:
                     x,y = map(float, box["pos"].split(","))
                     w,h = to_px(float(box["width"])), to_px(float(box["height"]))
-                    Line(width=dp(1), rectangle=(self.x + dp(x) - dp(w)/2, self.y + dp(y) - dp(h)/2, dp(w), dp(h)))
+                    x = self.x + dp(x) - dp(w)/2
+                    y = self.y + dp(y) - dp(h)/2
+                    
+                    ep = int(box["name"])
+                    block = self.fun.blocks[ep]
+                    lines, labels = [], []
+                    section_to_markup(block.insn, lines, labels)
+                    for label in labels:
+                        label.x = x + label.x * SVG_FONT_WIDTH / SCALE_FACTOR + dp(8)
+                        label.y = y + ((len(lines) - label.y - 1) * SVG_FONT_HEIGHT * 1.05) / SCALE_FACTOR + dp(8)
+                        label.width = label.width * SVG_FONT_WIDTH / SCALE_FACTOR
+                        label.height = label.height * SVG_FONT_HEIGHT / SCALE_FACTOR
+
+                    self.labels.extend(labels)
+
+                    for i, line in enumerate(lines):
+                        label = MarkupLabel(markup=True, font_size=dp(14) * SCALE_FACTOR, font_name=FONT_NAME)
+                        label.text = line
+                        label.refresh()
+
+                        Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(x + dp(8), y + (len(lines) - i - 1) * SVG_FONT_HEIGHT * 1.05 / SCALE_FACTOR + dp(8)))
+                        
+                    Line(width=dp(1.1), rectangle=(x, y, dp(w), dp(h)))
+
+            if self.hovered_label:
+                Color(*get_color_from_hex("#64B5F6"))
+                label = CoreLabel(font_size=dp(14) * SCALE_FACTOR, font_name=FONT_NAME)
+                label.text = self.hovered_label.text
+                label.refresh()
+
+                Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(self.hovered_label.x, self.hovered_label.y))
+                Line(points=[
+                        self.hovered_label.x, self.hovered_label.y - dp(0.5),
+                        self.hovered_label.x + self.hovered_label.width, self.hovered_label.y - dp(0.5)
+                    ], width=dp(0.5))
+
+
+class ScatterPlaneNoTouch(ScatterPlane):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.svg: FunctionSvg = None
+
+    def on_touch_down(self, touch):
+        if "multitouch_sim" in touch.profile: 
+            touch.profile.remove("multitouch_sim")
+
+        if touch.button == "scrollup" and self.collide_point(touch.x, touch.y):
+            scale = 0.9
+            self.apply_transform(Matrix().scale(scale, scale, scale), anchor=self.parent.to_widget(touch.x, touch.y))
+            self.svg.update_graphics()
+        elif touch.button == "scrolldown" and self.collide_point(touch.x, touch.y):
+            scale = 1.1
+            self.apply_transform(Matrix().scale(scale, scale, scale), anchor=self.parent.to_widget(touch.x, touch.y))
+            self.svg.update_graphics()
+
+        return super().on_touch_down(touch)
+    
+    def collide_point(self, x, y):
+        return self.parent.collide_point(*self.parent.to_widget(x, y))
 
 class FunctionPanel(BoxLayout):
     def __init__(self, fun: Function, **kwargs):
         super().__init__(**kwargs)
         self.fun = fun
-        #self.scatter = Scatter(do_rotation=False, do_scale=True, do_translation=True, size_hint=(1, 1))
-        #self.scatter.add_widget(FunctionSvg(self.fun))
-        self.add_widget(FunctionSvg(self.fun))
+
+        self.svg = FunctionSvg(self.fun)
+        self.stencil = StencilView(size_hint=(1, 1))
+        self.scatter = ScatterPlaneNoTouch(do_rotation=False, do_scale=True, do_translation=True, size_hint=(1, 1))
+        self.scatter.svg = self.svg
+        self.scatter.add_widget(self.svg)
+        self.stencil.add_widget(self.scatter)
+        self.add_widget(self.stencil)
+        self.svg.update_graphics()
+    
+    def move_to_initial_pos(self):
+        self.scatter._set_pos((0, -self.svg.height + self.stencil.y + self.stencil.height))

@@ -16,7 +16,7 @@ from kivy.properties import ObjectProperty
 
 from .main_menu import MenuItem, MenuHandler
 from .context_menu import show_context_menu
-from .project import Section, DATA_PER_ROW
+from .project import Section, DATA_PER_ROW, Instruction
 from .main import LABEL_HEIGHT,FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
 from disapi import Loc
 
@@ -291,6 +291,34 @@ class LocationLabel:
         self.width = width
         self.height = height
 
+def section_to_markup(instructions: list[Instruction], text: list[str], labels: list[LocationLabel]):
+    for insn in instructions:
+        row_width = len(insn.entry.opcode) + 1
+        row = f"[color=#569CD6]{insn.entry.opcode}[/color] "
+        for i in range(len(insn.entry.instructions)):
+            param = insn.entry.instructions[i]
+            if isinstance(param, Loc):
+                label_text = loc_to_str(param)
+                t = f"[color=#DCDCAA]{label_text}[/color]"
+                labels.append(
+                    LocationLabel(label_text, row_width, len(text), len(label_text), 1))
+                row += t
+                row_width += len(label_text)
+            elif isinstance(param, bytearray):
+                res = param.decode("ascii", "replace")
+                res = "".join(x if 0x7E >= ord(x) >= 0x20 else "." for x in res)
+                row += '"' + escape_markup(res) + '"'
+                row_width += len(res) + 2
+            else:
+                insn_text = str(param)
+                row += escape_markup(insn_text)
+                row_width += len(insn_text)
+            if i < len(insn.entry.instructions) - 1:
+                row += ", "
+                row_width += 2
+
+        text.append(row)
+
 class SectionMnemonic(SectionColumn):
     any_hovered = False
 
@@ -307,33 +335,7 @@ class SectionMnemonic(SectionColumn):
     def on_section(self, instance, section: Section):
         self.labels = []
         text = []
-        for insn in section.instructions:
-            row_width = len(insn.entry.opcode) + 1
-            row = f"[color=#569CD6]{insn.entry.opcode}[/color] "
-            for i in range(len(insn.entry.instructions)):
-                param = insn.entry.instructions[i]
-                if isinstance(param, Loc):
-                    label_text = loc_to_str(param)
-                    t = f"[color=#DCDCAA]{label_text}[/color]"
-                    self.labels.append(
-                        LocationLabel(label_text, row_width * FONT_WIDTH, len(text) * FONT_HEIGHT, len(label_text) * FONT_WIDTH, FONT_HEIGHT))
-                    row += t
-                    row_width += len(label_text)
-                elif isinstance(param, bytearray):
-                    res = param.decode("ascii", "replace")
-                    res = "".join(x if 0x7E >= ord(x) >= 0x20 else "." for x in res)
-                    row += '"' + escape_markup(res) + '"'
-                    row_width += len(res) + 2
-                else:
-                    insn_text = str(param)
-                    row += escape_markup(insn_text)
-                    row_width += len(insn_text)
-                if i < len(insn.entry.instructions) - 1:
-                    row += ", "
-                    row_width += 2
-
-            text.append(row)
-
+        section_to_markup(section.instructions, text, self.labels)
         self.text = "\n".join(text)
 
     @classmethod
@@ -351,8 +353,12 @@ class SectionMnemonic(SectionColumn):
         sx, sy = self.to_window(self.x, self.y)
         for label in self.labels:
             label.hovered = False
-            if (sx + label.x <= x <= sx + label.x + label.width and
-                sy + self.height - label.y - label.height <= y <= sy + self.height - label.y):
+            lx = label.x * FONT_WIDTH
+            ly = label.y * FONT_HEIGHT
+            lw = label.width * FONT_WIDTH
+            lh = label.height * FONT_HEIGHT
+            if (sx + lx <= x <= sx + lx + lw and
+                sy + self.height - ly - lh <= y <= sy + self.height - ly):
                 SectionMnemonic.any_hovered = True
                 label.hovered = True
                
@@ -372,6 +378,11 @@ class SectionMnemonic(SectionColumn):
 
         for label in self.labels:
             if label.hovered and self.ctrl_down:
+                lx = label.x * FONT_WIDTH
+                ly = label.y * FONT_HEIGHT
+                lw = label.width * FONT_WIDTH
+                lh = label.height * FONT_HEIGHT
+                
                 color = get_color_from_hex("#64B5F6")
 
                 cl = CoreLabel(text = label.text, font_size = FONT_SIZE, font_name = FONT_NAME)
@@ -379,10 +390,10 @@ class SectionMnemonic(SectionColumn):
                               
                 with self.canvas.after:
                     Color(*color)
-                    Rectangle(texture = cl.texture, pos = (self.x + label.x, self.y + self.height - label.y - label.height), size = cl.texture.size)
+                    Rectangle(texture = cl.texture, pos = (self.x + lx, self.y + self.height - ly - lh), size = cl.texture.size)
                     Line(points=[
-                        self.x + label.x, self.y + self.height - label.y - label.height + 1,
-                        self.x + label.x + label.width, self.y + self.height - label.y - label.height + 1
+                        self.x + lx, self.y + self.height - ly - lh + 1,
+                        self.x + lx + lw, self.y + self.height - ly - lh + 1
                     ], width=dp(1))
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):

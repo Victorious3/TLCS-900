@@ -26,7 +26,9 @@ LABEL_HEIGHT = FONT_SIZE + dp(5)
 FONT_NAME = "ui/RobotoMono"
 BG_COLOR = get_color_from_hex("#1F1F1F")
 
-graph_tmpfolder: str = None
+_graph_tmpfolder: str = None
+def graph_tmpfolder() -> str:
+    return _graph_tmpfolder
 
 def app() -> "DisApp":
     return App.get_running_app()
@@ -125,6 +127,7 @@ class AnalyzerTableRow(DataTableRow):
         return super().on_motion(etype, me)
     
     def on_mouse_move(self, window, pos):
+        if self.get_root_window() == None: return
         inside = self.collide_point(*self.to_widget(*pos))
         if inside:
             # Ugly UI hack
@@ -389,7 +392,12 @@ class DisApp(App):
         # Otherwise we open a new tab
         tab = FunctionTabItem(fun)
         tab_panel.add_widget(tab)
-        Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[0]), 0)
+
+        def after(dt):
+            tab_panel.switch_to(tab_panel.tab_list[0])
+            Clock.schedule_once(lambda dt: tab.move_to_initial_pos(), 0)
+
+        Clock.schedule_once(after, 0)
 
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
@@ -444,15 +452,15 @@ class DisApp(App):
     
     def on_stop(self):
         try:
-            shutil.rmtree(graph_tmpfolder)
+            shutil.rmtree(_graph_tmpfolder)
         except FileNotFoundError: pass
 
         super().on_stop()
 
 def main(path: str, ep: int, org: int):
     project = load_project(path, ep, org)
-    global graph_tmpfolder
-    graph_tmpfolder = tempfile.mkdtemp()
+    global _graph_tmpfolder
+    _graph_tmpfolder = tempfile.mkdtemp()
     
     window = DisApp(project)
     window.run()

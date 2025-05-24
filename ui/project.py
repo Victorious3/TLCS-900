@@ -234,10 +234,11 @@ class FunctionState:
 class Underflow(Exception): pass
 
 class Function:
-    def __init__(self, ep: int, name: str, start: CodeBlock):
+    def __init__(self, ep: int, name: str, start: CodeBlock, blocks: dict[int, CodeBlock]):
         self.ep = ep
         self.name = name
         self.start = start
+        self.blocks = blocks
         self.state: FunctionState = None
         self.underflow = False
         self.callers: list[tuple[int, Function]] = None
@@ -690,7 +691,7 @@ class Project:
                     return block
 
         start = next_block(ep)
-        fun = Function(ep, name, start)
+        fun = Function(ep, name, start, blocks)
         return fun
 
 def load_project(path: str, ep: int, org: int) -> Project:

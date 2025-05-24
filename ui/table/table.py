@@ -69,6 +69,7 @@ class ColumnResizer(ButtonBehavior, Widget):
         return super().on_touch_up(touch)
     
     def on_mouse_pos(self, window, pos):
+        if self.get_root_window() == None: return 
         inside = self.collide_point(*self.to_widget(*pos))
         if inside:
             self.on_enter()
