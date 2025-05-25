@@ -28,8 +28,8 @@ class FunctionTabPanel(TabbedPanel):
 
     def close_tab(self, item):
         index = self.tab_list.index(item)
-        self.remove_widget(self)
-        if len(self.tab_list) == 2:
+        self.remove_widget(item)
+        if len(self.tab_list) == 1:
             # Removed the last tab, collapse tabbed pane
             self.clear_widgets()
             app().dis_panel_container.remove_widget(self)
