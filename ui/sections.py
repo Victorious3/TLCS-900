@@ -349,6 +349,13 @@ class SectionMnemonic(SectionColumn):
             app().set_hover()
 
     def _on_mouse_move(self, window, pos):
+        # Check if we're currently visible
+        tab_panel = app().tab_panel
+        if tab_panel: 
+            if tab_panel.current_tab.content != app().dis_panel: 
+                return
+
+
         x, y = pos
         sx, sy = self.to_window(self.x, self.y)
         for label in self.labels:

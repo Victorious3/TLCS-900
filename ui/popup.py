@@ -1,5 +1,5 @@
 from kivy.uix.popup import Popup
-from kivy.properties import NumericProperty
+from kivy.properties import NumericProperty, StringProperty
 
 class InvalidInsnPopup(Popup):
     instruction = NumericProperty(0)
@@ -14,3 +14,8 @@ class InvalidInsnPopup(Popup):
 
     def on_close(self, *args):
         pass
+
+class FunctionAnalyzerPopup(Popup):
+    max = NumericProperty(0)
+    value = NumericProperty(0)
+    current = StringProperty("")

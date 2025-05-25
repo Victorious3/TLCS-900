@@ -1,4 +1,6 @@
 import os, time
+from threading import Thread
+from typing import Callable
 from dataclasses import dataclass, field
 from pytreemap import TreeMap
 from abc import ABC
@@ -268,7 +270,7 @@ class Function:
         dig = self.graph(ob)
         return dig.render(directory=out_folder, format="json0")
 
-    def analyze(self, proj: "Project"):
+    def analyze(self, proj: "Project", tick: Callable[[str], None] = None):
         if self.state: return
         self.state = FunctionState()
         self.underflow = False
@@ -318,7 +320,7 @@ class Function:
                         if len(insn.entry.instructions) == 1:
                             fun = proj.functions.get(int(insn.entry.instructions[0]))
                             if fun:
-                                if not fun.state: fun.analyze(proj)
+                                if not fun.state: fun.analyze(proj, tick)
                                 fun.callers.append((insn.entry.pc, self))
                                 self.callees.append((insn.entry.pc, fun))
                                 state.push_function(pc, fun)
@@ -341,6 +343,8 @@ class Function:
             self.state = reduce(FunctionState.merge, res, FunctionState())
         except Underflow:
             self.underflow = True
+        
+        if tick: tick(self.name)
 
 def label_list(label):
     if label is None: return []
@@ -602,21 +606,31 @@ class Project:
         #for section in self.sections:
         #    print(section)
 
-    def analyze_functions(self):
-        """ This function is meant to be executed using a thread"""
-        self.functions = {}
-        # Find all functions
-        for ep in self.ob.calls:
-            fun = self.extract_function(ep)
-            self.functions[ep] = fun
-        
-        for fun in self.functions.values():
-            fun.analyze(self)
+    def analyze_functions(self, callback: Callable[[], None], progress: Callable[[int, str], None]) -> int:
+        def analyze():
+            self.functions = {}
+            # Find all functions
+            for i, ep in enumerate(self.ob.calls):
+                fun = self.extract_function(ep)
+                self.functions[ep] = fun
+            
+            t = 0
+            def tick(name: str):
+                nonlocal t
+                progress(t, name)
+                t += 1
 
-        for fun in self.functions.values():
-            print(fun.name, ":", str(fun.state))
-            print("callers: ", list(map(lambda c: f"{c[0]}: {c[1].name}", fun.callers)))
-            print("callees: ", list(map(lambda c: f"{c[0]}: {c[1].name}", fun.callees)))
+            for i, fun in enumerate(self.functions.values()):
+                fun.analyze(self, tick)
+
+            callback()
+            #for fun in self.functions.values():
+            #    print(fun.name, ":", str(fun.state))
+            #    print("callers: ", list(map(lambda c: f"{c[0]}: {c[1].name}", fun.callers)))
+            #    print("callees: ", list(map(lambda c: f"{c[0]}: {c[1].name}", fun.callees)))
+
+        Thread(target=analyze, daemon=True).start()
+        return len(self.ob.calls)
 
     def extract_function(self, ep: int):
         section: Section = self.sections.get(ep)

@@ -345,12 +345,19 @@ class DisApp(App):
             scroll_pos += data["height"]
         raise ValueError("Invalid location")
     
+    @property
+    def tab_panel(self):
+        panel = self.dis_panel_container.children[0]
+        if isinstance(panel, FunctionTabPanel):
+            return panel
+        return None
+    
     def open_function_graph(self, fun_name: str):
         fun = next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
         if not fun: raise ValueError(f"No function called {fun} exists")
 
-        tab_panel = self.dis_panel_container.children[0]
-        if isinstance(tab_panel, FunctionTabPanel):
+        tab_panel = self.tab_panel
+        if tab_panel is not None:
             # We already have tabs, just open a new one if this one hasn't been opened yet
             tab: FunctionTabItem
             for tab in tab_panel.tab_list[:-1]:

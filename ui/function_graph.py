@@ -42,7 +42,7 @@ class FunctionTabItem(TabbedPanelItem, FloatLayout):
         super().__init__(**kwargs)
         self.text = fun.name
         self.fun = fun
-        self.add_widget(FunctionPanel(fun))
+        self.add_widget(FunctionPanel(fun, self))
         box = BoxLayout(size_hint=(None, None), width=dp(22.5), height=dp(20), padding=(0, 0, dp(2.5), 0), pos_hint={"right": 1, "center_y": 0.5})
         box.add_widget(XButton(on_press=lambda *_: self.close_tab()))
         super(FloatLayout, self).add_widget(box)
@@ -95,18 +95,24 @@ SVG_FONT_WIDTH, SVG_FONT_HEIGHT = find_font_height()
 
 
 class FunctionSvg(Widget):
-    def __init__(self, fun: Function, **kwargs):
+    def __init__(self, fun: Function, panel: FunctionTabItem, **kwargs):
         super().__init__(**kwargs)
         self.fun = fun
         self.size_hint = (None, None)
         self.graphfile = fun.graph_json(graph_tmpfolder(), app().project.ob)
         self.labels: list[LocationLabel] = []
         self.hovered_label = None
+        self.panel = panel
 
         self.bind(pos=self.update_graphics, size=self.update_graphics)
         Window.bind(mouse_pos=self.on_mouse_move)
 
     def on_mouse_move(self, window, pos):
+        tab_panel = app().tab_panel
+        if tab_panel: 
+            if tab_panel.current_tab != self.panel: 
+                return
+            
         x, y = self.to_widget(*pos)
 
         last = self.hovered_label
@@ -286,11 +292,11 @@ class ScatterPlaneNoTouch(ScatterPlane):
         return self.parent.collide_point(*self.parent.to_widget(x, y))
 
 class FunctionPanel(BoxLayout):
-    def __init__(self, fun: Function, **kwargs):
+    def __init__(self, fun: Function, tab: FunctionTabItem, **kwargs):
         super().__init__(**kwargs)
         self.fun = fun
 
-        self.svg = FunctionSvg(self.fun)
+        self.svg = FunctionSvg(self.fun, tab)
         self.stencil = StencilView(size_hint=(1, 1))
         self.scatter = ScatterPlaneNoTouch(do_rotation=False, do_scale=True, do_translation=True, size_hint=(1, 1))
         self.scatter.svg = self.svg

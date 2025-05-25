@@ -4,11 +4,11 @@ from threading import Thread
 
 from kivy.clock import Clock
 from kivy.metrics import dp
-from kivy.uix.widget import Widget
 from kivy.core.window import Window
 from kivy_garden.contextmenu import AppMenuTextItem, ContextMenu, ContextMenuTextItem, AbstractMenuItem
 
 from .main import app
+from .popup import FunctionAnalyzerPopup
 
 class MenuHandler(ABC):
     def on_close(self): pass
@@ -35,26 +35,35 @@ main_menu = [
 
 class MainMenuHandler(MenuHandler):
     def on_select(self, item):
+        wait = None
+        total_amount = 0
+        popup: FunctionAnalyzerPopup = None
+
         def interval(dt):
             Window.set_system_cursor("wait")
             app().set_hover()
 
-        def analyze():
-            wait = Clock.schedule_interval(interval, 0)
-            app().project.analyze_functions()
-            wait.cancel()
-            Clock.schedule_once(finish, 0)
-
         def finish(dt):
-            sys.setswitchinterval(previ)
+            nonlocal wait
+            wait.cancel()
             Window.set_system_cursor("arrow")
+            popup.dismiss()
             app().open_function_list()
+
+        def progress(i: int, fun: str):
+            popup.value = i
+            popup.current = fun
 
         if item == "functions":
             if app().project.functions is None:
-                previ = sys.getswitchinterval()
-                sys.setswitchinterval(0.0005)
-                Thread(target=analyze, daemon=True).start()
+                wait = Clock.schedule_interval(interval, 0)
+                total_amount = app().project.analyze_functions(
+                    lambda: Clock.schedule_once(finish, 0),
+                    lambda c, fun: Clock.schedule_once(lambda dt: progress(c, fun), 0)
+                )
+                popup = FunctionAnalyzerPopup(max=total_amount)
+                popup.open()
+
             else: app().open_function_list()
 
         app().app_menu.close_all()

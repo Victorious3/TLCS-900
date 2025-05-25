@@ -191,6 +191,27 @@
                 text: "Keep"
                 on_release: root.dispatch("on_continue")
 
+<FunctionAnalyzerPopup>:
+    auto_dismiss: False
+    title: "Analyzing functions..."
+    size_hint: None, None
+    width: dp(300)
+    height: dp(150)
+
+    BoxLayout:
+        size_hint: 1, 1
+        orientation: 'vertical'
+        padding: dp(10)
+
+        Label:
+            text: "Analyzing... " + root.current
+
+        ProgressBar:
+            size_hint: 1, None
+            height: dp(20)
+            max: root.max
+            value: root.value
+
 <FunctionTabItem>:
     size_hint: None, 1
     halign: "left"
