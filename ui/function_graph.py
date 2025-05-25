@@ -343,4 +343,6 @@ class FunctionPanel(BoxLayout):
 
         self.svg.current_block = block
         self.svg.render_hover()
-        self.scatter._set_pos((self.stencil.x + self.stencil.width / 2 - block.x - block.width / 2 , self.stencil.y + self.stencil.height / 2 - block.y - block.height / 2))
+        x = self.stencil.x + self.stencil.width / 2 - (block.x + block.width / 2) * self.scatter.scale
+        y = self.stencil.y + self.stencil.height / 2 - (block.y + block.height / 2) * self.scatter.scale
+        self.scatter._set_pos((x, y))

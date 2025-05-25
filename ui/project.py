@@ -66,6 +66,15 @@ def get_jump_location(insn: Instruction) -> Loc:
 
     return None
 
+def is_unconditional_jump(insn: Instruction):
+    if insn.entry.opcode in ("JR", "JRL"):
+        return insn.entry.instructions[0] == "T"
+    elif insn.entry.opcode == "JP":
+        if len(insn.entry.instructions) == 2:
+            return insn.entry.instructions[0] == "T"
+        else: return True
+    return False
+
 def get_loc(value: Reg | Mem) -> list[Reg | int]:
     if isinstance(value, Reg): return [value]
     elif isinstance(value, MemReg):
@@ -620,7 +629,7 @@ class Project:
                 progress(t, name)
                 t += 1
 
-            for i, fun in enumerate(self.functions.values()):
+            for fun in self.functions.values():
                 fun.analyze(self, tick)
 
             callback()
@@ -702,7 +711,7 @@ class Project:
                         else:
                             next_block(ep, block, True)
 
-                    if not (last_insn.entry.opcode == "JP" and len(last_insn.entry.instructions) == 1):
+                    if not is_unconditional_jump(last_insn):
                         next_block(last_insn.entry.pc + last_insn.entry.length, block)
                     return block
 
