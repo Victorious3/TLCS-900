@@ -16,7 +16,7 @@ from kivy.core.text import Label as CoreLabel
 from kivy.core.text.markup import MarkupLabel
 from kivy.graphics.transformation import Matrix
 
-from .project import Function
+from .project import Function, Section
 from .main import graph_tmpfolder, app, FONT_NAME
 from .sections import section_to_markup, LocationLabel
 from .buttons import XButton
@@ -53,6 +53,9 @@ class FunctionTabItem(TabbedPanelItem, FloatLayout):
 
     def move_to_initial_pos(self):
         self.content.move_to_initial_pos()
+
+    def move_to_label(self, label: str):
+        self.content.move_to_label(label)
 
 def parse_pos(pos_str):
     parts = pos_str.split()
@@ -94,6 +97,13 @@ SCALE_FACTOR = 4
 SVG_FONT_WIDTH, SVG_FONT_HEIGHT = find_font_height()
 
 
+class CodeBlockRect:
+    def __init__(self, x: int, y: int, width: int, height: int):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+
 class FunctionSvg(Widget):
     def __init__(self, fun: Function, panel: FunctionTabItem, **kwargs):
         super().__init__(**kwargs)
@@ -101,8 +111,10 @@ class FunctionSvg(Widget):
         self.size_hint = (None, None)
         self.graphfile = fun.graph_json(graph_tmpfolder(), app().project.ob)
         self.labels: list[LocationLabel] = []
-        self.hovered_label = None
+        self.hovered_label: LocationLabel = None
         self.panel = panel
+        self.code_blocks: dict[int, CodeBlockRect] = {}
+        self.current_block: CodeBlockRect = None
 
         self.bind(pos=self.update_graphics, size=self.update_graphics)
         Window.bind(mouse_pos=self.on_mouse_move)
@@ -130,9 +142,11 @@ class FunctionSvg(Widget):
 
     def on_touch_down(self, touch):
         if touch.button == "left" and self.hovered_label is not None:
-            try: app().open_function_graph(self.hovered_label.text)
+            try: 
+                if self.hovered_label.is_fun: app().open_function_graph(self.hovered_label.text)
+                else: self.panel.move_to_label(self.hovered_label.text)
+                return True
             except ValueError: pass
-            return True
 
         return super().on_touch_down(touch)
      
@@ -150,6 +164,10 @@ class FunctionSvg(Widget):
                         self.hovered_label.x, self.hovered_label.y - 0.5,
                         self.hovered_label.x + self.hovered_label.width, self.hovered_label.y - 0.5
                     ], width=0.5)
+        if self.current_block:
+            with self.canvas.after:
+                Color(*get_color_from_hex("#E69533"))
+                Line(width=1.1, rectangle=(self.current_block.x, self.current_block.y, self.current_block.width, self.current_block.height))
 
 
     def update_graphics(self, *args):
@@ -163,6 +181,8 @@ class FunctionSvg(Widget):
         def to_px(inches: float) -> float:
             return inches * 72
         
+        self.code_blocks = {}
+
         self.canvas.clear()
         self.labels.clear()
         with self.canvas:
@@ -245,8 +265,9 @@ class FunctionSvg(Widget):
                     w,h = to_px(float(box["width"])), to_px(float(box["height"]))
                     x = self.x + x - w/2
                     y = self.y + y - h/2
-                    
+
                     ep = int(box["name"])
+                    self.code_blocks[ep] = CodeBlockRect(x, y, w, h)
                     block = self.fun.blocks[ep]
                     lines, labels = [], []
                     section_to_markup(block.insn, lines, labels)
@@ -307,3 +328,19 @@ class FunctionPanel(BoxLayout):
     
     def move_to_initial_pos(self):
         self.scatter._set_pos((0, -self.svg.height + self.stencil.y + self.stencil.height))
+
+    def move_to_label(self, label: str):
+        ep = 0
+        section: Section
+        for section in app().project.sections.values():
+            if section.labels and section.labels[0].name == label:
+                ep = section.offset
+                break
+        else: return
+
+        block = self.svg.code_blocks.get(ep)
+        if block is None: return
+
+        self.svg.current_block = block
+        self.svg.render_hover()
+        self.scatter._set_pos((self.stencil.x + self.stencil.width / 2 - block.x - block.width / 2 , self.stencil.y + self.stencil.height / 2 - block.y - block.height / 2))

@@ -283,13 +283,14 @@ def loc_to_str(insn: Loc):
     return str(insn.loc)
 
 class LocationLabel:
-    def __init__(self, text, x, y, width, height):
+    def __init__(self, text: str, x: int, y: int, width: int, height: int, is_fun: bool = False):
         self.hovered = False
         self.text = text
         self.x = x
         self.y = y
         self.width = width
         self.height = height
+        self.is_fun = is_fun
 
 def section_to_markup(instructions: list[Instruction], text: list[str], labels: list[LocationLabel]):
     for insn in instructions:
@@ -298,10 +299,11 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
         for i in range(len(insn.entry.instructions)):
             param = insn.entry.instructions[i]
             if isinstance(param, Loc):
+                is_fun = insn.entry.opcode in ("CALL", "CALR")
                 label_text = loc_to_str(param)
                 t = f"[color=#DCDCAA]{label_text}[/color]"
                 labels.append(
-                    LocationLabel(label_text, row_width, len(text), len(label_text), 1))
+                    LocationLabel(label_text, row_width, len(text), len(label_text), 1, is_fun))
                 row += t
                 row_width += len(label_text)
             elif isinstance(param, bytearray):
