@@ -652,15 +652,16 @@ class Project:
                             pred.succ.append((block, branch))
 
                         return block
-                    next_section = self.sections.get_higher_entry(last_insn.entry.pc).get_value()
-                    if next_section is None: return None
+                    next_entry = self.sections.get_higher_entry(last_insn.entry.pc)
+                    if next_entry is None: return None
+                    next_section = next_entry.get_value()
                     if len(next_section.labels) > 0:
                         pc = insn[0].entry.pc
                         block = CodeBlock(insn)
                         blocks[pc] = block
                         if pred: 
                             block.pred.append(pred)
-                            pred.succ.append((block, False))
+                            pred.succ.append((block, branch))
 
                         next_block(next_section.offset, block, False)
                         return block
@@ -688,7 +689,7 @@ class Project:
                             next_block(ep, block, True)
 
                     if not (last_insn.entry.opcode == "JP" and len(last_insn.entry.instructions) == 1):
-                        next_block(last_insn.entry.pc + 1, block)
+                        next_block(last_insn.entry.pc + last_insn.entry.length, block)
                     return block
 
         start = next_block(ep)

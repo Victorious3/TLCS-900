@@ -26,6 +26,17 @@ class FunctionTabPanel(TabbedPanel):
         super().__init__(**kwargs)
         self.tab_width = None
 
+    def close_tab(self, item):
+        index = self.tab_list.index(item)
+        self.remove_widget(self)
+        if len(self.tab_list) == 2:
+            # Removed the last tab, collapse tabbed pane
+            self.clear_widgets()
+            app().dis_panel_container.remove_widget(self)
+            app().dis_panel_container.add_widget(app().dis_panel)
+        else:
+            Clock.schedule_once(lambda dt: self.switch_to(self.tab_list[index - 1 if index - 1 >= 0 else 0]))
+
 class FunctionTabItem(TabbedPanelItem, FloatLayout):
     def __init__(self, fun: Function, **kwargs):
         super().__init__(**kwargs)
@@ -38,10 +49,7 @@ class FunctionTabItem(TabbedPanelItem, FloatLayout):
 
     def close_tab(self):
         panel: FunctionTabPanel = self.parent.tabbed_panel
-        index = panel.tab_list.index(self)
-        panel.remove_widget(self)
-        Clock.schedule_once(lambda dt: panel.switch_to(panel.tab_list[index - 1 if index - 1 >= 0 else 0]))
-        
+        panel.close_tab(self)
 
     def move_to_initial_pos(self):
         self.content.move_to_initial_pos()
