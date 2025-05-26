@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Disgui",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "disgui.py",
+            "console": "integratedTerminal",
+            "args": "-m inspector"
+        }
+    ]
+}

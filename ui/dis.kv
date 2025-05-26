@@ -14,7 +14,7 @@
                 id: content_panel
                 size_hint: 1, 1
                 orientation: "vertical"
-                BoxLayout:
+                MainContainer:
                     orientation: "vertical"
                     id: dis_panel_container
                     MainPanel
@@ -81,6 +81,33 @@
         XButton:
             on_press: self.parent.parent.close_panel()
 
+    BoxLayout:
+        padding: 0, dp(30), dp(30), 0
+        size_hint: None, None
+        width: dp(180)
+        height: analyzer_filter.height + dp(30)
+        pos_hint: { "right": 1, "top": 1 }
+
+        BoxLayout:
+            opacity: analyzer_filter.opacity
+            size_hint: 1, 1
+            canvas.before:
+                Color:
+                    rgba: 0.18, 0.18, 0.18, 1.0
+                RoundedRectangle:
+                    pos: self.x - dp(5), self.y - dp(5)
+                    size: self.width + dp(10), self.height + dp(10)
+                    radius: [dp(5)]
+
+            AnalyzerFilter:
+                id: analyzer_filter
+                opacity: 0
+                disabled: True
+                hint_text: "Filter Functions"
+                size_hint: 1, None
+                height: self.minimum_height
+
+
 <IconButton>:
     background_normal: ""
     background_down: ""
@@ -128,12 +155,6 @@
     padding: 0
     size_hint: None, None
     orientation: 'vertical'
-    #canvas.before:
-    #    Color:
-    #        rgba: 1, 0, 0, 1
-    #    Line:
-    #        width: 2
-    #        rectangle: self.x, self.y, self.width, self.height
     
     LabelRow:
         id: label

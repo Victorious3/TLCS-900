@@ -16,11 +16,10 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.tabbedpanel import TabbedPanelItem
+from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
 from kivy.effects.scroll import ScrollEffect
-from kivy.properties import ListProperty, StringProperty, NumericProperty
-
-from kivy_garden.contextmenu import AppMenu
+from kivy.properties import BooleanProperty
 
 FONT_SIZE = dp(15)
 LABEL_HEIGHT = FONT_SIZE + dp(5)
@@ -67,6 +66,13 @@ from .context_menu import MenuHandler, MenuItem, show_context_menu
 from .function_graph import FunctionTabItem, FunctionTabPanel
 from .buttons import IconButton
 
+class EscapeTrigger:
+    def __init__(self):
+        app().global_event_bus.bind(on_escape=self.on_escape)
+
+    def on_escape(self, obj):
+        pass
+
 class NavigationListing(NavigationAction):
     def __init__(self, offset: int):
         self.offset = offset
@@ -75,6 +81,29 @@ class NavigationListing(NavigationAction):
         app().scroll_to_offset(self.offset, history=False)
 
 class MainWindow(FloatLayout): pass
+class MainContainer(BoxLayout):
+    def on_touch_down(self, touch):
+        if self.collide_point(touch.x, touch.y):
+            app().active = self
+        return super().on_touch_down(touch)
+
+class HideableTextInput(TextInput):
+    def show(self):
+        self.opacity = 1
+        self.disabled = False
+        self.text = ""
+        self.focus = True
+
+    def hide(self):
+        self.opacity = 0
+        self.disabled = True
+        self.text = ""
+
+class AnalyzerFilter(HideableTextInput, EscapeTrigger):
+    def on_escape(self, obj):
+        if app().active == app().analyzer_panel:
+            self.hide()
+
 
 HEADER_NAMES = ["name", "address", "complexity", "input", "clobber", "output"]
 COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(250), dp(250), dp(250)]
@@ -84,8 +113,12 @@ class AnalyzerTableRow(DataTableRow):
         super().__init__(**kwargs)
         Window.bind(mouse_pos=self.on_mouse_move)
     
+    @property
+    def first_label(self) -> Widget:
+        return self.children[-1]
+
     def on_touch_up(self, touch):
-        inside = self.collide_point(touch.x, touch.y)
+        inside = self.first_label.collide_point(touch.x, touch.y)
         if inside:
             if touch.button == "right":
                 data = self.data
@@ -103,19 +136,16 @@ class AnalyzerTableRow(DataTableRow):
         return super().on_touch_up(touch)
 
     def on_touch_down(self, touch):
-        inside = self.collide_point(touch.x, touch.y)
+        inside = self.first_label.collide_point(touch.x, touch.y)
         if inside:
             if touch.button == "left":
                 app().scroll_to_label(self.data[0])
                 return True
         return super().on_touch_down(touch)
     
-    def on_motion(self, etype, me):
-        return super().on_motion(etype, me)
-    
     def on_mouse_move(self, window, pos):
         if self.get_root_window() == None: return
-        inside = self.collide_point(*self.to_widget(*pos))
+        inside = self.first_label.collide_point(*self.first_label.to_widget(*pos))
         if inside:
             # Ugly UI hack
             table: AnalyzerTable = next(iter_all_children_of_type(app().analyzer_panel, AnalyzerTable))
@@ -126,7 +156,13 @@ class AnalyzerTableRow(DataTableRow):
             Window.set_system_cursor('hand')
     
 class AnalyzerPanel(RelativeLayout):
+    def on_touch_down(self, touch):
+        if self.collide_point(touch.x, touch.y):
+            app().active = self
+        return super().on_touch_down(touch)
+
     def close_panel(self):
+        app().active = app().dis_panel_container
         app().content_panel.remove_widget(app().y_splitter)
 
 class AnalyzerTable(ResizableRecycleTable):
@@ -167,13 +203,13 @@ class AnalyzerTable(ResizableRecycleTable):
 
         self.body.update_data()
 
-class GotoPosition(TextInput):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        app().goto_position = self
+class GotoPosition(HideableTextInput, EscapeTrigger):
+    def _on_focus(self, instance, value, *largs):
+        if not value: self.hide()
+        return super()._on_focus(instance, value, *largs)
 
-    def _key_down(self, key, repeat=False):
-        if key[2] == "enter":
+    def keyboard_on_key_down(self, window, keycode, text, modifiers):
+        if keycode[0] == 13:
             try:
                 offset = int(self.text, base=16)
                 try:
@@ -184,16 +220,12 @@ class GotoPosition(TextInput):
                     app().scroll_to_label(self.text)
                 except ValueError: return
 
-            
             self.hide()
             return
-        
-        super()._key_down(key, repeat)
+        super().keyboard_on_key_down(window, keycode, text, modifiers)
     
-    def hide(self):
-        self.opacity = 0
-        self.disabled = True
-        self.text = ""
+    def on_escape(self, obj):
+        self.hide()
  
 class RV(RecycleView):
     def __init__(self, **kwargs):
@@ -242,6 +274,14 @@ class RV(RecycleView):
         if super().on_touch_up(touch): return True
         return SectionColumn.on_touch_up_selection(touch)
 
+class GlobalEventBus(EventDispatcher):
+    def __init__(self, **kwargs):
+        self.register_event_type("on_escape")
+        super(GlobalEventBus, self).__init__(**kwargs)
+
+    def on_escape(self, *args):
+        pass
+
 class DisApp(App):
     _any_hovered = False
 
@@ -254,7 +294,6 @@ class DisApp(App):
         self.minimap: Minimap = None
         self.arrows: ArrowRenderer = None
         self.window: MainWindow = None
-        self.app_menu: AppMenu = None
         self.back_button: IconButton = None
         self.forward_button: IconButton = None
         self.content_panel: BoxLayout = None
@@ -262,6 +301,7 @@ class DisApp(App):
         self.analyzer_panel: AnalyzerPanel = None
         self.dis_panel: Widget = None
         self.dis_panel_container: BoxLayout = None
+        self.analyzer_filter: AnalyzerFilter = None
 
         self.last_position = -1
         self.position_history: list[NavigationAction] = []
@@ -269,6 +309,9 @@ class DisApp(App):
 
         self.ctrl_down = False
         self.shift_down = False
+        self.active: Widget = None
+
+        self.global_event_bus = GlobalEventBus()
 
         Window.bind(mouse_pos=self.on_mouse_move)
         Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
@@ -285,9 +328,12 @@ class DisApp(App):
         self.content_panel = self.window.ids["content_panel"]
         self.dis_panel = self.window.ids["dis_panel"]
         self.dis_panel_container = self.window.ids["dis_panel_container"]
+        self.goto_position = self.window.ids["goto_position"]
 
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
+
+        self.active = self.dis_panel_container
 
         build_menu()
         return self.window
@@ -405,20 +451,23 @@ class DisApp(App):
                 Clock.schedule_once(lambda dt: tab.move_to_initial_pos(), 0)
 
         Clock.schedule_once(after, 0)
+        self.active = self.dis_panel_container
 
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
-        if "ctrl" in modifiers and keycode == 10: # ctrl + g
-            self.goto_position.disabled = False
-            self.goto_position.opacity = 1
-            self.goto_position.focus = True
+        if "ctrl" in modifiers: # ctrl + g
+            if keycode == 10:
+                self.goto_position.show()
+            elif keycode == 9:
+                if self.active == self.analyzer_panel:
+                    self.analyzer_filter.show()
 
         elif keycode == 225: self.shift_down = True
         elif keycode == 224: 
             self.ctrl_down = True
             SectionMnemonic.update_cursor()
         elif keycode == 41: 
-            self.goto_position.hide()
+            self.global_event_bus.dispatch("on_escape")
             return True
     
     def _keyup(self, window, keyboard: int, keycode: int):
@@ -432,6 +481,7 @@ class DisApp(App):
     def open_function_list(self):
         if not self.y_splitter:
             self.analyzer_panel = AnalyzerPanel()
+            self.analyzer_filter = self.analyzer_panel.ids["analyzer_filter"]
             self.y_splitter = Splitter(
                 keep_within_parent = True,
                 min_size = dp(100),
@@ -439,6 +489,7 @@ class DisApp(App):
                 sizable_from = "top"
             )
             self.y_splitter.add_widget(self.analyzer_panel)
+            self.active = self.analyzer_panel
         if self.y_splitter.get_root_window() is None:
             self.content_panel.add_widget(self.y_splitter)
     
