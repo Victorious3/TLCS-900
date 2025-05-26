@@ -1,4 +1,5 @@
 import math, shutil, tempfile, json
+from abc import ABC, abstractmethod
 
 from kivy.app import App
 from kivy.metrics import dp
@@ -50,6 +51,10 @@ def iter_all_children_of_type(widget: Widget, widget_type: type):
     for child in widget.children:
         yield from iter_all_children_of_type(child, widget_type)
 
+class NavigationAction(ABC):
+    @abstractmethod
+    def navigate(self): pass
+
 from tcls_900.tlcs_900 import Reg, Mem
 
 from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project, Function
@@ -61,6 +66,13 @@ from .table.table import ResizableRecycleTable, DataTableRow, TableBody
 from .context_menu import MenuHandler, MenuItem, show_context_menu
 from .function_graph import FunctionTabItem, FunctionTabPanel
 from .buttons import IconButton
+
+class NavigationListing(NavigationAction):
+    def __init__(self, offset: int):
+        self.offset = offset
+
+    def navigate(self):
+        app().scroll_to_offset(self.offset, history=False)
 
 class MainWindow(FloatLayout): pass
 
@@ -252,7 +264,7 @@ class DisApp(App):
         self.dis_panel_container: BoxLayout = None
 
         self.last_position = -1
-        self.position_history: list[int] = []
+        self.position_history: list[NavigationAction] = []
         self.position = 0
 
         self.ctrl_down = False
@@ -301,13 +313,13 @@ class DisApp(App):
                 return
         raise ValueError("Invalid label")
     
-    def update_position_history(self, offset):
+    def update_position_history(self, action: NavigationAction):
         if self.position > 0:
             ln = len(self.position_history)
             self.position_history = self.position_history[:ln - self.position]
             self.position = 0
 
-        self.position_history.append(offset)
+        self.position_history.append(action)
         self.update_position_buttons()
 
     def update_position_buttons(self):
@@ -317,16 +329,21 @@ class DisApp(App):
     def go_back(self):
         if self.position < len(self.position_history) - 1:
             self.position += 1
-        self.scroll_to_offset(self.position_history[len(self.position_history) - self.position - 1], history=False)
+
+        position = self.position_history[len(self.position_history) - self.position - 1]
+        position.navigate()
         self.update_position_buttons()
 
     def go_forward(self):
         if self.position > 0:
             self.position -= 1
-        self.scroll_to_offset(self.position_history[len(self.position_history) - self.position - 1], history=False)
+
+        position = self.position_history[len(self.position_history) - self.position - 1]
+        position.navigate()
         self.update_position_buttons()
     
     def scroll_to_offset(self, offset: int, history = True):
+        self.swich_to_listing()
         scroll_pos = 0
         for i in range(len(self.rv.data)):
             total_height = self.rv.children[0].height - self.rv.height
@@ -337,13 +354,17 @@ class DisApp(App):
                 scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
                 self.rv.scroll_y = 1 - (scroll_pos / total_height)                
                 SectionData.reset_selection()
-                if history: self.update_position_history(offset)
+                if history: self.update_position_history(NavigationListing(offset))
                 self.last_position = offset
                 
                 return
 
             scroll_pos += data["height"]
         raise ValueError("Invalid location")
+    
+    def swich_to_listing(self):
+        if self.tab_panel:
+            self.tab_panel.switch_to(self.tab_panel.tab_list[-1])
     
     @property
     def tab_panel(self):
@@ -352,7 +373,7 @@ class DisApp(App):
             return panel
         return None
     
-    def open_function_graph(self, fun_name: str):
+    def open_function_graph(self, fun_name: str, rescale=True):
         fun = next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
         if not fun: raise ValueError(f"No function called {fun} exists")
 
@@ -380,7 +401,8 @@ class DisApp(App):
 
         def after(dt):
             tab_panel.switch_to(tab_panel.tab_list[0])
-            Clock.schedule_once(lambda dt: tab.move_to_initial_pos(), 0)
+            if rescale: 
+                Clock.schedule_once(lambda dt: tab.move_to_initial_pos(), 0)
 
         Clock.schedule_once(after, 0)
 

@@ -15,11 +15,32 @@ from kivy.core.window import Window
 from kivy.core.text import Label as CoreLabel
 from kivy.core.text.markup import MarkupLabel
 from kivy.graphics.transformation import Matrix
+from kivy.metrics import Metrics
 
 from .project import Function, Section
-from .main import graph_tmpfolder, app, FONT_NAME
+from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction
 from .sections import section_to_markup, LocationLabel
 from .buttons import XButton
+
+class NavigationGraph(NavigationAction):
+    def __init__(self, fun: int, location: tuple[int, int] | int, zoom: float = 0):
+        super().__init__()
+        self.function = fun
+        self.location = location
+        self.zoom = zoom
+
+    def navigate(self):
+        fun = app().project.functions.get(self.function)
+        if not fun: return
+        app().open_function_graph(fun.name, rescale=False)
+        panel = app().tab_panel
+        if not panel: return
+        for tab in panel.tab_list:
+            if isinstance(tab, FunctionTabItem):
+                if isinstance(self.location, int):
+                    tab.move_to_location(self.location, history=False)
+                else:
+                    tab.move_to_coords(self.location, self.zoom)
 
 class FunctionTabPanel(TabbedPanel):
     def __init__(self, **kwargs):
@@ -56,6 +77,12 @@ class FunctionTabItem(TabbedPanelItem, FloatLayout):
 
     def move_to_label(self, label: str):
         self.content.move_to_label(label)
+
+    def move_to_location(self, ep: int, history=True):
+        self.content.move_to_location(ep, history)
+
+    def move_to_coords(self, location: tuple[int, int], zoom: float = None):
+        self.content.move_to_coords(location, zoom)
 
 def parse_pos(pos_str):
     parts = pos_str.split()
@@ -114,6 +141,7 @@ class FunctionSvg(Widget):
         self.hovered_label: LocationLabel = None
         self.panel = panel
         self.code_blocks: dict[int, CodeBlockRect] = {}
+        self.first_block: CodeBlockRect = None
         self.current_block: CodeBlockRect = None
 
         self.bind(pos=self.update_graphics, size=self.update_graphics)
@@ -259,15 +287,17 @@ class FunctionSvg(Widget):
 
             Color(1, 1, 1, 1)
             if "objects" in data:
-
-                for box in data["objects"]:
+                for i, box in enumerate(data["objects"]):
                     x,y = map(float, box["pos"].split(","))
                     w,h = to_px(float(box["width"])), to_px(float(box["height"]))
                     x = self.x + x - w/2
                     y = self.y + y - h/2
 
                     ep = int(box["name"])
-                    self.code_blocks[ep] = CodeBlockRect(x, y, w, h)
+                    block = CodeBlockRect(x, y, w, h)
+                    self.code_blocks[ep] = block
+                    if i == 0: self.first_block = block
+
                     block = self.fun.blocks[ep]
                     lines, labels = [], []
                     section_to_markup(block.insn, lines, labels)
@@ -287,7 +317,6 @@ class FunctionSvg(Widget):
                         Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(x + 8, y + (len(lines) - i - 1) * SVG_FONT_HEIGHT * 1.05 / SCALE_FACTOR + 8))
                         
                     Line(width=1.1, rectangle=(x, y, w, h))
-
 
 class ScatterPlaneNoTouch(ScatterPlane):
     def __init__(self, **kwargs):
@@ -325,9 +354,33 @@ class FunctionPanel(BoxLayout):
         self.stencil.add_widget(self.scatter)
         self.add_widget(self.stencil)
         self.svg.update_graphics()
+
+    def block_pos(self, block: CodeBlockRect) -> tuple[int, int]:
+        x = self.stencil.x + self.stencil.width / 2 - (block.x + block.width / 2) * self.scatter.scale
+        y = self.stencil.y + self.stencil.height / 2 - (block.y + block.height / 2) * self.scatter.scale
+        return x, y
+    
+    def move_to_coords(self, location: tuple[int, int], zoom: float = None):
+        if zoom: self.scatter._set_scale(zoom)
+        self.scatter._set_pos(location)
     
     def move_to_initial_pos(self):
-        self.scatter._set_pos((0, -self.svg.height + self.stencil.y + self.stencil.height))
+        self.scatter.apply_transform(Matrix().scale(Metrics.density, Metrics.density, Metrics.density))
+        block = self.svg.first_block
+        pos = self.block_pos(block)
+        self.scatter._set_pos(pos)
+        app().update_position_history(NavigationGraph(self.fun.ep, pos, self.scatter.scale))
+
+    def move_to_location(self, ep: int, history = True):
+        block = self.svg.code_blocks.get(ep)
+        if block is None: return
+
+        if history:
+            app().update_position_history(NavigationGraph(self.fun.ep, ep))
+
+        self.svg.current_block = block
+        self.svg.render_hover()
+        self.scatter._set_pos(self.block_pos(block))
 
     def move_to_label(self, label: str):
         ep = 0
@@ -337,12 +390,4 @@ class FunctionPanel(BoxLayout):
                 ep = section.offset
                 break
         else: return
-
-        block = self.svg.code_blocks.get(ep)
-        if block is None: return
-
-        self.svg.current_block = block
-        self.svg.render_hover()
-        x = self.stencil.x + self.stencil.width / 2 - (block.x + block.width / 2) * self.scatter.scale
-        y = self.stencil.y + self.stencil.height / 2 - (block.y + block.height / 2) * self.scatter.scale
-        self.scatter._set_pos((x, y))
+        self.move_to_location(ep)
