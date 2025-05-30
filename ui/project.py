@@ -371,6 +371,7 @@ class Project:
         self.functions: dict[int, Function] = None
 
     def disassemble(self, ep: int, callback):
+        clear_cache()
         # TODO make this part of the API instead of messing with the internals manually
         old_map = self.ob.insnmap
         old_locations = self.pool.locations.copy()
@@ -557,6 +558,7 @@ class Project:
         return res
 
     def rescan(self, ep: int, org: int):
+        clear_cache()
         self.sections.clear()
         self.file_len = os.path.getsize(self.path)
 
@@ -567,7 +569,7 @@ class Project:
             self.ib = ib
 
             from tcls_900 import tlcs_900 as proc
-
+ 
             self.pool = InsnPool(proc)
             insn = Insn(self.pool, ib, ob, ep)
 
@@ -723,3 +725,5 @@ def load_project(path: str, ep: int, org: int) -> Project:
     proj = Project(path)
     proj.rescan(ep, org)
     return proj
+
+from .arrow import clear_cache

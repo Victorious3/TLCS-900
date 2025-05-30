@@ -10,9 +10,9 @@ from .main import app
 from .main_menu import MenuItem, MenuHandler
 
 # Construct path to Kivy's bundled SDL2
-kivy_base = kivy_path[0]
-sdl_path = os.path.join(kivy_base, '.dylibs', 'SDL2')
-sdl = ctypes.CDLL(sdl_path)
+#kivy_base = kivy_path[0]
+#sdl_path = os.path.join(kivy_base, '.dylibs', 'SDL2')
+#sdl = ctypes.CDLL(sdl_path)
 
 class ContextMenuBehavior(Widget):
     menu_triggered = False
@@ -39,14 +39,14 @@ class ContextMenuBehavior(Widget):
     
     @classmethod
     def on_mouse_up(cls, window, x, y, button, modifiers):
-        print("mouse up", x, y, button)
+        #print("mouse up", x, y, button)
         #if cls.menu_triggered:
         #    Window.dispatch("on_mouse_down", x, y, button, modifiers)
         #    cls.menu_triggered = False
 
     @classmethod
     def on_mouse_down(cls, window, x, y, button, modifiers):
-        print("mouse down", x, y, button)
+        #print("mouse down", x, y, button)
         #cls.menu_triggered = False
 
 

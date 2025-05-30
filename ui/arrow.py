@@ -8,6 +8,9 @@ from kivy.utils import get_color_from_hex
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, StencilUnUse, Rectangle
 
+def clear_cache():
+    ArrowRenderer.get_offset.cache_clear()
+
 from .project import Section, CodeSection
 from .main import LABEL_HEIGHT, app, FONT_HEIGHT
 from disapi import Loc
@@ -30,32 +33,8 @@ COLORS =  [get_color_from_hex("#80FFCC"),
            get_color_from_hex("#BFFF80"),
            get_color_from_hex("#FF80B3")]
 
-def DashedLine(points, dash_length = dp(5), space_length = dp(2), width = dp(1)):
-    space_length *= width
-    for i in range(0, len(points) - 2, 2):
-        x1, y1 = points[i], points[i + 1]
-        x2, y2 = points[i + 2], points[i + 3]
-
-        dx = x2 - x1
-        dy = y2 - y1
-        length = math.sqrt(dx**2 + dy**2)
-        if length == 0: continue
-
-        total_dash = dash_length + space_length
-        unit_dx = dx / length
-        unit_dy = dy / length
-
-        dist_covered = 0
-        while dist_covered < length:
-            start_x = x1 + unit_dx * dist_covered
-            start_y = y1 + unit_dy * dist_covered
-
-            dash_end = min(dash_length, length - dist_covered)
-            end_x = start_x + unit_dx * dash_end
-            end_y = start_y + unit_dy * dash_end
-
-            Line(points=[start_x, start_y, end_x, end_y], width=width)
-            dist_covered += dash_length + space_length
+def DashedLine(points, dash_length = dp(5), dash_offset=dp(2), width = dp(1)):
+    Line(points=points, dash_length=dash_length, dash_offset=dash_offset, width=width)
 
 @dataclass
 class Arrow:
@@ -177,6 +156,24 @@ class ArrowRenderer(Widget):
         self.arrows = list(arrows)
         self.arrow_offsets = arrow_offsets
 
+
+    @cache
+    @staticmethod
+    def get_offset(pc):
+        offset = 0
+        for data in app().rv.data:
+            section: Section = data["section"]
+            if section.offset <= pc < section.length + section.offset:
+                if section.labels: 
+                    offset += LABEL_HEIGHT
+                for i in section.instructions:
+                    if i.entry.pc <= pc < i.entry.pc + i.entry.length:
+                        return offset
+                    offset += FONT_HEIGHT
+
+            offset += data["height"]
+        return offset
+
     def redraw(self):
         rv = app().rv
         layout_manager = rv.layout_manager
@@ -200,22 +197,6 @@ class ArrowRenderer(Widget):
             Rectangle(pos=self.pos, size=self.size)
             StencilUse()
 
-            @cache
-            def get_offset(pc):
-                offset = 0
-                for data in rv.data:
-                    section: Section = data["section"]
-                    if section.offset <= pc < section.length + section.offset:
-                        if section.labels: 
-                            offset += LABEL_HEIGHT
-                        for i in section.instructions:
-                            if i.entry.pc <= pc < i.entry.pc + i.entry.length:
-                                return offset
-                            offset += FONT_HEIGHT
-
-                    offset += data["height"]
-                return offset
-
             arrows_to_render = []
             for arrow in self.arrows:
                 if arrow.start > first.length + last.offset: continue
@@ -223,7 +204,7 @@ class ArrowRenderer(Widget):
                 arrows_to_render.append(arrow)
         
             def calc_offset(x):
-                e = self.height - get_offset(x) + (vstart - self.height)
+                e = self.height - ArrowRenderer.get_offset(x) + (vstart - self.height)
                 return e - LABEL_HEIGHT / 2
 
             for a in arrows_to_render:
