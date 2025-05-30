@@ -33,8 +33,35 @@ COLORS =  [get_color_from_hex("#80FFCC"),
            get_color_from_hex("#BFFF80"),
            get_color_from_hex("#FF80B3")]
 
-def DashedLine(points, dash_length = dp(5), dash_offset=dp(2), width = dp(1)):
-    Line(points=points, dash_length=dash_length, dash_offset=dash_offset, width=width)
+# TODO This doesn't seem to work reliably
+#def DashedLine(points, dash_length = dp(5), dash_offset = dp(2), width = dp(1)):
+#    Line(points=points, dash_length=dash_length, dash_offset=dash_offset, width=width)
+
+def DashedLine(points, dash_length = dp(5), dash_offset = dp(2), width = dp(1)):
+    dash_offset *= width
+    for i in range(0, len(points) - 2, 2):
+        x1, y1 = points[i], points[i + 1]
+        x2, y2 = points[i + 2], points[i + 3]
+
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.sqrt(dx**2 + dy**2)
+        if length == 0: continue
+
+        unit_dx = dx / length
+        unit_dy = dy / length
+
+        dist_covered = 0
+        while dist_covered < length:
+            start_x = x1 + unit_dx * dist_covered
+            start_y = y1 + unit_dy * dist_covered
+
+            dash_end = min(dash_length, length - dist_covered)
+            end_x = start_x + unit_dx * dash_end
+            end_y = start_y + unit_dy * dash_end
+
+            Line(points=[start_x, start_y, end_x, end_y], width=width)
+            dist_covered += dash_length + dash_offset
 
 @dataclass
 class Arrow:
