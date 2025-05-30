@@ -14,8 +14,6 @@ from kivy.graphics import Color, Rectangle, Line
 from kivy.utils import get_color_from_hex, escape_markup
 from kivy.properties import ObjectProperty
 
-from .main_menu import MenuItem, MenuHandler
-from .context_menu import show_context_menu
 from .project import Section, DATA_PER_ROW, Instruction
 from .main import LABEL_HEIGHT,FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
 from disapi import Loc
@@ -143,35 +141,6 @@ class SectionColumn(Label):
 
         cls.redraw_children()
 
-    @classmethod
-    def on_touch_up_selection(cls, touch):
-        inside = app().rv.collide_point(touch.x, touch.y)
-
-        if (touch.button == "right" and inside and
-            touch.x < app().rv.width - app().minimap.width):
-
-            class Handler(MenuHandler):
-                def on_select(self, item):
-                    if item == "dis": 
-                        a = app()
-                        def callback():
-                            a.rv.update_data()
-                            a.minimap.redraw()
-                            a.arrows.recompute_arrows()
-                            a.arrows.redraw()
-                            Clock.schedule_once(lambda dt: a.scroll_to_offset(cls.selection_start), 0)
-                
-                        a.project.disassemble(cls.selection_start, callback)
-                        
-            show_context_menu(Handler(), [
-                MenuItem("label", "Insert Label"),
-                MenuItem("dis", "Disassemble from here"),
-                MenuItem("dis_oneshot", "Disassemble oneshot"),
-                MenuItem("dis_selected", "Disassemble selected"),
-            ])
-
-            return True
-
 class SectionAddresses(SectionColumn):
     def on_section(self, instance, section: Section):
         self.text = "\n".join(format(x, "X") for x in map(lambda i: i.entry.pc, section.instructions))
@@ -283,14 +252,13 @@ def loc_to_str(insn: Loc):
     return str(insn.loc)
 
 class LocationLabel:
-    def __init__(self, text: str, x: int, y: int, width: int, height: int, is_fun: bool = False):
+    def __init__(self, text, x, y, width, height):
         self.hovered = False
         self.text = text
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.is_fun = is_fun
 
 def section_to_markup(instructions: list[Instruction], text: list[str], labels: list[LocationLabel]):
     for insn in instructions:
@@ -319,7 +287,7 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
                 row += ", "
                 row_width += 2
 
-        text.append(row)
+            text.append(row)
 
 class SectionMnemonic(SectionColumn):
     any_hovered = False
@@ -347,27 +315,16 @@ class SectionMnemonic(SectionColumn):
     @classmethod
     def update_cursor(cls):
         if cls.any_hovered and app().ctrl_down and not app().any_hovered:
-            Window.set_system_cursor('hand')
+            Window.set_system_cursor("hand")
             app().set_hover()
 
     def _on_mouse_move(self, window, pos):
-        # Check if we're currently visible
-        tab_panel = app().tab_panel
-        if tab_panel: 
-            if tab_panel.current_tab.content != app().dis_panel: 
-                return
-
-
         x, y = pos
         sx, sy = self.to_window(self.x, self.y)
         for label in self.labels:
             label.hovered = False
-            lx = label.x * FONT_WIDTH
-            ly = label.y * FONT_HEIGHT
-            lw = label.width * FONT_WIDTH
-            lh = label.height * FONT_HEIGHT
-            if (sx + lx <= x <= sx + lx + lw and
-                sy + self.height - ly - lh <= y <= sy + self.height - ly):
+            if (sx + label.x <= x <= sx + label.x + label.width and
+                sy + self.height - label.y - label.height <= y <= sy + self.height - label.y):
                 SectionMnemonic.any_hovered = True
                 label.hovered = True
                
@@ -387,11 +344,6 @@ class SectionMnemonic(SectionColumn):
 
         for label in self.labels:
             if label.hovered and self.ctrl_down:
-                lx = label.x * FONT_WIDTH
-                ly = label.y * FONT_HEIGHT
-                lw = label.width * FONT_WIDTH
-                lh = label.height * FONT_HEIGHT
-                
                 color = get_color_from_hex("#64B5F6")
 
                 cl = CoreLabel(text = label.text, font_size = FONT_SIZE, font_name = FONT_NAME)
@@ -399,10 +351,10 @@ class SectionMnemonic(SectionColumn):
                               
                 with self.canvas.after:
                     Color(*color)
-                    Rectangle(texture = cl.texture, pos = (self.x + lx, self.y + self.height - ly - lh), size = cl.texture.size)
+                    Rectangle(texture = cl.texture, pos = (self.x + label.x, self.y + self.height - label.y - label.height), size = cl.texture.size)
                     Line(points=[
-                        self.x + lx, self.y + self.height - ly - lh + 1,
-                        self.x + lx + lw, self.y + self.height - ly - lh + 1
+                        self.x + label.x, self.y + self.height - label.y - label.height + 1,
+                        self.x + label.x + label.width, self.y + self.height - label.y - label.height + 1
                     ], width=dp(1))
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):

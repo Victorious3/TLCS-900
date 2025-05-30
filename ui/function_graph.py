@@ -165,7 +165,7 @@ class FunctionSvg(Widget):
                 break
         if last != self.hovered_label: self.render_hover()
         if self.hovered_label is not None and not app().any_hovered:
-            Window.set_system_cursor('hand')
+            Window.set_system_cursor("hand")
             app().set_hover()
 
     def on_touch_down(self, touch):

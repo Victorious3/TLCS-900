@@ -1,10 +1,54 @@
-import sys
-from abc import ABC, abstractmethod
-from kivy.clock import Clock
+import sys, ctypes, os
+from kivy import __path__ as kivy_path
+
+from kivy.uix.widget import Widget
 from kivy.core.window import Window
+from kivy.metrics import Metrics
+from kivy.clock import Clock
 
 from .main import app
 from .main_menu import MenuItem, MenuHandler
+
+# Construct path to Kivy's bundled SDL2
+kivy_base = kivy_path[0]
+sdl_path = os.path.join(kivy_base, '.dylibs', 'SDL2')
+sdl = ctypes.CDLL(sdl_path)
+
+class ContextMenuBehavior(Widget):
+    menu_triggered = False
+
+    def trigger_context_menu(self, touch) -> bool:
+        return False
+
+    def on_touch_down(self, touch):
+        if touch.button == "right" and sys.platform == "darwin":
+            # Hack for macos
+            res = self.trigger_context_menu(touch)
+
+            #sx = int(touch.sx * app().window.width / Metrics.density)
+            #sy = int((app().window.height - touch.sy * app().window.height) / Metrics.density)
+            #Window.dispatch("on_mouse_up", sx, sy, touch.button, ["pos", "button"])
+            #ContextMenuBehavior.menu_triggered = True
+            return res
+        return super().on_touch_down(touch)
+    
+    def on_touch_up(self, touch):
+        if touch.button == "right" and sys.platform != "darwin":
+            return self.trigger_context_menu(touch) 
+        return super().on_touch_up(touch)
+    
+    @classmethod
+    def on_mouse_up(cls, window, x, y, button, modifiers):
+        print("mouse up", x, y, button)
+        #if cls.menu_triggered:
+        #    Window.dispatch("on_mouse_down", x, y, button, modifiers)
+        #    cls.menu_triggered = False
+
+    @classmethod
+    def on_mouse_down(cls, window, x, y, button, modifiers):
+        print("mouse down", x, y, button)
+        #cls.menu_triggered = False
+
 
 if sys.platform == "darwin":
     # Native MacOS context menu

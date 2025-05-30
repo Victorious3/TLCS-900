@@ -54,39 +54,6 @@ class NavigationAction(ABC):
     @abstractmethod
     def navigate(self): pass
 
-from tcls_900.tlcs_900 import Reg, Mem
-
-from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project, Function
-from .arrow import ArrowRenderer
-from .minimap import Minimap
-from .main_menu import build_menu
-from .sections import SectionColumn, SectionAddresses, SectionData, SectionMnemonic
-from .table.table import ResizableRecycleTable, DataTableRow, TableBody
-from .context_menu import MenuHandler, MenuItem, show_context_menu
-from .function_graph import FunctionTabItem, FunctionTabPanel
-from .buttons import IconButton
-
-class EscapeTrigger:
-    def __init__(self):
-        app().global_event_bus.bind(on_escape=self.on_escape)
-
-    def on_escape(self, obj):
-        pass
-
-class NavigationListing(NavigationAction):
-    def __init__(self, offset: int):
-        self.offset = offset
-
-    def navigate(self):
-        app().scroll_to_offset(self.offset, history=False)
-
-class MainWindow(FloatLayout): pass
-class MainContainer(BoxLayout):
-    def on_touch_down(self, touch):
-        if self.collide_point(touch.x, touch.y):
-            app().active = self
-        return super().on_touch_down(touch)
-
 class HideableTextInput(TextInput):
     def show(self):
         self.opacity = 1
@@ -99,109 +66,71 @@ class HideableTextInput(TextInput):
         self.disabled = True
         self.text = ""
 
-class AnalyzerFilter(HideableTextInput, EscapeTrigger):
+class EscapeTrigger:
+    def __init__(self):
+        app().global_event_bus.bind(on_escape=self.on_escape)
+
     def on_escape(self, obj):
-        if app().active == app().analyzer_panel:
-            self.hide()
+        pass
 
+from tcls_900.tlcs_900 import Reg, Mem
 
-HEADER_NAMES = ["name", "address", "complexity", "input", "clobber", "output"]
-COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(250), dp(250), dp(250)]
+from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project, Function
+from .arrow import ArrowRenderer
+from .minimap import Minimap
+from .main_menu import build_menu
+from .sections import SectionColumn, SectionAddresses, SectionData, SectionMnemonic
+from .function_graph import FunctionTabItem, FunctionTabPanel
+from .buttons import IconButton
+from .analyzer import AnalyzerPanel, AnalyzerFilter
+from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 
-class AnalyzerTableRow(DataTableRow):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        Window.bind(mouse_pos=self.on_mouse_move)
-    
-    @property
-    def first_label(self) -> Widget:
-        return self.children[-1]
+class NavigationListing(NavigationAction):
+    def __init__(self, offset: int):
+        self.offset = offset
 
-    def on_touch_up(self, touch):
-        inside = self.first_label.collide_point(touch.x, touch.y)
-        if inside:
-            if touch.button == "right":
-                data = self.data
-                class Handler(MenuHandler):
-                    def on_select(self, item):
-                        if item == "goto": app().scroll_to_label(data[0])
-                        elif item == "graph": app().open_function_graph(data[0])
+    def navigate(self):
+        app().scroll_to_offset(self.offset, history=False)
+
+class MainPanel(RelativeLayout, ContextMenuBehavior):
+    def trigger_context_menu(self, touch):
+        if (touch.x < app().rv.width - app().minimap.width):
+            class Handler(MenuHandler):
+                def on_select(self, item):
+                    if item == "dis": 
+                        a = app()
+                        def callback():
+                            a.rv.update_data()
+                            a.minimap.redraw()
+                            a.arrows.recompute_arrows()
+                            a.arrows.redraw()
+                            Clock.schedule_once(lambda dt: a.scroll_to_offset(SectionColumn.selection_start), 0)
                 
-                show_context_menu(Handler(), [
-                    MenuItem("goto", "Go to function"),
-                    MenuItem("graph", "Open function graph")
-                ])
-                return True
-            
-        return super().on_touch_up(touch)
+                        a.project.disassemble(SectionColumn.selection_start, callback)
+                        
+            show_context_menu(Handler(), [
+                MenuItem("label", "Insert Label"),
+                MenuItem("dis", "Disassemble from here"),
+                MenuItem("dis_oneshot", "Disassemble oneshot"),
+                MenuItem("dis_selected", "Disassemble selected"),
+            ])
+
+            return True
 
     def on_touch_down(self, touch):
-        inside = self.first_label.collide_point(touch.x, touch.y)
-        if inside:
-            if touch.button == "left":
-                app().scroll_to_label(self.data[0])
-                return True
-        return super().on_touch_down(touch)
+        if super().on_touch_down(touch): return True
+        return SectionColumn.on_touch_down_selection(touch)
     
-    def on_mouse_move(self, window, pos):
-        if self.get_root_window() == None: return
-        inside = self.first_label.collide_point(*self.first_label.to_widget(*pos))
-        if inside:
-            # Ugly UI hack
-            table: AnalyzerTable = next(iter_all_children_of_type(app().analyzer_panel, AnalyzerTable))
-            if not table.is_pos_inside_of_body(pos): return
+    def on_touch_move(self, touch):
+        if super().on_touch_move(touch): return True
+        return SectionColumn.on_touch_move_section(touch)
 
-        if inside and not app().any_hovered:
-            app().set_hover()
-            Window.set_system_cursor('hand')
-    
-class AnalyzerPanel(RelativeLayout):
+class MainWindow(FloatLayout): pass
+class MainContainer(BoxLayout):
     def on_touch_down(self, touch):
         if self.collide_point(touch.x, touch.y):
             app().active = self
         return super().on_touch_down(touch)
-
-    def close_panel(self):
-        app().active = app().dis_panel_container
-        app().content_panel.remove_widget(app().y_splitter)
-
-class AnalyzerTable(ResizableRecycleTable):
-    def __init__(self, **kwargs):
-        super().__init__(headers = HEADER_NAMES, data = [], column_widths=COLUMN_WIDTHS, cols=5, **kwargs)
-        self.viewclass = "AnalyzerTableRow"
-
-    def on_kv_post(self, base_widget):
-        super().on_kv_post(base_widget)
-        self.update_data()
-
-    def update_data(self):
-        project = app().project
-        self.data = []
-        for fun in project.functions.values():
-            if not fun.state: continue
-            row = []
-            # name
-            row.append(fun.name)
-            # address
-            row.append(format(fun.ep, "X"))
-            #complexity
-            row.append(str(len(fun.blocks)))
-            # callers
-            #callers = set(map(lambda c: c[1], fun.callers))
-            #row.append(", ".join(map(lambda c: c.name, callers)))
-            # callees
-            #callees = set(map(lambda c: c[1], fun.callers))
-            #row.append(", ".join(map(lambda c: c.name, callees)))
-            #input registers
-            row.append(", ".join(map(str, filter(lambda r: isinstance(r, Reg), fun.state.input))))
-            #clobber registers
-            row.append(", ".join(map(lambda x: str(x[1]), filter(lambda r: isinstance(r[1], Reg), fun.state.clobbers))))
-            #ouput registers
-            row.append(", ".join(map(str, filter(lambda r: isinstance(r, Reg), fun.state.output))))
-
-            self.data.append(row)
-
-        self.body.update_data()
 
 class GotoPosition(HideableTextInput, EscapeTrigger):
     def _on_focus(self, instance, value, *largs):
@@ -262,17 +191,6 @@ class RV(RecycleView):
 
         return scroll_pos, scroll_pos + self.height
     
-    def on_touch_down(self, touch):
-        if super().on_touch_down(touch): return True
-        return SectionColumn.on_touch_down_selection(touch)
-    
-    def on_touch_move(self, touch):
-        if super().on_touch_move(touch): return True
-        return SectionColumn.on_touch_move_section(touch)
-    
-    def on_touch_up(self, touch):
-        if super().on_touch_up(touch): return True
-        return SectionColumn.on_touch_up_selection(touch)
 
 class GlobalEventBus(EventDispatcher):
     def __init__(self, **kwargs):
@@ -289,6 +207,7 @@ class DisApp(App):
         super().__init__()
         self.project = project
         
+        self.main_panel: RelativeLayout = None
         self.goto_position: GotoPosition = None
         self.rv: RV = None
         self.minimap: Minimap = None
@@ -315,6 +234,8 @@ class DisApp(App):
 
         Window.bind(mouse_pos=self.on_mouse_move)
         Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
+        Window.bind(on_mouse_up=ContextMenuBehavior.on_mouse_up)
+        Window.bind(on_mouse_down=ContextMenuBehavior.on_mouse_down)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
     
@@ -322,6 +243,7 @@ class DisApp(App):
         Window.clearcolor = BG_COLOR
 
         self.window = MainWindow()
+        self.main_panel = self.window.ids["main_panel"]
         self.app_menu = self.window.ids["app_menu"]
         self.back_button = self.window.ids["back_button"]
         self.forward_button = self.window.ids["forward_button"]
@@ -497,7 +419,7 @@ class DisApp(App):
         DisApp._any_hovered = False
         def post(dt):
             if not DisApp._any_hovered:
-                Window.set_system_cursor('arrow')
+                Window.set_system_cursor("arrow")
 
         Clock.schedule_once(post, 0)
 
