@@ -43,11 +43,13 @@ class ContextMenuBehavior(Widget):
         #if cls.menu_triggered:
         #    Window.dispatch("on_mouse_down", x, y, button, modifiers)
         #    cls.menu_triggered = False
+        pass
 
     @classmethod
     def on_mouse_down(cls, window, x, y, button, modifiers):
         #print("mouse down", x, y, button)
         #cls.menu_triggered = False
+        pass
 
 
 if sys.platform == "darwin":
