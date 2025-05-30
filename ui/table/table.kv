@@ -52,7 +52,9 @@
     halign: 'left'
     valign: 'middle'
     text_size: self.size
-    padding_x: 10
+    padding: dp(5), 0, 0, 0
+    width: self.parent.column_widths[self.column] + dp(5) if self.parent else dp(100)
+    text: str(self.parent.data[self.column]) if self.parent else ""
 
 <DataTableRow>:
     size_hint: 1, None
@@ -63,8 +65,3 @@
         Rectangle:
             pos: self.pos
             size: self.size
-
-<DataTableCell>:
-    padding: dp(5), 0, 0, 0
-    width: self.parent.column_widths[self.column] + dp(5) if self.parent else dp(100)
-    text: self.parent.data[self.column] if self.parent else ""

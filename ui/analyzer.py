@@ -101,7 +101,7 @@ class AnalyzerTable(ResizableRecycleTable):
             # address
             row.append(format(fun.ep, "X"))
             #complexity
-            row.append(str(len(fun.blocks)))
+            row.append(len(fun.blocks))
             # callers
             #callers = set(map(lambda c: c[1], fun.callers))
             #row.append(", ".join(map(lambda c: c.name, callers)))

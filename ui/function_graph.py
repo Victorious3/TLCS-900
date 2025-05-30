@@ -330,11 +330,11 @@ class ScatterPlaneNoTouch(ScatterPlane):
         if touch.button == "scrollup" and self.collide_point(touch.x, touch.y):
             scale = 0.9
             self.apply_transform(Matrix().scale(scale, scale, scale), anchor=self.parent.to_widget(touch.x, touch.y))
-            self.svg.update_graphics()
+            #self.svg.update_graphics()
         elif touch.button == "scrolldown" and self.collide_point(touch.x, touch.y):
             scale = 1.1
             self.apply_transform(Matrix().scale(scale, scale, scale), anchor=self.parent.to_widget(touch.x, touch.y))
-            self.svg.update_graphics()
+            #self.svg.update_graphics()
 
         return super().on_touch_down(touch)
     

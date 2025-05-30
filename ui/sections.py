@@ -252,14 +252,14 @@ def loc_to_str(insn: Loc):
     return str(insn.loc)
 
 class LocationLabel:
-    def __init__(self, text: str, x: int, y: int, width: int, height: int, is_fun: bool):
+    def __init__(self, text: str, x: int, y: int, width: int, height: int, is_fun: bool = False):
         self.hovered = False
         self.text = text
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.is_fub = is_fun
+        self.is_fun = is_fun
 
 def section_to_markup(instructions: list[Instruction], text: list[str], labels: list[LocationLabel]):
     for insn in instructions:
@@ -288,7 +288,7 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
                 row += ", "
                 row_width += 2
 
-            text.append(row)
+        text.append(row)
 
 class SectionMnemonic(SectionColumn):
     any_hovered = False
