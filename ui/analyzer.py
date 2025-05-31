@@ -9,7 +9,7 @@ from tcls_900.tlcs_900 import Reg
 
 from .main import HideableTextInput, EscapeTrigger, app, iter_all_children_of_type
 from .main_menu import MenuHandler, MenuItem
-from .context_menu import show_context_menu
+from .context_menu import show_context_menu, ContextMenuBehavior
 from .table.table import DataTableRow, ResizableRecycleTable
 
 class AnalyzerFilter(HideableTextInput, EscapeTrigger):
@@ -26,7 +26,7 @@ class AnalyzerFilter(HideableTextInput, EscapeTrigger):
 HEADER_NAMES = ["name", "address", "complexity", "input", "clobber", "output"]
 COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(250), dp(250), dp(250)]
 
-class AnalyzerTableRow(DataTableRow):
+class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         Window.bind(mouse_pos=self.on_mouse_move)
@@ -35,7 +35,7 @@ class AnalyzerTableRow(DataTableRow):
     def first_label(self) -> Widget:
         return self.children[-1]
 
-    def on_touch_up(self, touch):
+    def trigger_context_menu(self, touch):
         inside = self.first_label.collide_point(touch.x, touch.y)
         if inside:
             if touch.button == "right":
@@ -50,8 +50,7 @@ class AnalyzerTableRow(DataTableRow):
                     MenuItem("graph", "Open in function graph")
                 ])
                 return True
-            
-        return super().on_touch_up(touch)
+        return False
 
     def on_touch_down(self, touch):
         inside = self.first_label.collide_point(touch.x, touch.y)
