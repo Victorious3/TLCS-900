@@ -7,7 +7,8 @@
             "request": "launch",
             "program": "disgui.py",
             "console": "integratedTerminal",
-            "args": "-m inspector"
+            "args": "-m inspector",
+            "justMyCode": false
         }
     ]
 }

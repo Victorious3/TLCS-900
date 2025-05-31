@@ -2,9 +2,7 @@ import math
 
 from kivy.uix.textinput import TextInput
 from kivy.uix.label import Label
-from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.core.text import Label as CoreLabel
 from kivy.core.window import Window
@@ -15,10 +13,11 @@ from kivy.utils import get_color_from_hex, escape_markup
 from kivy.properties import ObjectProperty
 
 from .project import Section, DATA_PER_ROW, Instruction
-from .main import LABEL_HEIGHT,FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
+from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
+from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
-class LabelRow(TextInput):
+class LabelRow(ContextMenuBehavior, TextInput):
     section = ObjectProperty(None)
     
     def __init__(self, **kwargs):
@@ -29,19 +28,66 @@ class LabelRow(TextInput):
         self.height = LABEL_HEIGHT
         self.background_color = 0, 0, 0, 0
         self.foreground_color = 1, 1, 1, 1
-        self.padding = [dp(250), 0, 0, 0]
+        self.padding = dp(250), 0, 0, 0
         self.multiline = False
-    
+        self.cursor_color = 0, 0, 0, 0
+        self.is_active = False
+        self.is_function = False
+
+    def trigger_context_menu(self, touch) -> bool:
+        if self.collide_point(touch.x, touch.y):
+            text = self.text
+            is_function = self.is_function
+            section = self.section
+
+            class Handler(MenuHandler):
+                def on_select(self, item):
+                    if item == "graph":
+                        if is_function:
+                            app().open_function_graph(text)
+                        else:
+                            app().open_function_graph_from_label(section.offset)
+            
+            show_context_menu(Handler(), [
+                MenuItem("graph", "Open in function graph")
+            ])
+            return True
+
     def on_section(self, instance, value: Section):
         if len(value.labels) == 0:
             self.disabled = True
             self.opacity = 0
             self.height = 0
+            self.is_function = False
         else:
             self.text = value.labels[0].name
             self.disabled = False
             self.opacity = 1
             self.height = LABEL_HEIGHT
+            self.is_function = app().project.is_function(self.section.offset)
+
+    def on_double_tap(self):
+        self.cursor_color = (1, 1, 1, 1)
+        if self.is_active:
+            super().on_double_tap()
+        self.is_active = True
+    
+    def _on_focus(self, instance, value, *largs):
+        super()._on_focus(instance, value, *largs)
+        if value: SectionColumn.reset_selection()
+        else:
+            self.cursor_color = (0, 0, 0, 0)
+            self.is_active = False
+
+    def _key_down(self, key, repeat=False):
+        if key[2].startswith("cursor") and not self.is_active:
+            return
+        super()._key_down(key, repeat)
+
+    def keyboard_on_textinput(self, window, text):
+        if not self.is_active: return
+        super().keyboard_on_textinput(window, text)
+    
 
 class SectionColumn(Label):
     section = ObjectProperty(None)
@@ -96,10 +142,10 @@ class SectionColumn(Label):
     def on_touch_move_section(cls, touch):
         if cls.outside_bounds: return
         if touch.button != "left": return
-        tx, ty = app().rv.to_window(touch.x, touch.y)
+        tx, ty = touch.x, touch.y
 
         panel = next(cls.find_children())
-        x, y = panel.to_window(panel.x, panel.y)
+        x, y = panel.x, panel.y
         if touch.x > x + panel.width:
             end = cls.calculate_selection((x + panel.width, ty))
         else:
@@ -115,10 +161,10 @@ class SectionColumn(Label):
         if touch.button != "left": return
         cls.outside_bounds = touch.x > app().minimap.x
         if cls.outside_bounds: return
-        tx, ty = app().rv.to_window(touch.x, touch.y)
+        tx, ty = touch.x, touch.y
 
         panel = next(cls.find_children())
-        x, y = panel.to_window(panel.x, panel.y)
+        x, y = panel.x, panel.y
         if touch.x > x + panel.width:
             selection_end = cls.calculate_selection((x + panel.width, ty))
             selection_start = cls.calculate_selection((x, ty))
@@ -300,13 +346,18 @@ class SectionMnemonic(SectionColumn):
 
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
-        Window.bind(on_mouse_up=self._on_mouse_up)
         Window.bind(mouse_pos=self._on_mouse_move)
         
     def on_section(self, instance, section: Section):
         self.labels = []
         text = []
         section_to_markup(section.instructions, text, self.labels)
+        for label in self.labels:
+            label.x = label.x * FONT_WIDTH
+            label.y = label.y * FONT_HEIGHT
+            label.width *= FONT_WIDTH
+            label.height *= FONT_HEIGHT
+
         self.text = "\n".join(text)
 
     @classmethod
@@ -333,11 +384,14 @@ class SectionMnemonic(SectionColumn):
         self._on_update()
         SectionMnemonic.update_cursor()
 
-    def _on_mouse_up(self, window, x: int, y: int, button: str, modifiers):
+    def on_touch_up(self, touch):
+        if super().on_touch_up(touch): return True
         for label in self.labels:
-            if label.hovered and self.ctrl_down and button == 'left':
+            if label.hovered and self.ctrl_down and touch.button == 'left':
                 try:
+                    SectionColumn.reset_selection()
                     app().scroll_to_label(label.text)
+                    return True
                 except ValueError: pass
 
     def _on_update(self):
@@ -368,11 +422,36 @@ class SectionMnemonic(SectionColumn):
             self.ctrl_down = False
             self._on_update()
 
-class SectionPanel(BoxLayout, RecycleDataViewBehavior):
+class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, BoxLayout):
     section = ObjectProperty(None)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def trigger_context_menu(self, touch):
+        if not self.collide_point(touch.x, touch.y): return
+        if (touch.x < app().rv.width - app().minimap.width):
+            class Handler(MenuHandler):
+                def on_select(self, item):
+                    if item == "dis": 
+                        a = app()
+                        def callback():
+                            a.rv.update_data()
+                            a.minimap.redraw()
+                            a.arrows.recompute_arrows()
+                            a.arrows.redraw()
+                            Clock.schedule_once(lambda dt: a.scroll_to_offset(SectionColumn.selection_start), 0)
+                
+                        a.project.disassemble(SectionColumn.selection_start, callback)
+                        
+            show_context_menu(Handler(), [
+                MenuItem("label", "Insert Label"),
+                MenuItem("dis", "Disassemble from here"),
+                MenuItem("dis_oneshot", "Disassemble oneshot"),
+                MenuItem("dis_selected", "Disassemble selected"),
+            ])
+
+            return True
 
     def refresh_view_attrs(self, rv, index, data):
         super().refresh_view_attrs(rv, index, data)

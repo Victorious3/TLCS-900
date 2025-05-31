@@ -38,17 +38,18 @@
                 
                 IconButton:
                     id: back_button
-                    source: "ui/left_arrow.png"
+                    source: "ui/resources/left_arrow.png"
                     disabled: True
                     icon_height: dp(20)
                 IconButton:
                     id: forward_button
-                    source: "ui/right_arrow.png"
+                    source: "ui/resources/right_arrow.png"
                     disabled: True
                     icon_height: dp(20)
 
     GotoPosition:
         id: goto_position
+        multiline: False
         opacity: 0
         disabled: True
         size_hint: None, None
@@ -67,10 +68,11 @@
     size: dp(20), dp(20)
     icon_height: dp(20)
     default_color: 0.1216, 0.1216, 0.1216, 1.0
-    source: "ui/x.png"
+    source: "ui/resources/x.png"
 
 <AnalyzerPanel>:
-    AnalyzerTable
+    AnalyzerTable:
+        id: analyzer_table
     BoxLayout:
         padding: dp(5)
         size: dp(30), dp(30)
@@ -100,6 +102,7 @@
                     radius: [dp(5)]
 
             AnalyzerFilter:
+                multiline: False
                 id: analyzer_filter
                 opacity: 0
                 disabled: True

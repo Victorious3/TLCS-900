@@ -1,5 +1,7 @@
 import math, shutil, tempfile, json
+
 from abc import ABC, abstractmethod
+from typing import Callable
 
 from kivy.app import App
 from kivy.metrics import dp
@@ -23,7 +25,7 @@ from kivy.properties import BooleanProperty
 
 FONT_SIZE = dp(15)
 LABEL_HEIGHT = FONT_SIZE + dp(5)
-FONT_NAME = "ui/RobotoMono"
+FONT_NAME = "ui/resources/RobotoMono"
 BG_COLOR = get_color_from_hex("#1F1F1F")
 
 _graph_tmpfolder: str = None
@@ -83,7 +85,8 @@ from .sections import SectionColumn, SectionAddresses, SectionData, SectionMnemo
 from .function_graph import FunctionTabItem, FunctionTabPanel
 from .buttons import IconButton
 from .analyzer import AnalyzerPanel, AnalyzerFilter
-from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
+from .context_menu import ContextMenuBehavior
+from .popup import FunctionAnalyzerPopup
 
 class NavigationListing(NavigationAction):
     def __init__(self, offset: int):
@@ -92,31 +95,7 @@ class NavigationListing(NavigationAction):
     def navigate(self):
         app().scroll_to_offset(self.offset, history=False)
 
-class MainPanel(RelativeLayout, ContextMenuBehavior):
-    def trigger_context_menu(self, touch):
-        if (touch.x < app().rv.width - app().minimap.width):
-            class Handler(MenuHandler):
-                def on_select(self, item):
-                    if item == "dis": 
-                        a = app()
-                        def callback():
-                            a.rv.update_data()
-                            a.minimap.redraw()
-                            a.arrows.recompute_arrows()
-                            a.arrows.redraw()
-                            Clock.schedule_once(lambda dt: a.scroll_to_offset(SectionColumn.selection_start), 0)
-                
-                        a.project.disassemble(SectionColumn.selection_start, callback)
-                        
-            show_context_menu(Handler(), [
-                MenuItem("label", "Insert Label"),
-                MenuItem("dis", "Disassemble from here"),
-                MenuItem("dis_oneshot", "Disassemble oneshot"),
-                MenuItem("dis_selected", "Disassemble selected"),
-            ])
-
-            return True
-
+class MainPanel(RelativeLayout):
     def on_touch_down(self, touch):
         if super().on_touch_down(touch): return True
         return SectionColumn.on_touch_down_selection(touch)
@@ -341,17 +320,35 @@ class DisApp(App):
             return panel
         return None
     
-    def open_function_graph(self, fun_name: str, rescale=True):
+    def open_function_graph_from_label(self, ep: int):
+        if not self.project.functions:
+            self.analyze_functions(lambda: self.open_function_graph_from_label(ep))
+            return
+        for fun in self.project.functions.values():
+            if ep in fun.blocks:
+                self.open_function_graph(fun.name, callback=lambda panel: panel.move_to_location(ep))
+                return
+
+    
+    def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[FunctionTabItem], None] = None):
+        if not self.project.functions:
+            self.analyze_functions(lambda: self.open_function_graph(fun_name, rescale))
+            return
+
         fun = next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
-        if not fun: raise ValueError(f"No function called {fun} exists")
+        if not fun: return
 
         tab_panel = self.tab_panel
         if tab_panel is not None:
             # We already have tabs, just open a new one if this one hasn't been opened yet
             tab: FunctionTabItem
             for tab in tab_panel.tab_list[:-1]:
-                if tab.fun == fun: 
-                    Clock.schedule_once(lambda dt: tab_panel.switch_to(tab), 0)
+                if tab.fun == fun:
+                    def after(dt):
+                        tab_panel.switch_to(tab)
+                        if callback: callback(tab)
+
+                    Clock.schedule_once(after, 0)
                     return
         else:
             # Open a tabbed panel
@@ -361,16 +358,25 @@ class DisApp(App):
             item.add_widget(self.dis_panel)
             tab_panel.add_widget(item)
             self.dis_panel_container.add_widget(tab_panel, index=1)
-            Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[0]), 0)
+
+            def after(dt):
+                tab = tab_panel.tab_list[0]
+                tab_panel.switch_to(tab)
+                if callback: callback(tab)
+
+            Clock.schedule_once(after, 0)
         
         # Otherwise we open a new tab
         tab = FunctionTabItem(fun)
         tab_panel.add_widget(tab)
 
         def after(dt):
-            tab_panel.switch_to(tab_panel.tab_list[0])
+            tab_panel.switch_to(tab)
+            def after(dt):
+                tab.move_to_initial_pos()
+                if callback: callback(tab)
             if rescale: 
-                Clock.schedule_once(lambda dt: tab.move_to_initial_pos(), 0)
+                Clock.schedule_once(after, 0)
 
         Clock.schedule_once(after, 0)
         self.active = self.dis_panel_container
@@ -384,7 +390,7 @@ class DisApp(App):
                 if self.active == self.analyzer_panel:
                     self.analyzer_filter.show()
 
-        elif keycode == 225: self.shift_down = True
+        if keycode == 225: self.shift_down = True
         elif keycode == 224: 
             self.ctrl_down = True
             SectionMnemonic.update_cursor()
@@ -399,6 +405,33 @@ class DisApp(App):
             SectionMnemonic.update_cursor()
         elif keycode == 41:
             return True
+        
+    def analyze_functions(self, callback):
+        wait = None
+        total_amount = 0
+        popup: FunctionAnalyzerPopup = None
+
+        def interval(dt):
+            Window.set_system_cursor("wait")
+            app().set_hover()
+
+        def finish(dt):
+            wait.cancel()
+            Window.set_system_cursor("arrow")
+            popup.dismiss()
+            callback()
+
+        def progress(i: int, fun: str):
+            popup.value = i
+            popup.current = fun
+
+        wait = Clock.schedule_interval(interval, 0)
+        total_amount = app().project.analyze_functions(
+            lambda: Clock.schedule_once(finish, 0),
+            lambda c, fun: Clock.schedule_once(lambda dt: progress(c, fun), 0)
+        )
+        popup = FunctionAnalyzerPopup(max=total_amount)
+        popup.open()
         
     def open_function_list(self):
         if not self.y_splitter:

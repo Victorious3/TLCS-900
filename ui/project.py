@@ -370,6 +370,9 @@ class Project:
         self.file_len = 0
         self.functions: dict[int, Function] = None
 
+    def is_function(self, ep: int) -> bool:
+        return ep in self.ob.calls
+
     def disassemble(self, ep: int, callback):
         clear_cache()
         # TODO make this part of the API instead of messing with the internals manually

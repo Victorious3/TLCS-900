@@ -3,6 +3,7 @@ from kivy.core.window import Window
 from kivy.uix.widget import Widget
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.metrics import dp
+from kivy.clock import Clock
 
 from tcls_900.tlcs_900 import Reg
 
@@ -15,10 +16,11 @@ class AnalyzerFilter(HideableTextInput, EscapeTrigger):
     def on_escape(self, obj):
         if app().active == app().analyzer_panel:
             self.hide()
+            app().analyzer_panel.ids["analyzer_table"].filter()
 
-    def keyboard_on_textinput(self, window, text):
-        super().keyboard_on_textinput(window, text)
-        app().analyzer_panel.filter(self.text)
+    def keyboard_on_key_down(self, window, keycode, text, modifiers):
+        super().keyboard_on_key_down(window, keycode, text, modifiers)
+        Clock.schedule_once(lambda dt: app().analyzer_panel.ids["analyzer_table"].filter(self.text), 0)
 
 
 HEADER_NAMES = ["name", "address", "complexity", "input", "clobber", "output"]
@@ -45,7 +47,7 @@ class AnalyzerTableRow(DataTableRow):
                 
                 show_context_menu(Handler(), [
                     MenuItem("goto", "Go to function"),
-                    MenuItem("graph", "Open function graph")
+                    MenuItem("graph", "Open in function graph")
                 ])
                 return True
             
@@ -85,6 +87,7 @@ class AnalyzerTable(ResizableRecycleTable):
     def __init__(self, **kwargs):
         super().__init__(headers = HEADER_NAMES, data = [], column_widths=COLUMN_WIDTHS, cols=5, **kwargs)
         self.viewclass = "AnalyzerTableRow"
+        self.original_data = []
 
     def on_kv_post(self, base_widget):
         super().on_kv_post(base_widget)
@@ -92,7 +95,7 @@ class AnalyzerTable(ResizableRecycleTable):
 
     def update_data(self):
         project = app().project
-        self.data = []
+        self.original_data = []
         for fun in project.functions.values():
             if not fun.state: continue
             row = []
@@ -112,9 +115,16 @@ class AnalyzerTable(ResizableRecycleTable):
             row.append(", ".join(map(str, filter(lambda r: isinstance(r, Reg), fun.state.input))))
             #clobber registers
             row.append(", ".join(map(lambda x: str(x[1]), filter(lambda r: isinstance(r[1], Reg), fun.state.clobbers))))
-            #ouput registers
+            #output registers
             row.append(", ".join(map(str, filter(lambda r: isinstance(r, Reg), fun.state.output))))
 
-            self.data.append(row)
+            self.original_data.append(row)
 
+        self.data = self.original_data.copy()
+        self.body.update_data()
+
+    def filter(self, text: str = None):
+        self.data = self.original_data.copy()
+        if text is not None: 
+            self.data = list(filter(lambda row: any(map(lambda r: text in str(r), row)), self.data))
         self.body.update_data()

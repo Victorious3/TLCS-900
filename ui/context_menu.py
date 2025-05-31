@@ -14,28 +14,19 @@ from .main_menu import MenuItem, MenuHandler
 #sdl_path = os.path.join(kivy_base, '.dylibs', 'SDL2')
 #sdl = ctypes.CDLL(sdl_path)
 
-class ContextMenuBehavior(Widget):
-    menu_triggered = False
-
+class ContextMenuBehavior:
     def trigger_context_menu(self, touch) -> bool:
         return False
 
     def on_touch_down(self, touch):
+        if super().on_touch_down(touch): return True
         if touch.button == "right" and sys.platform == "darwin":
-            # Hack for macos
-            res = self.trigger_context_menu(touch)
-
-            #sx = int(touch.sx * app().window.width / Metrics.density)
-            #sy = int((app().window.height - touch.sy * app().window.height) / Metrics.density)
-            #Window.dispatch("on_mouse_up", sx, sy, touch.button, ["pos", "button"])
-            #ContextMenuBehavior.menu_triggered = True
-            return res
-        return super().on_touch_down(touch)
+            return self.trigger_context_menu(touch)
     
     def on_touch_up(self, touch):
+        if super().on_touch_up(touch): return True
         if touch.button == "right" and sys.platform != "darwin":
-            return self.trigger_context_menu(touch) 
-        return super().on_touch_up(touch)
+            return self.trigger_context_menu(touch)
     
     @classmethod
     def on_mouse_up(cls, window, x, y, button, modifiers):
