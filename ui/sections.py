@@ -298,7 +298,8 @@ def loc_to_str(insn: Loc):
     return str(insn.loc)
 
 class LocationLabel:
-    def __init__(self, text: str, x: int, y: int, width: int, height: int, is_fun: bool = False):
+    def __init__(self, ep: int, text: str, x: int, y: int, width: int, height: int, is_fun: bool = False):
+        self.ep = ep
         self.hovered = False
         self.text = text
         self.x = x
@@ -318,7 +319,7 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
                 label_text = loc_to_str(param)
                 t = f"[color=#DCDCAA]{label_text}[/color]"
                 labels.append(
-                    LocationLabel(label_text, row_width, len(text), len(label_text), 1, is_fun))
+                    LocationLabel(int(param), label_text, row_width, len(text), len(label_text), 1, is_fun))
                 row += t
                 row_width += len(label_text)
             elif isinstance(param, bytearray):
@@ -336,7 +337,7 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
 
         text.append(row)
 
-class SectionMnemonic(SectionColumn):
+class SectionMnemonic(ContextMenuBehavior, SectionColumn):
     any_hovered = False
 
     def __init__(self, **kwargs):
@@ -383,6 +384,26 @@ class SectionMnemonic(SectionColumn):
 
         self._on_update()
         SectionMnemonic.update_cursor()
+
+    def trigger_context_menu(self, touch):
+        for label in self.labels:
+            if label.hovered and self.ctrl_down:
+                class Handler(MenuHandler):
+                    def on_select(self, item):
+                        if item == "goto": app().scroll_to_label(label.text)
+                        elif item == "graph": 
+                            if label.is_fun:
+                                app().open_function_graph(label.text)
+                            else:
+                                app().open_function_graph_from_label(label.ep)
+                
+                show_context_menu(Handler(), [
+                    MenuItem("goto", f"Go to {'function' if label.is_fun else 'label'}"),
+                    MenuItem("graph", "Open in function graph")
+                ])
+                return True
+
+        return False
 
     def on_touch_up(self, touch):
         if super().on_touch_up(touch): return True

@@ -21,6 +21,7 @@ from .project import Function, Section
 from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction
 from .sections import section_to_markup, LocationLabel
 from .buttons import XButton
+from .context_menu import ContextMenuBehavior, show_context_menu, MenuItem, MenuHandler
 
 class NavigationGraph(NavigationAction):
     def __init__(self, fun: int, location: tuple[int, int] | int, zoom: float = 0):
@@ -125,13 +126,14 @@ SVG_FONT_WIDTH, SVG_FONT_HEIGHT = find_font_height()
 
 
 class CodeBlockRect:
-    def __init__(self, x: int, y: int, width: int, height: int):
+    def __init__(self, ep: int, x: int, y: int, width: int, height: int):
+        self.ep = ep
         self.x = x
         self.y = y
         self.width = width
         self.height = height
 
-class FunctionSvg(Widget):
+class FunctionSvg(ContextMenuBehavior, Widget):
     def __init__(self, fun: Function, panel: FunctionTabItem, **kwargs):
         super().__init__(**kwargs)
         self.fun = fun
@@ -146,6 +148,37 @@ class FunctionSvg(Widget):
 
         self.bind(pos=self.update_graphics, size=self.update_graphics)
         Window.bind(mouse_pos=self.on_mouse_move)
+
+    def trigger_context_menu(self, touch):
+        if self.collide_point(touch.x, touch.y):
+            if self.hovered_label:
+                hovered_label = self.hovered_label
+                class Handler(MenuHandler):
+                    def on_select(self, item):
+                        if item == "goto": app().scroll_to_label(hovered_label.text)
+                        elif item == "graph": 
+                            if hovered_label.is_fun:
+                                app().open_function_graph(hovered_label.text)
+                            else:
+                                app().open_function_graph_from_label(hovered_label.ep)
+                
+                show_context_menu(Handler(), [
+                    MenuItem("goto", f"Go to {'function' if hovered_label.is_fun else 'label'}"),
+                    MenuItem("graph", "Open in function graph")
+                ])
+                return True
+            else:
+                for block in self.code_blocks.values():
+                    if (block.x <= touch.x <= block.x + block.width and
+                        block.y <= touch.y <= block.y + block.height):
+                        class Handler(MenuHandler):
+                            def on_select(self, item):
+                                if item == "goto": app().scroll_to_offset(block.ep)
+                        
+                        show_context_menu(Handler(), [
+                            MenuItem("goto", "Go to block"),
+                        ])
+                        return True
 
     def on_mouse_move(self, window, pos):
         tab_panel = app().tab_panel
@@ -294,7 +327,7 @@ class FunctionSvg(Widget):
                     y = self.y + y - h/2
 
                     ep = int(box["name"])
-                    block = CodeBlockRect(x, y, w, h)
+                    block = CodeBlockRect(ep, x, y, w, h)
                     self.code_blocks[ep] = block
                     if i == 0: self.first_block = block
 
