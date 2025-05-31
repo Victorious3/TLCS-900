@@ -94,6 +94,7 @@ class AnalyzerTable(ResizableRecycleTable):
 
     def update_data(self):
         project = app().project
+        assert project.functions is not None
         self.original_data = []
         for fun in project.functions.values():
             if not fun.state: continue
@@ -122,7 +123,7 @@ class AnalyzerTable(ResizableRecycleTable):
         self.data = self.original_data.copy()
         self.body.update_data()
 
-    def filter(self, text: str = None):
+    def filter(self, text: str | None = None):
         self.data = self.original_data.copy()
         if text is not None: 
             self.data = list(filter(lambda row: any(map(lambda r: text in str(r), row)), self.data))

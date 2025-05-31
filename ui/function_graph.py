@@ -15,10 +15,11 @@ from kivy.core.window import Window
 from kivy.core.text import Label as CoreLabel
 from kivy.core.text.markup import MarkupLabel
 from kivy.graphics.transformation import Matrix
+from kivy.graphics import Canvas
 from kivy.metrics import Metrics
 
 from .project import Function, Section
-from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction
+from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction, KWidget
 from .sections import section_to_markup, LocationLabel
 from .buttons import XButton
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuItem, MenuHandler
@@ -31,7 +32,9 @@ class NavigationGraph(NavigationAction):
         self.zoom = zoom
 
     def navigate(self):
-        fun = app().project.functions.get(self.function)
+        functions = app().project.functions
+        assert functions is not None
+        fun = functions.get(self.function)
         if not fun: return
         app().open_function_graph(fun.name, rescale=False)
         panel = app().tab_panel
@@ -60,6 +63,8 @@ class FunctionTabPanel(TabbedPanel):
             Clock.schedule_once(lambda dt: self.switch_to(self.tab_list[index - 1 if index - 1 >= 0 else 0]))
 
 class FunctionTabItem(TabbedPanelItem, FloatLayout):
+    content: "FunctionPanel"
+
     def __init__(self, fun: Function, **kwargs):
         super().__init__(**kwargs)
         self.text = fun.name
@@ -82,7 +87,7 @@ class FunctionTabItem(TabbedPanelItem, FloatLayout):
     def move_to_location(self, ep: int, history=True):
         self.content.move_to_location(ep, history)
 
-    def move_to_coords(self, location: tuple[int, int], zoom: float = None):
+    def move_to_coords(self, location: tuple[int, int], zoom: float | None = None):
         self.content.move_to_coords(location, zoom)
 
 def parse_pos(pos_str):
@@ -95,14 +100,17 @@ def parse_pos(pos_str):
         points.append((x, y))
     return points
 
-def cubic_bezier_point(p0, p1, p2, p3, t):
-    x = (1 - t)**3 * p0[0] + 3*(1 - t)**2 * t * p1[0] + 3*(1 - t)*t**2 * p2[0] + t**3 * p3[0]
-    y = (1 - t)**3 * p0[1] + 3*(1 - t)**2 * t * p1[1] + 3*(1 - t)*t**2 * p2[1] + t**3 * p3[1]
+type Point = tuple[float, float]
+type Segment = tuple[Point, Point, Point, Point]
+
+def cubic_bezier_point(seg: Segment, t: float):
+    x = (1 - t)**3 * seg[0][0] + 3*(1 - t)**2 * t * seg[1][0] + 3*(1 - t)*t**2 * seg[2][0] + t**3 * seg[3][0]
+    y = (1 - t)**3 * seg[0][1] + 3*(1 - t)**2 * t * seg[1][1] + 3*(1 - t)*t**2 * seg[2][1] + t**3 * seg[3][1]
     return (x, y)
 
-def cubic_bezier_tangent(p0, p1, p2, p3, t):
-    dx = 3*(1 - t)**2 * (p1[0] - p0[0]) + 6*(1 - t)*t * (p2[0] - p1[0]) + 3*t**2 * (p3[0] - p2[0])
-    dy = 3*(1 - t)**2 * (p1[1] - p0[1]) + 6*(1 - t)*t * (p2[1] - p1[1]) + 3*t**2 * (p3[1] - p2[1])
+def cubic_bezier_tangent(seg: Segment, t: float):
+    dx = 3*(1 - t)**2 * (seg[1][0] - seg[0][0]) + 6*(1 - t)*t * (seg[2][0] - seg[1][0]) + 3*t**2 * (seg[3][0] - seg[2][0])
+    dy = 3*(1 - t)**2 * (seg[1][1] - seg[0][1]) + 6*(1 - t)*t * (seg[2][1] - seg[1][1]) + 3*t**2 * (seg[3][1] - seg[2][1])
     return (dx, dy)
 
 def normalize(vx, vy):
@@ -133,18 +141,20 @@ class CodeBlockRect:
         self.width = width
         self.height = height
 
-class FunctionSvg(ContextMenuBehavior, Widget):
+class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
+    canvas: Canvas
+
     def __init__(self, fun: Function, panel: FunctionTabItem, **kwargs):
         super().__init__(**kwargs)
         self.fun = fun
         self.size_hint = (None, None)
         self.graphfile = fun.graph_json(graph_tmpfolder(), app().project.ob)
         self.labels: list[LocationLabel] = []
-        self.hovered_label: LocationLabel = None
+        self.hovered_label: LocationLabel | None = None
         self.panel = panel
         self.code_blocks: dict[int, CodeBlockRect] = {}
-        self.first_block: CodeBlockRect = None
-        self.current_block: CodeBlockRect = None
+        self.first_block: CodeBlockRect | None = None
+        self.current_block: CodeBlockRect | None = None
 
         self.bind(pos=self.update_graphics, size=self.update_graphics)
         Window.bind(mouse_pos=self.on_mouse_move)
@@ -153,7 +163,7 @@ class FunctionSvg(ContextMenuBehavior, Widget):
         if self.collide_point(touch.x, touch.y):
             if self.hovered_label:
                 hovered_label = self.hovered_label
-                class Handler(MenuHandler):
+                class Handler1(MenuHandler):
                     def on_select(self, item):
                         if item == "goto": app().scroll_to_label(hovered_label.text)
                         elif item == "graph": 
@@ -162,7 +172,7 @@ class FunctionSvg(ContextMenuBehavior, Widget):
                             else:
                                 app().open_function_graph_from_label(hovered_label.ep)
                 
-                show_context_menu(Handler(), [
+                show_context_menu(Handler1(), [
                     MenuItem("goto", f"Go to {'function' if hovered_label.is_fun else 'label'}"),
                     MenuItem("graph", "Open in function graph")
                 ])
@@ -171,11 +181,11 @@ class FunctionSvg(ContextMenuBehavior, Widget):
                 for block in self.code_blocks.values():
                     if (block.x <= touch.x <= block.x + block.width and
                         block.y <= touch.y <= block.y + block.height):
-                        class Handler(MenuHandler):
+                        class Handler2(MenuHandler):
                             def on_select(self, item):
                                 if item == "goto": app().scroll_to_offset(block.ep)
                         
-                        show_context_menu(Handler(), [
+                        show_context_menu(Handler2(), [
                             MenuItem("goto", "Go to block"),
                         ])
                         return True
@@ -185,6 +195,7 @@ class FunctionSvg(ContextMenuBehavior, Widget):
         if tab_panel: 
             if tab_panel.current_tab != self.panel: 
                 return
+        else: return
             
         x, y = self.to_widget(*pos)
 
@@ -239,8 +250,8 @@ class FunctionSvg(ContextMenuBehavior, Widget):
         self.width = float(gw)
         self.height = float(gh)
 
-        def to_px(inches: float) -> float:
-            return inches * 72
+        def to_px(inches: float) -> int:
+            return int(inches * 72)
         
         self.code_blocks = {}
 
@@ -277,7 +288,7 @@ class FunctionSvg(ContextMenuBehavior, Widget):
                     for seg in segments:
                         for t_i in range(steps + 1):
                             t = t_i / steps
-                            pt = cubic_bezier_point(*seg, t)
+                            pt = cubic_bezier_point(seg, t)
                             sampled_points.append(pt)
 
                     # Flatten for Kivy Line
@@ -288,7 +299,7 @@ class FunctionSvg(ContextMenuBehavior, Widget):
                     # Draw arrowhead at endpoint using last segment
                     last_seg = segments[-1]
                     # Tangent at t=1 (end of last segment)
-                    tx, ty = cubic_bezier_tangent(*last_seg, 1)
+                    tx, ty = cubic_bezier_tangent(last_seg, 1)
                     tx, ty = normalize(tx, ty)
 
                     arrow_length = 12
@@ -298,7 +309,7 @@ class FunctionSvg(ContextMenuBehavior, Widget):
                     tip_x, tip_y = endpoint  # This is from 'e,x,y'
 
                     # Tangent direction at t=1 from the last Bezier segment
-                    tx, ty = cubic_bezier_tangent(*last_seg, 1)
+                    tx, ty = cubic_bezier_tangent(last_seg, 1)
                     tx, ty = normalize(tx, ty)
 
                     # Base center of the arrowhead
@@ -354,7 +365,7 @@ class FunctionSvg(ContextMenuBehavior, Widget):
 class ScatterPlaneNoTouch(ScatterPlane):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.svg: FunctionSvg = None
+        self.svg: FunctionSvg
 
     def on_touch_down(self, touch):
         if "multitouch_sim" in touch.profile: 
@@ -393,13 +404,14 @@ class FunctionPanel(BoxLayout):
         y = self.stencil.y + self.stencil.height / 2 - (block.y + block.height / 2) * self.scatter.scale
         return x, y
     
-    def move_to_coords(self, location: tuple[int, int], zoom: float = None):
+    def move_to_coords(self, location: tuple[int, int], zoom: float | None = None):
         if zoom: self.scatter._set_scale(zoom)
         self.scatter._set_pos(location)
     
     def move_to_initial_pos(self):
         self.scatter.apply_transform(Matrix().scale(Metrics.density, Metrics.density, Metrics.density))
         block = self.svg.first_block
+        assert block is not None
         pos = self.block_pos(block)
         self.scatter._set_pos(pos)
         app().update_position_history(NavigationGraph(self.fun.ep, pos, self.scatter.scale))

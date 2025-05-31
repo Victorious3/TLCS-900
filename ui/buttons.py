@@ -4,13 +4,15 @@ from kivy.properties import ListProperty, StringProperty, NumericProperty
 from kivy.core.window import Window
 from kivy.metrics import dp
 
+from .main import KWidget
+
 class Icon(Image):
     def on_touch_down(self, touch):
         return False
     def on_touch_up(self, touch):
         return False
 
-class IconButton(Button):
+class IconButton(KWidget, Button):
     icon_color = ListProperty([1, 1, 1, 1])
     default_color = ListProperty([0.2, 0.2, 0.2, 1])
     hover_color = ListProperty([0.25, 0.25, 0.25, 1])

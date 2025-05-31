@@ -1,11 +1,11 @@
 import math, shutil, tempfile, json
 
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import Callable, TypeVar, Type, Generator, cast, Protocol, Any, TYPE_CHECKING
 
 from kivy.app import App
 from kivy.metrics import dp
-from kivy.clock import Clock
+from kivy.clock import Clock, ClockEvent
 from kivy.core.window import Window
 from kivy.uix.image import Image
 from kivy.uix.button import Button
@@ -22,18 +22,19 @@ from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
 from kivy.effects.scroll import ScrollEffect
 from kivy.properties import BooleanProperty
+from kivy.graphics import Canvas
 
 FONT_SIZE = dp(15)
 LABEL_HEIGHT = FONT_SIZE + dp(5)
 FONT_NAME = "ui/resources/RobotoMono"
 BG_COLOR = get_color_from_hex("#1F1F1F")
 
-_graph_tmpfolder: str = None
+_graph_tmpfolder: str
 def graph_tmpfolder() -> str:
     return _graph_tmpfolder
 
 def app() -> "DisApp":
-    return App.get_running_app()
+    return cast("DisApp", App.get_running_app())
 
 def find_font_height():
     label = Label(
@@ -46,7 +47,8 @@ def find_font_height():
 
 FONT_WIDTH, FONT_HEIGHT = find_font_height()
 
-def iter_all_children_of_type(widget: Widget, widget_type: type):
+R = TypeVar("R")
+def iter_all_children_of_type(widget: Widget, widget_type: Type[R]) -> Generator[R, None, None]:
     if isinstance(widget, widget_type):
         yield widget
     for child in widget.children:
@@ -74,6 +76,17 @@ class EscapeTrigger:
 
     def on_escape(self, obj):
         pass
+
+class HasWidget(Protocol):
+    canvas: Canvas = ...
+
+    def bind(self, **kwargs: Callable[..., Any]) -> Any: pass
+    def register_event_type(self, *args): pass
+
+if TYPE_CHECKING:
+    class KWidget(HasWidget): ...
+else:
+    class KWidget: pass
 
 from tcls_900.tlcs_900 import Reg, Mem
 
@@ -135,13 +148,13 @@ class GotoPosition(HideableTextInput, EscapeTrigger):
     def on_escape(self, obj):
         self.hide()
  
-class RV(RecycleView):
+class RV(KWidget, RecycleView):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         app().rv = self
         self.effect_x = ScrollEffect()
         self.update_data()
-        self.bind(size=lambda *args: SectionColumn.redraw_children())
+        self.bind(size=lambda *_: SectionColumn.redraw_children())
 
     def update_data(self):
         data = []
@@ -186,20 +199,20 @@ class DisApp(App):
         super().__init__()
         self.project = project
         
-        self.main_panel: RelativeLayout = None
-        self.goto_position: GotoPosition = None
-        self.rv: RV = None
-        self.minimap: Minimap = None
-        self.arrows: ArrowRenderer = None
-        self.window: MainWindow = None
-        self.back_button: IconButton = None
-        self.forward_button: IconButton = None
-        self.content_panel: BoxLayout = None
-        self.y_splitter: Splitter = None
-        self.analyzer_panel: AnalyzerPanel = None
-        self.dis_panel: Widget = None
-        self.dis_panel_container: BoxLayout = None
-        self.analyzer_filter: AnalyzerFilter = None
+        self.main_panel = cast(RelativeLayout, None)
+        self.goto_position = cast(GotoPosition, None)
+        self.rv = cast(RV, None)
+        self.minimap = cast(Minimap, None)
+        self.arrows = cast(ArrowRenderer, None)
+        self.window = cast(MainWindow, None)
+        self.back_button = cast(IconButton, None)
+        self.forward_button = cast(IconButton, None)
+        self.content_panel = cast(BoxLayout, None)
+        self.y_splitter = cast(Splitter, None)
+        self.analyzer_panel = cast(AnalyzerPanel, None)
+        self.dis_panel = cast(Widget, None)
+        self.dis_panel_container = cast(BoxLayout, None )
+        self.analyzer_filter = cast(AnalyzerFilter, None)
 
         self.last_position = -1
         self.position_history: list[NavigationAction] = []
@@ -207,7 +220,7 @@ class DisApp(App):
 
         self.ctrl_down = False
         self.shift_down = False
-        self.active: Widget = None
+        self.active: Widget
 
         self.global_event_bus = GlobalEventBus()
 
@@ -330,7 +343,7 @@ class DisApp(App):
                 return
 
     
-    def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[FunctionTabItem], None] = None):
+    def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[FunctionTabItem], None] | None = None):
         if not self.project.functions:
             self.analyze_functions(lambda: self.open_function_graph(fun_name, rescale))
             return
@@ -407,9 +420,9 @@ class DisApp(App):
             return True
         
     def analyze_functions(self, callback):
-        wait = None
+        wait: ClockEvent = None
         total_amount = 0
-        popup: FunctionAnalyzerPopup = None
+        popup: FunctionAnalyzerPopup
 
         def interval(dt):
             Window.set_system_cursor("wait")

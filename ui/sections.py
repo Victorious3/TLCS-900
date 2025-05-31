@@ -13,7 +13,7 @@ from kivy.utils import get_color_from_hex, escape_markup
 from kivy.properties import ObjectProperty
 
 from .project import Section, DATA_PER_ROW, Instruction
-from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
+from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type, KWidget
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
@@ -52,6 +52,7 @@ class LabelRow(ContextMenuBehavior, TextInput):
                 MenuItem("graph", "Open in function graph")
             ])
             return True
+        return False
 
     def on_section(self, instance, value: Section):
         if len(value.labels) == 0:
@@ -187,7 +188,7 @@ class SectionColumn(Label):
 
         cls.redraw_children()
 
-class SectionAddresses(SectionColumn):
+class SectionAddresses(KWidget, SectionColumn):
     def on_section(self, instance, section: Section):
         self.text = "\n".join(format(x, "X") for x in map(lambda i: i.entry.pc, section.instructions))
 
@@ -212,7 +213,7 @@ class SectionAddresses(SectionColumn):
                     break
         
 
-class SectionData(SectionColumn):
+class SectionData(KWidget, SectionColumn):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.width = DATA_PER_ROW * dp(40)
@@ -337,7 +338,7 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
 
         text.append(row)
 
-class SectionMnemonic(ContextMenuBehavior, SectionColumn):
+class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     any_hovered = False
 
     def __init__(self, **kwargs):

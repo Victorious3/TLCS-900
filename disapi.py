@@ -5,6 +5,7 @@ import sys
 
 from collections import deque, Counter
 from queue import Queue
+from typing import Any
 
 def insnentry_to_str(entry, ob):
     return entry.opcode + " " + ", ".join(map(lambda v: insn_to_str(v, ob), entry.instructions))
@@ -79,7 +80,7 @@ class OutputBuffer:
             self.insnmap[ep] = lst
 
     def datalabel(self, ep):
-        name = "data_" + format(ep, "X")
+        name: Any = "data_" + format(ep, "X")
         self.labels[ep] = name
 
     def branch(self, ep, to, conditional = False, call = False):
@@ -207,7 +208,7 @@ class InsnPool:
 
     # Returns a location if there has been an error and blocking,
     # otherwise calls the callback with the location
-    def poll_all(self, blocking = True, callback = None):
+    def poll_all(self, blocking = True, callback = None) -> int:
         if not blocking and callback is None:
             raise ValueError("If called in a non blocking way you must provide a callback function.")
 
@@ -224,6 +225,8 @@ class InsnPool:
         else:
             thread = threading.Thread(daemon = True, target = poll_all_impl)
             thread.start()
+
+        return 0
 
     def poll(self):
         # Batch processing, we only start a new batch when the old

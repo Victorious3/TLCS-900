@@ -1,10 +1,8 @@
 import sys, ctypes, os
+from typing import cast, Any, TYPE_CHECKING
 from kivy import __path__ as kivy_path
 
 from kivy.uix.widget import Widget
-from kivy.core.window import Window
-from kivy.metrics import Metrics
-from kivy.clock import Clock
 
 from .main import app
 from .main_menu import MenuItem, MenuHandler
@@ -14,7 +12,7 @@ from .main_menu import MenuItem, MenuHandler
 #sdl_path = os.path.join(kivy_base, '.dylibs', 'SDL2')
 #sdl = ctypes.CDLL(sdl_path)
 
-class ContextMenuBehavior:
+class ContextMenuBehavior(Widget):
     def trigger_context_menu(self, touch) -> bool:
         return False
 
@@ -68,8 +66,17 @@ if sys.platform == "darwin":
         menu.popUpMenuPositioningItem_atLocation_inView_(None, mouse_location, None)
 
 else:
+    from kivy.uix.label import Label
     from kivy_garden.contextmenu import ContextMenu, ContextMenuTextItem
 
+    from .main import HasWidget
+
+    if TYPE_CHECKING:
+        class KMenuItem(HasWidget, Label, ContextMenuTextItem): pass
+    else:
+        class KMenuItem: pass
+
+    # TODO Handle recursive case
     def show_context_menu(handler: MenuHandler, menu_items: list[MenuItem]):
         menu = ContextMenu(cancel_handler_widget=app().window)
         for item in menu_items:
@@ -79,12 +86,13 @@ else:
                 menu.hide()
                 app().window.remove_widget(menu)
             
-            widget = ContextMenuTextItem(text = item.text)
+            widget = cast(KMenuItem, ContextMenuTextItem(text = item.text))
             widget.bind(on_release=lambda x, id=item.id: on_release(id))
             widget.label.texture_update()
             menu.add_item(widget)
         
         app().window.add_widget(menu)
         menu._setup_hover_timer()
-        menu.show(*app().root_window.mouse_pos)
+        root_window: Any = app().root_window
+        menu.show(*root_window.mouse_pos)
 

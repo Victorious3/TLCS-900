@@ -1,7 +1,8 @@
 import sys
 from abc import ABC, abstractmethod
-from threading import Thread
+from typing import cast
 
+from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.metrics import dp
 from kivy.core.window import Window
@@ -15,7 +16,7 @@ class MenuHandler(ABC):
     def on_select(self, item: str): pass
 
 class MenuItem:
-    def __init__(self, id: str, text: str, child_menu: list["MenuItem"] = None):
+    def __init__(self, id: str | None, text: str, child_menu: list["MenuItem"] | None = None):
         self.id = id
         self.text = text
         self.child_menu = child_menu
@@ -103,17 +104,20 @@ if sys.platform == "darwin":
 
         #app.setMainMenu_(native_menu)
 else:
-    def build_menu():
-        def build_rec(menu_item: AbstractMenuItem, item: MenuItem):
-            ctx_menu = ContextMenu()
-            for child in item.child_menu:
-                child_item = ContextMenuTextItem(text=child.text)
-                if child.id:
-                    child_item.bind(on_release=lambda i, id=child.id: main_menu_handler.on_select(id))
-                if child.child_menu:
-                    build_rec(child_item, child)
+    from .context_menu import KMenuItem
 
-                ctx_menu.add_widget(child_item)
+    def build_menu():
+        def build_rec(menu_item: KMenuItem, item: MenuItem):
+            ctx_menu = ContextMenu()
+            if item.child_menu:
+                for child in item.child_menu:
+                    child_item = cast(KMenuItem, ContextMenuTextItem(text=child.text))
+                    if child.id:
+                        child_item.bind(on_release=lambda i, id=child.id: main_menu_handler.on_select(id))
+                    if child.child_menu:
+                        build_rec(child_item, child)
+
+                    ctx_menu.add_widget(child_item)
 
             menu_item.add_widget(ctx_menu)
             menu_item.submenu = ctx_menu
@@ -123,7 +127,7 @@ else:
         app_menu.on_cancel_handler_widget(None, None)
 
         for item in main_menu:
-            menu_item = AppMenuTextItem(text=item.text)
+            menu_item = cast(KMenuItem, AppMenuTextItem(text=item.text))
             menu_item.padding = dp(10), 0
             if item.id:
                 menu_item.bind(on_release=lambda i, id=item.id: main_menu_handler.on_select(id))

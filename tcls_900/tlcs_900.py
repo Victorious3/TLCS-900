@@ -343,6 +343,7 @@ def popr(insn, tpe, size = -1, spos = -1):
     extended = ((b ^ 0x7) & 0x7) == 0
     
     reg = popR(insn, tpe, size, spos)
+    assert isinstance(reg, Reg)
     
     if not extended: return reg
     

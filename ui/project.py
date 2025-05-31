@@ -7,6 +7,7 @@ from abc import ABC
 from functools import reduce
 from itertools import takewhile
 from graphviz import Digraph
+from pathlib import Path
 
 from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label, Loc, insnentry_to_str
 from tcls_900.tlcs_900 import Reg, Mem, MemReg, LWORD, WORD, BYTE # TODO Specific import
@@ -47,7 +48,7 @@ class CodeSection(Section): pass
 class CodeBlock:
     # A CodeBlock may have an arbitrary amount of predecessors but only up to two successors.
     # Every Block ends with a branching instruction or RET
-    def __init__(self, insn: list[Instruction], pred: list["CodeBlock"] = None, succ: list[("CodeBlock", bool)] = None):
+    def __init__(self, insn: list[Instruction], pred: list["CodeBlock"] | None = None, succ: list[tuple["CodeBlock", bool]] | None = None):
         self.insn = insn
         self.ep = insn[0].entry.pc
         self.pred = pred or []
@@ -56,7 +57,7 @@ class CodeBlock:
 def is_jump_insn(insn: Instruction):
     return insn.entry.opcode in ("JR", "JRL", "JP", "DJNZ")
 
-def get_jump_location(insn: Instruction) -> Loc:
+def get_jump_location(insn: Instruction) -> Loc | None:
     entry = insn.entry
     if entry.opcode == "JP":
         if len(entry.instructions) == 1: 
@@ -75,7 +76,7 @@ def is_unconditional_jump(insn: Instruction):
         else: return True
     return False
 
-def get_loc(value: Reg | Mem) -> list[Reg | int]:
+def get_loc(value: Reg | Mem) -> list[Reg | Mem]:
     if isinstance(value, Reg): return [value]
     elif isinstance(value, MemReg):
         if value.reg2: return [value.reg1, value.reg2]
@@ -84,7 +85,7 @@ def get_loc(value: Reg | Mem) -> list[Reg | int]:
         return [value]
     return []
 
-def get_load(insn: Instruction) -> list[Reg | int]:
+def get_load(insn: Instruction) -> list[Reg | Mem]:
     if insn.entry.opcode in ("BS1B", "BS1F", "DJNZ", "DEC", "INC", "LD", "LDC", "LDCF", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "ORCF", "RL", "RLC", "RR", "RRC", "SET", "TSET", "XORCF"): #second argument
         return get_loc(insn.entry.instructions[1])
     elif insn.entry.opcode in ("CPL", "DAA", "EXTS", "EXTZ", "MIRR", "NEG", "PAA"): # first argument
@@ -103,7 +104,7 @@ def get_load(insn: Instruction) -> list[Reg | int]:
         return get_loc(insn.entry.instructions[1]) + [Reg(True, WORD, 0xE4)] # BC
     return []
         
-def get_store(insn: Instruction) -> list[Reg | int]:
+def get_store(insn: Instruction) -> list[Reg | Mem]:
     if insn.entry.opcode in ("ADC", "ADD", "AND", "BS1B", "BS1F", "CHG", "CPL", "DAA", "DIV", "DIVS", "DJNZ", "EXTS", "EXTZ", "LD", "LDA", "LDC", "MIRR", "MUL", "MULA", "MULS", "NEG", "OR", "PAA", "SBC", "SUB", "XOR"): # first argument
         return get_loc(insn.entry.instructions[0])
     elif insn.entry.opcode in ("DEC", "INC", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "RES", "RL", "RLC", "RR", "RRC", "SCC", "SET", "SLA", "SLL", "SRA", "SRL", "STCF", "TSET", "XORCF"): # second arument
@@ -145,17 +146,13 @@ def overlaps_and_covers(r1: Reg | Mem, r2: Reg | Mem):
 
 @dataclass
 class FunctionState:
-    clobbers: set[tuple[int, Reg]] = field(default_factory=set)
-    input: set[Reg | int] = field(default_factory=set)
-    output: set[Reg | int] = field(default_factory=set)
-    stack: list[tuple[int, Reg | int]] = field(default_factory=list)
-    fun_stack : list[tuple["Function", set[Reg | int], set[Reg | int]]] = field(default_factory=list)
+    clobbers: set[tuple[int, Reg | Mem]] = field(default_factory=set)
+    input: set[Reg | Mem] = field(default_factory=set)
+    output: set[Reg | Mem] = field(default_factory=set)
+    stack: list[tuple[int, Reg | Mem]] = field(default_factory=list)
+    fun_stack : list[tuple["Function", set[Reg | Mem], set[Reg | Mem]]] = field(default_factory=list)
 
     pc: int = 0
-
-    @property
-    def used(self) -> list[Reg]:
-        return self.clobbers + self.input + self.output
 
     def __str__(self):
         clobbers = ", ".join(map(lambda c: f"{c[0]}: {c[1]}", self.clobbers))
@@ -164,15 +161,15 @@ class FunctionState:
         stack = ", ".join(map(str, self.stack))
         return f"{{\n\t{clobbers=}\n\t{input=}\n\t{output=}\n\t{stack=}\n}}"
     
-    def is_clobbered(self, pc: int, reg: Reg) -> bool:
+    def is_clobbered(self, pc: int, reg: Reg | Mem) -> bool:
         for c, r in self.clobbers:
             if c < pc and overlaps(r, reg): return True
         return False
     
-    def unclobber(self, reg: Reg):
+    def unclobber(self, reg: Reg | Mem):
         self.clobbers = set(filter(lambda ir: not overlaps_and_covers(ir[1], reg), self.clobbers))
 
-    def add_input(self, pc: int, reg: Reg):
+    def add_input(self, pc: int, reg: Reg | Mem):
         for fun, in_in, in_out in reversed(self.fun_stack):
             for i in in_in: 
                 if overlaps(reg, i): in_out.add(i)
@@ -182,7 +179,7 @@ class FunctionState:
         self.input = set(filter(lambda r2: not overlaps_and_covers(r2, reg), self.input))
         self.input.add(reg)
 
-    def add_clobber(self, pc: int, reg: Reg):
+    def add_clobber(self, pc: int, reg: Reg | Mem):
         for fun, in_in, in_out in reversed(self.fun_stack):
             for r in in_in.copy():
                 if overlaps(r, reg): in_in.remove(r)
@@ -193,6 +190,7 @@ class FunctionState:
         self.clobbers.add((pc, reg))
 
     def push_function(self, pc: int, fun: "Function"):
+        assert fun.state is not None
         input = set(map(lambda c: c[1], fun.state.clobbers))
         for c in fun.state.input:
             self.add_input(pc, c)
@@ -202,12 +200,14 @@ class FunctionState:
 
     def clear_functions(self):
         for fun, in_in, in_out in self.fun_stack:
+            assert fun.state is not None
             fun.state.output.update(in_out)
         self.fun_stack.clear()
 
     @staticmethod
-    def merge(a: "FunctionState", b: "FunctionState") -> "FunctionState":
+    def merge(a: "FunctionState | None", b: "FunctionState | None") -> "FunctionState":
         if a is None:
+            assert b is not None
             b.clear_functions()
             return b.copy()
         elif b is None:
@@ -250,10 +250,10 @@ class Function:
         self.name = name
         self.start = start
         self.blocks = blocks
-        self.state: FunctionState = None
+        self.state: FunctionState | None = None
         self.underflow = False
-        self.callers: list[tuple[int, Function]] = None
-        self.callees: list[tuple[int, Function]] = None
+        self.callers: list[tuple[int, Function]]
+        self.callees: list[tuple[int, Function]]
 
     def _graph(self, block: CodeBlock, visited: set[CodeBlock], dig: Digraph, ob: OutputBuffer):
         if block in visited: return
@@ -279,7 +279,8 @@ class Function:
         dig = self.graph(ob)
         return dig.render(directory=out_folder, format="json0")
 
-    def analyze(self, proj: "Project", tick: Callable[[str], None] = None):
+    def analyze(self, proj: "Project", tick: Callable[[str], None] | None = None):
+        assert proj.functions is not None
         if self.state: return
         self.state = FunctionState()
         self.underflow = False
@@ -364,11 +365,14 @@ class Project:
         self.path = path
         self.filename = os.path.basename(path)
         self.sections = TreeMap()
-        self.ib: InputBuffer = InputBuffer
-        self.ob: OutputBuffer = None
-        self.pool: InsnPool = None
+        self.ib: InputBuffer
+        self.ob: OutputBuffer
+        self.pool: InsnPool
         self.file_len = 0
-        self.functions: dict[int, Function] = None
+        self.functions: dict[int, Function] | None = None
+
+    def write_to_file(self, file: Path):
+        pass
 
     def is_function(self, ep: int) -> bool:
         return ep in self.ob.calls
@@ -626,6 +630,7 @@ class Project:
             # Find all functions
             for i, ep in enumerate(self.ob.calls):
                 fun = self.extract_function(ep)
+                assert fun is not None
                 self.functions[ep] = fun
             
             t = 0
@@ -647,12 +652,12 @@ class Project:
         return len(self.ob.calls)
 
     def extract_function(self, ep: int):
-        section: Section = self.sections.get(ep)
+        section = self.sections.get(ep)
         if not section: return None
         name = str(section.labels[0])
 
         blocks: dict[int, CodeBlock] = {}    
-        def next_block(ep: int, pred: CodeBlock = None, branch = False) -> CodeBlock:
+        def next_block(ep: int, pred: CodeBlock | None = None, branch = False) -> CodeBlock | None:
             insn = []
             entry = self.sections.get_floor_entry(ep)
             if not entry: return None
@@ -661,10 +666,11 @@ class Project:
             if len(instructions) == 0: return None
             ep2 = instructions[0].entry.pc
             if ep2 in blocks:
-                block = blocks[ep2]
-                block.pred.append(pred)
-                pred.succ.append((block, branch))
-                return None
+                if pred:
+                    block = blocks[ep2]
+                    block.pred.append(pred)
+                    pred.succ.append((block, branch))
+                    return None
 
             while True:
                 new_insn = list(takewhile(lambda i: not is_jump_insn(i), instructions))
@@ -721,6 +727,7 @@ class Project:
                     return block
 
         start = next_block(ep)
+        assert start is not None
         fun = Function(ep, name, start, blocks)
         return fun
 
