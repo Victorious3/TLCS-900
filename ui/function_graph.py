@@ -56,9 +56,7 @@ class FunctionTabPanel(TabbedPanel):
         self.remove_widget(item)
         if len(self.tab_list) == 1:
             # Removed the last tab, collapse tabbed pane
-            self.clear_widgets()
-            app().dis_panel_container.remove_widget(self)
-            app().dis_panel_container.add_widget(app().dis_panel)
+            app().close_tabs()
         else:
             Clock.schedule_once(lambda dt: self.switch_to(self.tab_list[index - 1 if index - 1 >= 0 else 0]))
 

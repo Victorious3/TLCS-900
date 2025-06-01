@@ -1,7 +1,6 @@
-import os, time
+import os, json
 from threading import Thread
-from typing import Callable
-from dataclasses import dataclass, field
+from typing import Callable, cast
 from pytreemap import TreeMap
 from abc import ABC
 from functools import reduce
@@ -9,8 +8,9 @@ from itertools import takewhile
 from graphviz import Digraph
 from pathlib import Path
 
+from tcls_900 import tlcs_900 as proc
 from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label, Loc, insnentry_to_str
-from tcls_900.tlcs_900 import Reg, Mem, MemReg, LWORD, WORD, BYTE # TODO Specific import
+from tcls_900.tlcs_900 import Reg, Mem, MemReg, CReg, RReg, LWORD, WORD, BYTE # TODO Specific import
 from .popup import InvalidInsnPopup
 
 DATA_PER_ROW = 7
@@ -48,11 +48,48 @@ class CodeSection(Section): pass
 class CodeBlock:
     # A CodeBlock may have an arbitrary amount of predecessors but only up to two successors.
     # Every Block ends with a branching instruction or RET
-    def __init__(self, insn: list[Instruction], pred: list["CodeBlock"] | None = None, succ: list[tuple["CodeBlock", bool]] | None = None):
-        self.insn = insn
-        self.ep = insn[0].entry.pc
+    def __init__(self, 
+        proj: "Project",
+        insn: list[Instruction] | None = None, 
+        pred: list[int] | None = None,
+        succ: list[tuple[int, bool]] | None = None, 
+        ep: int | None = None, ln: int | None = None
+    ):
+        self.proj = proj
+        self._insn = insn
+        if insn:
+            self.ep = insn[0].entry.pc
+            last_insn = insn[-1].entry
+            self.len = last_insn.pc + last_insn.length - self.ep
+        else:
+            assert ep and ln
+            self.ep = ep
+            self.len = ln
+
         self.pred = pred or []
         self.succ = succ or []
+
+    @property
+    def insn(self):
+        if self._insn:
+            return self._insn
+        self._insn = self.proj.insn(self.ep, self.len)
+        return self._insn
+
+    def serialize(self) -> dict:
+        res = {}
+        res["ep"] = self.ep
+        res["pred"] = [b for b in self.pred]
+        res["succ"] = [{"ep": s[0], "cond": s[1]} for s in self.succ]
+        res["len"] = self.len
+        return res
+    
+    @staticmethod
+    def deserialize(data: dict, proj: "Project") -> "CodeBlock":
+        ep: int = data["ep"]
+        ln: int = data["len"]
+        succ = [(s["ep"], s["cond"]) for s in data["succ"]]
+        return CodeBlock(proj, None, data["pred"], succ, ep=ep, ln=ln)
 
 def is_jump_insn(insn: Instruction):
     return insn.entry.opcode in ("JR", "JRL", "JP", "DJNZ")
@@ -76,16 +113,16 @@ def is_unconditional_jump(insn: Instruction):
         else: return True
     return False
 
-def get_loc(value: Reg | Mem) -> list[Reg | Mem]:
-    if isinstance(value, Reg): return [value]
+def get_loc(value: Reg | Mem) -> list[Reg | int]:
+    if isinstance(value, Reg): return [value.normalize()]
     elif isinstance(value, MemReg):
-        if value.reg2: return [value.reg1, value.reg2]
-        else: return [value.reg1]
+        if value.reg2: return [value.reg1.normalize(), value.reg2.normalize()]
+        else: return [value.reg1.normalize()]
     elif isinstance(value, Mem):
-        return [value]
+        return [value.address]
     return []
 
-def get_load(insn: Instruction) -> list[Reg | Mem]:
+def get_load(insn: Instruction) -> list[Reg | int]:
     if insn.entry.opcode in ("BS1B", "BS1F", "DJNZ", "DEC", "INC", "LD", "LDC", "LDCF", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "ORCF", "RL", "RLC", "RR", "RRC", "SET", "TSET", "XORCF"): #second argument
         return get_loc(insn.entry.instructions[1])
     elif insn.entry.opcode in ("CPL", "DAA", "EXTS", "EXTZ", "MIRR", "NEG", "PAA"): # first argument
@@ -104,7 +141,7 @@ def get_load(insn: Instruction) -> list[Reg | Mem]:
         return get_loc(insn.entry.instructions[1]) + [Reg(True, WORD, 0xE4)] # BC
     return []
         
-def get_store(insn: Instruction) -> list[Reg | Mem]:
+def get_store(insn: Instruction) -> list[Reg | int]:
     if insn.entry.opcode in ("ADC", "ADD", "AND", "BS1B", "BS1F", "CHG", "CPL", "DAA", "DIV", "DIVS", "DJNZ", "EXTS", "EXTZ", "LD", "LDA", "LDC", "MIRR", "MUL", "MULA", "MULS", "NEG", "OR", "PAA", "SBC", "SUB", "XOR"): # first argument
         return get_loc(insn.entry.instructions[0])
     elif insn.entry.opcode in ("DEC", "INC", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "RES", "RL", "RLC", "RR", "RRC", "SCC", "SET", "SLA", "SLL", "SRA", "SRL", "STCF", "TSET", "XORCF"): # second arument
@@ -121,7 +158,7 @@ def get_store(insn: Instruction) -> list[Reg | Mem]:
         return [Reg(True, WORD, 0xE4)] # BC
     return []
 
-def overlaps(r1: Reg | Mem, r2: Reg | Mem):
+def overlaps(r1: Reg | int, r2: Reg | int):
     if isinstance(r1, Reg) and isinstance(r2, Reg):
         if r1.size == r2.size: return r1.addr == r2.addr
         if r1.size > r2.size:
@@ -135,24 +172,93 @@ def overlaps(r1: Reg | Mem, r2: Reg | Mem):
             return r2.addr <= r1.addr <= r2.addr + 3
 
         assert False, "Invalid register sizes"
-    elif isinstance(r1, Mem) and isinstance(r2, Mem):
-        return r1.address == r2.address
+    elif isinstance(r1, int) and isinstance(r2, int):
+        return r1 == r2
     else: return False
 
-def overlaps_and_covers(r1: Reg | Mem, r2: Reg | Mem):
+def overlaps_and_covers(r1: Reg | int, r2: Reg | int):
     if isinstance(r1, Reg) and isinstance(r2, Reg):
         return overlaps(r1, r2) and r1.size <= r2.size
     return overlaps(r1, r2)
 
-@dataclass
-class FunctionState:
-    clobbers: set[tuple[int, Reg | Mem]] = field(default_factory=set)
-    input: set[Reg | Mem] = field(default_factory=set)
-    output: set[Reg | Mem] = field(default_factory=set)
-    stack: list[tuple[int, Reg | Mem]] = field(default_factory=list)
-    fun_stack : list[tuple["Function", set[Reg | Mem], set[Reg | Mem]]] = field(default_factory=list)
+def serialize_reg_mem(value: Reg | int) -> dict:
+    res = {}
+    if isinstance(value, int):
+        res["type"] = "Mem"
+        res["address"] = value
+    elif isinstance(value, Reg):
+        res["type"] = "Reg"
+        res["size"] = value._size
+        res["reg"] = value.reg
 
-    pc: int = 0
+    assert not isinstance(value, (CReg, RReg))
+
+    return res
+
+def deserialize_reg_mem(data: dict) -> Reg | int:
+    tpe = data["type"]
+    if tpe == "Mem":
+        return data["address"]
+    elif tpe == "Reg":
+        return Reg(True, data["size"], data["reg"])
+    
+    raise ValueError("Invalid register or memory location")
+
+class FunctionState:
+    def __init__(
+            self, proj: "Project",
+            clobbers: set[tuple[int, Reg | int]] | None = None, 
+            input: set[Reg | int] | None = None, 
+            output: set[Reg | int] | None = None, 
+            stack: list[tuple[int, Reg | int]] | None = None, 
+            fun_stack: list[tuple[int, set[Reg | int], set[Reg | int]]] | None = None,
+            pc: int = 0
+        ):
+        
+        self.clobbers = clobbers or set()
+        self.input = input or set()
+        self.output = output or set()
+        self.stack = stack or list()
+        self.fun_stack = fun_stack or list()
+        self.pc = pc
+        self.proj = proj
+
+    def serialize(self) -> dict:
+        res = {}
+        res["clobbers"] = [{"ep": c[0], "value": serialize_reg_mem(c[1]) } for c in self.clobbers]
+        res["input"] = [serialize_reg_mem(i) for i in self.input]
+        res["output"] = [serialize_reg_mem(o) for o in self.output]
+        fun_stack = []
+        for fun, in_in, in_out in self.fun_stack:
+            c_in_in = [serialize_reg_mem(i) for i in in_in]
+            c_in_out = [serialize_reg_mem(i) for i in in_out]
+            fun_stack.append({"function": fun, "in": c_in_in, "out": c_in_out})
+
+        res["stack"] = [{"ep": s[0], "value": serialize_reg_mem(s[1])} for s in self.stack]
+        res["fun_stack"] = fun_stack
+        res["pc"] = self.pc
+
+        return res
+    
+    @staticmethod
+    def deserialize(data: dict, proj: "Project") -> "FunctionState":
+        state = FunctionState(proj)
+        for c in data["clobbers"]:
+            state.clobbers.add((c["ep"], deserialize_reg_mem(c["value"])))
+        for i in data["input"]:
+            state.input.add(deserialize_reg_mem(i))
+        for o in data["output"]:
+            state.input.add(deserialize_reg_mem(o))
+        for stack in data["stack"]:
+            state.stack.append((stack["ep"], deserialize_reg_mem(stack["value"])))
+        for stack in data["fun_stack"]:
+            c_in_in = set(deserialize_reg_mem(r) for r in stack["in"])
+            c_in_out = set(deserialize_reg_mem(r) for r in stack["out"])
+            fun = int(stack["function"])
+            state.fun_stack.append((fun, c_in_in, c_in_out))
+        state.pc = data["pc"]
+
+        return state
 
     def __str__(self):
         clobbers = ", ".join(map(lambda c: f"{c[0]}: {c[1]}", self.clobbers))
@@ -161,15 +267,15 @@ class FunctionState:
         stack = ", ".join(map(str, self.stack))
         return f"{{\n\t{clobbers=}\n\t{input=}\n\t{output=}\n\t{stack=}\n}}"
     
-    def is_clobbered(self, pc: int, reg: Reg | Mem) -> bool:
+    def is_clobbered(self, pc: int, reg: Reg | int) -> bool:
         for c, r in self.clobbers:
             if c < pc and overlaps(r, reg): return True
         return False
     
-    def unclobber(self, reg: Reg | Mem):
+    def unclobber(self, reg: Reg | int):
         self.clobbers = set(filter(lambda ir: not overlaps_and_covers(ir[1], reg), self.clobbers))
 
-    def add_input(self, pc: int, reg: Reg | Mem):
+    def add_input(self, pc: int, reg: Reg | int):
         for fun, in_in, in_out in reversed(self.fun_stack):
             for i in in_in: 
                 if overlaps(reg, i): in_out.add(i)
@@ -179,7 +285,7 @@ class FunctionState:
         self.input = set(filter(lambda r2: not overlaps_and_covers(r2, reg), self.input))
         self.input.add(reg)
 
-    def add_clobber(self, pc: int, reg: Reg | Mem):
+    def add_clobber(self, pc: int, reg: Reg | int):
         for fun, in_in, in_out in reversed(self.fun_stack):
             for r in in_in.copy():
                 if overlaps(r, reg): in_in.remove(r)
@@ -196,16 +302,18 @@ class FunctionState:
             self.add_input(pc, c)
         for c in input:
             self.add_clobber(pc, c)
-        self.fun_stack.append((fun, input, set()))
+        self.fun_stack.append((fun.ep, input, set()))
 
     def clear_functions(self):
         for fun, in_in, in_out in self.fun_stack:
+            assert self.proj.functions is not None
+            fun = self.proj.functions[fun]
             assert fun.state is not None
             fun.state.output.update(in_out)
         self.fun_stack.clear()
 
     @staticmethod
-    def merge(a: "FunctionState | None", b: "FunctionState | None") -> "FunctionState":
+    def merge(a: "FunctionState | None", b: "FunctionState | None",) -> "FunctionState":
         if a is None:
             assert b is not None
             b.clear_functions()
@@ -218,6 +326,7 @@ class FunctionState:
         b.clear_functions()
 
         state = FunctionState(
+            a.proj,
             clobbers = a.clobbers.copy(),
             input = a.input.copy(),
             stack = a.stack if len(a.stack) >= len(b.stack) else b.stack,
@@ -233,6 +342,7 @@ class FunctionState:
             fun_stack.append((fun, in_in.copy(), in_out.copy()))
 
         return FunctionState(
+            self.proj,
             self.clobbers.copy(), 
             self.input.copy(), 
             self.output.copy(), 
@@ -252,17 +362,56 @@ class Function:
         self.blocks = blocks
         self.state: FunctionState | None = None
         self.underflow = False
-        self.callers: list[tuple[int, Function]]
-        self.callees: list[tuple[int, Function]]
+        self.callers: list[tuple[int, int]]
+        self.callees: list[tuple[int, int]]
 
+    def serialize(self) -> dict:
+        res = {}
+        if self.state:
+            res["state"] = self.state.serialize()
+
+        res["start"] = self.start.ep
+        blocks = []
+        for block in self.blocks.values():
+            blocks.append(block.serialize())
+        
+        res["blocks"] = blocks
+        res["underflow"] = self.underflow
+        res["callers"] = [{"loc": c[0], "fun": c[1] } for c in self.callers]
+        res["callees"] = [{"loc": c[0], "fun": c[1] } for c in self.callees]
+
+        return res
+    
+    @staticmethod
+    def deserialize(data: dict, proj: "Project") -> "Function":
+        state: FunctionState | None = None
+        if "state" in data:
+            state = FunctionState.deserialize(data["state"], proj)
+        
+        blocks: dict[int, CodeBlock] = {}
+        for block_data in data["blocks"]:
+            block = CodeBlock.deserialize(block_data, proj)
+            blocks[block.ep] = block
+
+        ep: int = data["start"]
+        start = blocks[ep]
+        fun = Function(ep, str(proj.ob.labels[ep]), start, blocks)
+        fun.underflow = data["underflow"]
+
+        fun.callers = [(c["loc"], c["fun"]) for c in data["callers"]]
+        fun.callees = [(c["loc"], c["fun"]) for c in data["callees"]]
+        fun.state = state
+
+        return fun
+    
     def _graph(self, block: CodeBlock, visited: set[CodeBlock], dig: Digraph, ob: OutputBuffer):
         if block in visited: return
         visited.add(block)
         text = "".join(map(lambda insn: insnentry_to_str(insn.entry, ob) + "\\l", block.insn))
         dig.node(str(block.ep), text)
         for succ, branch in block.succ:
-            dig.edge(str(block.ep), str(succ.ep), color="red" if branch else "black")
-            self._graph(succ, visited, dig, ob)
+            dig.edge(str(block.ep), str(succ), color="red" if branch else "black")
+            self._graph(self .blocks[succ], visited, dig, ob)
 
     def graph(self, ob: OutputBuffer) -> Digraph:
         visited: set[CodeBlock] = set()
@@ -282,7 +431,7 @@ class Function:
     def analyze(self, proj: "Project", tick: Callable[[str], None] | None = None):
         assert proj.functions is not None
         if self.state: return
-        self.state = FunctionState()
+        self.state = FunctionState(proj)
         self.underflow = False
         self.callers = []
         self.callees = []
@@ -308,8 +457,8 @@ class Function:
 
                 # Merge results of all predecessors
                 if len(block.pred) == 1:
-                    state = states.get(block.pred[0], FunctionState()).copy()
-                else: state = reduce(FunctionState.merge, map(lambda p: states.get(p), block.pred), FunctionState())
+                    state = states.get(self.blocks[block.pred[0]], FunctionState(proj)).copy()
+                else: state = reduce(FunctionState.merge, map(lambda p: states.get(self.blocks[p]), block.pred), FunctionState(proj))
                 states[block] = state
 
                 pc = state.pc
@@ -318,7 +467,13 @@ class Function:
                     if insn.entry.opcode in ("RET", "RETD", "RETI"):
                         res.append(state)
                     elif insn.entry.opcode == "PUSH":
-                        state.stack.append((pc, insn.entry.instructions[0]))
+                        reg_or_mem = insn.entry.instructions[0]
+                        if isinstance(reg_or_mem, Mem):
+                            state.stack.append((pc, reg_or_mem.address))
+                        elif isinstance(reg_or_mem, Reg):
+                            state.stack.append((pc, reg_or_mem.normalize()))
+                        elif reg_or_mem == "A":
+                            state.stack.append((pc, Reg(True, BYTE, 0xE0))) #A
                     elif insn.entry.opcode == "POP":
                         if len(state.stack) > 0:
                             pc, last = state.stack.pop()
@@ -331,8 +486,8 @@ class Function:
                             fun = proj.functions.get(int(insn.entry.instructions[0]))
                             if fun:
                                 if not fun.state: fun.analyze(proj, tick)
-                                fun.callers.append((insn.entry.pc, self))
-                                self.callees.append((insn.entry.pc, fun))
+                                fun.callers.append((insn.entry.pc, self.ep))
+                                self.callees.append((insn.entry.pc, fun.ep))
                                 state.push_function(pc, fun)
                     else:
                         load = get_load(insn)
@@ -348,9 +503,9 @@ class Function:
 
                 state.pc = pc
                 for succ in block.succ:
-                    queue.append(succ[0])
+                    queue.append(self.blocks[succ[0]])
 
-            self.state = reduce(FunctionState.merge, res, FunctionState())
+            self.state = reduce(FunctionState.merge, res, FunctionState(proj))
         except Underflow:
             self.underflow = True
         
@@ -360,19 +515,110 @@ def label_list(label):
     if label is None: return []
     return [label]
 
+class ProjectLoadException(Exception): pass
+
 class Project:
-    def __init__(self, path: str):
+    def __init__(self, path: Path, org: int, ep: int):
         self.path = path
         self.filename = os.path.basename(path)
         self.sections = TreeMap()
+        self.org = org
+        self.ep = ep
         self.ib: InputBuffer
         self.ob: OutputBuffer
         self.pool: InsnPool
         self.file_len = 0
         self.functions: dict[int, Function] | None = None
 
-    def write_to_file(self, file: Path):
-        pass
+    def write_to_file(self, project_folder: Path):
+        project_folder.mkdir(exist_ok=True)
+
+        labels = {}
+        for ep, l in self.ob.labels.items():
+            label = {}
+            label["name"] = l.name
+            label["count"] = l.count
+            label["call"] = ep in self.ob.calls
+            labels[ep] = label
+
+        with open(project_folder / "labels.json", "w") as fp:
+            json.dump(labels, fp, indent=2)
+
+        proj = {
+            "rom": self.path.relative_to(project_folder).as_posix(),
+            "ep": self.ep,
+            "org": self.org
+        }
+        with open(project_folder / "proj.json", "w") as fp:
+            json.dump(proj, fp, indent=2)
+
+        fun_folder = project_folder / "fun"
+        fun_folder.mkdir(exist_ok=True)
+
+        if self.functions:
+            for fun in self.functions.values():
+                with open(fun_folder / (str(fun.ep) + ".json"), "w") as fp:
+                    json.dump(fun.serialize(), fp, indent=2)
+
+    @staticmethod
+    def read_from_file(project_folder: Path) -> "Project":
+        if not project_folder.is_dir(): 
+            raise ProjectLoadException("Not a directory")
+        if not project_folder.name.endswith(".disproj"): 
+            raise ProjectLoadException("Invalid name")
+        
+        proj_file = project_folder / "proj.json"
+        if not proj_file.exists() or not proj_file.is_file():
+            raise ProjectLoadException("No proj.json file")
+        
+        with open(proj_file, "r") as fp:
+            proj_json = json.load(fp)
+
+        path = project_folder / proj_json["rom"]
+        file_len = os.path.getsize(path)
+
+        project = Project(path, proj_json["org"], proj_json["ep"])
+        with open(path, "rb") as fp:
+            project.ib = InputBuffer(fp, file_len, entry_point=project.org, exit_on_invalid=True)
+            project.ob = OutputBuffer(None)
+
+        project.pool = InsnPool(proc)
+
+        labels = {}
+        labels_file = project_folder / "labels.json"
+        if labels_file.exists() and labels_file.is_file():
+            with open(labels_file, "r") as fp:
+                labels = json.load(fp)
+        
+        label_eps: list[int] = []
+        for ep, label in labels.items():
+            ep = int(ep)
+            label_eps.append(ep)
+            count = label["count"]
+            name = label["name"]
+            call = label["call"]
+            if call: project.ob.calls.add(ep)
+            project.ob.labels[ep] = Label(ep, count, name, call)
+
+        for ep in label_eps:
+            project.pool.query(Insn(project.pool, project.ib, project.ob, ep, do_branch=False))
+        project.pool.poll_all()
+        project._load_sections()
+
+        # Load functions
+        fun_folder = project_folder / "fun"
+        if fun_folder.exists() and fun_folder.is_dir():
+            project.functions = {}
+
+            for fun_file in fun_folder.iterdir():
+                with open(fun_file, "r") as fp:
+                    fun_data = json.load(fp)
+                fun = Function.deserialize(fun_data, project)
+                project.functions[fun.ep] = fun
+
+
+        return project
+
 
     def is_function(self, ep: int) -> bool:
         return ep in self.ob.calls
@@ -563,27 +809,11 @@ class Project:
             res.append(ctor(section.offset + last, section.length - last, labels, section.data[last:], section.instructions[last_i:]))
 
         return res
-
-    def rescan(self, ep: int, org: int):
-        clear_cache()
-        self.sections.clear()
-        self.file_len = os.path.getsize(self.path)
-
-        with open(self.path, 'rb') as f:
-            ib = InputBuffer(f, self.file_len, entry_point=org, exit_on_invalid=True)
-            ob = OutputBuffer(None)
-            self.ob = ob
-            self.ib = ib
-
-            from tcls_900 import tlcs_900 as proc
- 
-            self.pool = InsnPool(proc)
-            insn = Insn(self.pool, ib, ob, ep)
-
-        self.pool.query(insn)
-        self.pool.poll_all()
-
-        ob.compute_labels(org, self.file_len + org)
+    
+    def _load_sections(self):
+        ib = self.ib
+        ob = self.ob
+        org = self.org
 
         sections: list[Section] = list()
         def output_db(nxt: int, last: int):
@@ -621,8 +851,27 @@ class Project:
         for section in sections:
             self.sections[section.offset] = section
 
-        #for section in self.sections:
-        #    print(section)
+    def rescan(self, ep: int, org: int):
+        self.org = org
+        clear_cache()
+        self.sections.clear()
+        self.file_len = os.path.getsize(self.path)
+
+        with open(self.path, 'rb') as f:
+            ib = InputBuffer(f, self.file_len, entry_point=org, exit_on_invalid=True)
+            ob = OutputBuffer(None)
+            self.ob = ob
+            self.ib = ib
+ 
+            self.pool = InsnPool(proc)
+            insn = Insn(self.pool, ib, ob, ep)
+
+        self.pool.query(insn)
+        self.pool.poll_all()
+
+        ob.compute_labels(org, self.file_len + org)
+
+        self._load_sections()
 
     def analyze_functions(self, callback: Callable[[], None], progress: Callable[[int, str], None]) -> int:
         def analyze():
@@ -650,6 +899,36 @@ class Project:
 
         Thread(target=analyze, daemon=True).start()
         return len(self.ob.calls)
+    
+    def insn(self, start: int, ln: int) -> list[Instruction]:
+        entry = self.sections.floor_entry(start)
+        res = []
+
+        assert entry is not None
+        section: Section = cast(Section, entry.get_value())
+        s = start - section.offset
+        end = min(section.length - s, ln)
+        res.extend([i for i in section.instructions if section.offset + s <= i.entry.pc < start + end])
+        read = end
+        if read < ln:
+            entry = self.sections.floor_entry(section.offset + section.length + 1)
+            if entry is None: return res
+            section = cast(Section, entry.get_value())
+
+            while section.offset + section.length < start + ln:
+                res.extend(section.instructions[:])
+                read += section.length
+                entry = self.sections.floor_entry(section.offset + section.length + 1)
+                if entry is None: return res
+                section = cast(Section, entry.get_value())
+            rest = ln - read
+            if rest > 0:
+                res.extend([i for i in section.instructions if i.entry.pc < start + ln])
+
+        last_offset = res[-1].entry.pc + res[-1].entry.length
+        first_offset = res[0].entry.pc
+        assert last_offset - first_offset == ln
+        return res
 
     def extract_function(self, ep: int):
         section = self.sections.get(ep)
@@ -668,8 +947,8 @@ class Project:
             if ep2 in blocks:
                 if pred:
                     block = blocks[ep2]
-                    block.pred.append(pred)
-                    pred.succ.append((block, branch))
+                    block.pred.append(pred.ep)
+                    pred.succ.append((block.ep, branch))
                     return None
 
             while True:
@@ -679,11 +958,11 @@ class Project:
                     last_insn = new_insn[-1]
                     if last_insn.entry.opcode == "RET" and len(last_insn.entry.instructions) == 0 or last_insn.entry.opcode in ("RETI", "RETD"):
                         pc = insn[0].entry.pc
-                        block = CodeBlock(insn)
+                        block = CodeBlock(self, insn)
                         blocks[pc] = block
                         if pred: 
-                            block.pred.append(pred)
-                            pred.succ.append((block, branch))
+                            block.pred.append(pred.ep)
+                            pred.succ.append((block.ep, branch))
 
                         return block
                     next_entry = self.sections.get_higher_entry(last_insn.entry.pc)
@@ -691,11 +970,11 @@ class Project:
                     next_section = next_entry.get_value()
                     if len(next_section.labels) > 0:
                         pc = insn[0].entry.pc
-                        block = CodeBlock(insn)
+                        block = CodeBlock(self, insn)
                         blocks[pc] = block
                         if pred: 
-                            block.pred.append(pred)
-                            pred.succ.append((block, branch))
+                            block.pred.append(pred.ep)
+                            pred.succ.append((block.ep, branch))
 
                         next_block(next_section.offset, block, False)
                         return block
@@ -706,19 +985,19 @@ class Project:
                     insn.append(last_insn)
 
                     pc = insn[0].entry.pc
-                    block = CodeBlock(insn)
+                    block = CodeBlock(self, insn)
                     blocks[pc] = block
                     if pred: 
-                        block.pred.append(pred)
-                        pred.succ.append((block, branch))
+                        block.pred.append(pred.ep)
+                        pred.succ.append((block.ep, branch))
 
                     loc = get_jump_location(last_insn)
                     if loc:
                         ep = int(loc)
                         if ep in blocks:
                             target = blocks[ep]
-                            target.pred.append(block)
-                            block.succ.append((target, True))
+                            target.pred.append(block.ep)
+                            block.succ.append((target.ep, True))
                         else:
                             next_block(ep, block, True)
 
@@ -731,8 +1010,8 @@ class Project:
         fun = Function(ep, name, start, blocks)
         return fun
 
-def load_project(path: str, ep: int, org: int) -> Project:
-    proj = Project(path)
+def new_project(path: Path, ep: int, org: int) -> Project:
+    proj = Project(path, org, ep)
     proj.rescan(ep, org)
     return proj
 

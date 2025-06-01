@@ -53,9 +53,9 @@ class Label:
         self.location = location
         self.count = count
         if name is None:
-           if call: name = "fun_"
-           else: name = "label_"
-        self.name = name + format(location, "X")
+           if call: name = "fun_" + format(location, "X")
+           else: name = "label_" + format(location, "X")
+        self.name = name
 
     def __str__(self):
         return self.name
@@ -254,7 +254,7 @@ class InsnEntry:
         return ibuffer.buffer[self.pc - ibuffer.entry_point:self.pc + self.length - ibuffer.entry_point]
 
 class Insn(threading.Thread):
-    def __init__(self, pool, ibuffer, obuffer, pc = 0):
+    def __init__(self, pool, ibuffer, obuffer, pc = 0, do_branch = True):
         threading.Thread.__init__(self, daemon = True, name = "Insn at " + str(pc))
 
         self.pc = pc
@@ -268,6 +268,7 @@ class Insn(threading.Thread):
         self.lastr = "INVALID"
         self.lastmem = "INVALID"
         self.exit_on_invalid = ibuffer.exit_on_invalid
+        self.do_branch = do_branch
 
         # List of processed instructions to insert at the entry point
         self.__instructions = deque()
@@ -333,8 +334,10 @@ class Insn(threading.Thread):
         # We don't want to start jumping to invalid addresses
         if to < self.ibuffer.min or to > self.ibuffer.max: return
 
-        self.obuffer.branch(self.pc, to, conditional, call)
+        if self.do_branch:
+            self.obuffer.branch(self.pc, to, conditional, call)
+
         # We don't need this one anymore if we know that we have to branch
         if not conditional: self.kill()
-        if not self.ibuffer.was_read(to):
+        if not self.ibuffer.was_read(to) and self.do_branch:
             self.pool.query(Insn(self.pool, self.ibuffer, self.obuffer, to))

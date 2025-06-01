@@ -23,6 +23,9 @@ class Reg:
     def addr(self):
         return reg_addr[str(self)]
     
+    def normalize(self):
+        return Reg(True, self.size, self.addr)
+    
     def __hash__(self):
         return hash((self.size, self.addr))
     
@@ -48,6 +51,9 @@ class RReg(Reg):
     
     def __str__(self):
         return rregname(self)
+    
+    def normalize(self):
+        return Reg(True, self.size, reg_addr[rregname(self)])
     
     @property
     def size(self):

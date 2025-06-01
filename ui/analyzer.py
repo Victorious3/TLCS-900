@@ -126,5 +126,5 @@ class AnalyzerTable(ResizableRecycleTable):
     def filter(self, text: str | None = None):
         self.data = self.original_data.copy()
         if text is not None: 
-            self.data = list(filter(lambda row: any(map(lambda r: text in str(r), row)), self.data))
+            self.data = list(filter(lambda row: any(map(lambda r: text.casefold() in str(r).casefold(), row)), self.data))
         self.body.update_data()

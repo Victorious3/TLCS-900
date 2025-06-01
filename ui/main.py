@@ -1,5 +1,6 @@
-import math, shutil, tempfile, json
+import math, shutil, tempfile
 
+from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Callable, TypeVar, Type, Generator, cast, Protocol, Any, TYPE_CHECKING
 
@@ -7,8 +8,6 @@ from kivy.app import App
 from kivy.metrics import dp
 from kivy.clock import Clock, ClockEvent
 from kivy.core.window import Window
-from kivy.uix.image import Image
-from kivy.uix.button import Button
 from kivy.uix.widget import Widget
 from kivy.uix.label import Label
 from kivy.uix.splitter import Splitter
@@ -21,7 +20,6 @@ from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
 from kivy.effects.scroll import ScrollEffect
-from kivy.properties import BooleanProperty
 from kivy.graphics import Canvas
 
 FONT_SIZE = dp(15)
@@ -90,7 +88,7 @@ else:
 
 from tcls_900.tlcs_900 import Reg, Mem
 
-from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, load_project, Function
+from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, new_project, Function
 from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
@@ -209,7 +207,7 @@ class DisApp(App):
         self.forward_button = cast(IconButton, None)
         self.content_panel = cast(BoxLayout, None)
         self.y_splitter = cast(Splitter, None)
-        self.analyzer_panel = cast(AnalyzerPanel, None)
+        self.analyzer_panel: AnalyzerPanel | None = None
         self.dis_panel = cast(Widget, None)
         self.dis_panel_container = cast(BoxLayout, None )
         self.analyzer_filter = cast(AnalyzerFilter, None)
@@ -284,7 +282,7 @@ class DisApp(App):
 
     def update_position_buttons(self):
         self.forward_button.disabled = self.position == 0
-        self.back_button.disabled = self.position == len(self.position_history) - 1
+        self.back_button.disabled = self.position >= len(self.position_history) - 1
 
     def go_back(self):
         if self.position < len(self.position_history) - 1:
@@ -419,6 +417,28 @@ class DisApp(App):
         elif keycode == 41:
             return True
         
+    def close_tabs(self):
+        if self.tab_panel:
+            self.tab_panel.clear_widgets()
+            self.dis_panel_container.remove_widget(self.tab_panel)
+            self.dis_panel_container.add_widget(app().dis_panel)
+        
+    def load_project(self, project: Project):
+        self.project = project
+
+        # Clear history
+        self.position = 0
+        self.position_history.clear()
+        self.update_position_buttons()
+
+        # Close views
+        if self.analyzer_panel:
+            self.analyzer_panel.close_panel()
+        self.close_tabs()
+
+        # Update data
+        self.rv.update_data()
+        
     def analyze_functions(self, callback):
         wait: ClockEvent = None
         total_amount = 0
@@ -483,8 +503,8 @@ class DisApp(App):
 
         super().on_stop()
 
-def main(path: str, ep: int, org: int):
-    project = load_project(path, ep, org)
+def main(path: Path, ep: int, org: int):
+    project = new_project(path, ep, org)
     global _graph_tmpfolder
     _graph_tmpfolder = tempfile.mkdtemp()
     

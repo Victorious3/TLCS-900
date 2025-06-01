@@ -1,6 +1,7 @@
 import sys
 from abc import ABC, abstractmethod
 from typing import cast
+from pathlib import Path
 
 from kivy.uix.label import Label
 from kivy.clock import Clock
@@ -9,6 +10,7 @@ from kivy.core.window import Window
 from kivy_garden.contextmenu import AppMenuTextItem, ContextMenu, ContextMenuTextItem, AbstractMenuItem
 
 from .main import app
+from .project import Project
 
 class MenuHandler(ABC):
     def on_close(self): pass
@@ -40,6 +42,10 @@ class MainMenuHandler(MenuHandler):
                 app().analyze_functions(lambda: app().open_function_list())
 
             else: app().open_function_list()
+        elif item == "save":
+            app().project.write_to_file(Path("el9900.disproj"))
+        elif item == "open":
+            app().load_project(Project.read_from_file(Path("el9900.disproj")))
 
         app().app_menu.close_all()
         
