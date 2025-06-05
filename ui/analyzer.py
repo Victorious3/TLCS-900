@@ -16,15 +16,19 @@ class AnalyzerFilter(HideableTextInput, EscapeTrigger):
     def on_escape(self, obj):
         if app().active == app().analyzer_panel:
             self.hide()
-            app().analyzer_panel.ids["analyzer_table"].filter()
+            panel = app().analyzer_panel
+            assert panel
+            panel.ids["analyzer_table"].filter()
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
+        panel = app().analyzer_panel
+        assert panel
         super().keyboard_on_key_down(window, keycode, text, modifiers)
-        Clock.schedule_once(lambda dt: app().analyzer_panel.ids["analyzer_table"].filter(self.text), 0)
+        Clock.schedule_once(lambda dt: panel.ids["analyzer_table"].filter(self.text), 0)
 
 
-HEADER_NAMES = ["name", "address", "complexity", "input", "clobber", "output"]
-COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(250), dp(250), dp(250)]
+HEADER_NAMES = ["name", "address", "frequency", "complexity", "input", "clobber", "output"]
+COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(100), dp(200), dp(200), dp(200)]
 
 class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
     def __init__(self, **kwargs):
@@ -65,7 +69,9 @@ class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
         inside = self.first_label.collide_point(*self.first_label.to_widget(*pos))
         if inside:
             # Ugly UI hack
-            table: AnalyzerTable = next(iter_all_children_of_type(app().analyzer_panel, AnalyzerTable))
+            panel = app().analyzer_panel
+            assert panel
+            table: AnalyzerTable = next(iter_all_children_of_type(panel, AnalyzerTable))
             if not table.is_pos_inside_of_body(pos): return
 
         if inside and not app().any_hovered:
@@ -103,7 +109,9 @@ class AnalyzerTable(ResizableRecycleTable):
             row.append(fun.name)
             # address
             row.append(format(fun.ep, "X"))
-            #complexity
+            # frequency
+            row.append(len(fun.callers))
+            # complexity
             row.append(len(fun.blocks))
             # callers
             #callers = set(map(lambda c: c[1], fun.callers))

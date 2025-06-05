@@ -9,7 +9,7 @@ from graphviz import Digraph
 from pathlib import Path
 
 from tcls_900 import tlcs_900 as proc
-from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label, Loc, insnentry_to_str
+from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, InsnEntry, Label, LabelKind, Loc, insnentry_to_str
 from tcls_900.tlcs_900 import Reg, Mem, MemReg, CReg, RReg, LWORD, WORD, BYTE # TODO Specific import
 from .popup import InvalidInsnPopup
 
@@ -538,7 +538,7 @@ class Project:
             label = {}
             label["name"] = l.name
             label["count"] = l.count
-            label["call"] = ep in self.ob.calls
+            label["kind"] = l.kind.value
             labels[ep] = label
 
         with open(project_folder / "labels.json", "w") as fp:
@@ -578,6 +578,8 @@ class Project:
         file_len = os.path.getsize(path)
 
         project = Project(path, proj_json["org"], proj_json["ep"])
+        project.file_len = file_len
+
         with open(path, "rb") as fp:
             project.ib = InputBuffer(fp, file_len, entry_point=project.org, exit_on_invalid=True)
             project.ob = OutputBuffer(None)
@@ -593,16 +595,16 @@ class Project:
         label_eps: list[int] = []
         for ep, label in labels.items():
             ep = int(ep)
-            label_eps.append(ep)
             count = label["count"]
             name = label["name"]
-            call = label["call"]
-            if call: project.ob.calls.add(ep)
-            project.ob.labels[ep] = Label(ep, count, name, call)
+            kind = LabelKind(label["kind"])
+            if kind != LabelKind.DATA: label_eps.append(ep)
+            if kind == LabelKind.FUNCTION: project.ob.calls.add(ep)
+            project.ob.labels[ep] = Label(ep, count, name, kind)
 
         for ep in label_eps:
             project.pool.query(Insn(project.pool, project.ib, project.ob, ep, do_branch=False))
-        project.pool.poll_all()
+        project.pool.poll_all(threaded=False)
         project._load_sections()
 
         # Load functions

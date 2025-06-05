@@ -1,18 +1,20 @@
 import math
 
+from typing import cast
 from functools import cache
 from dataclasses import dataclass
 
 from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
 from kivy.uix.widget import Widget
+from kivy.uix.recycleboxlayout import RecycleBoxLayout
 from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, StencilUnUse, Rectangle
 
 def clear_cache():
     ArrowRenderer.get_offset.cache_clear()
 
 from .project import Section, CodeSection
-from .main import LABEL_HEIGHT, app, FONT_HEIGHT
+from .main import LABEL_HEIGHT, app, FONT_HEIGHT, KWidget
 from disapi import Loc
 
 MAX_OFFSET = 15
@@ -77,13 +79,13 @@ class Arrow:
     def __str__(self):
         return f"{self.start:X} -> {self.end:X}"
 
-class ArrowRenderer(Widget):
+class ArrowRenderer(KWidget, Widget):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         app().arrows = self
 
-        self.arrows: list[tuple[int, int]] = []
+        self.arrows: list[Arrow] = []
         self.arrow_offsets = {}
 
         self.recompute_arrows()
@@ -93,7 +95,7 @@ class ArrowRenderer(Widget):
         for section in app().project.sections.values():
             if not isinstance(section, CodeSection): continue
             for insn in section.instructions:
-                location: Loc = None
+                location: Loc | None = None
                 cond = False
                 if insn.entry.opcode == "JP":
                     if len(insn.entry.instructions) == 1:
@@ -186,7 +188,7 @@ class ArrowRenderer(Widget):
 
     @cache
     @staticmethod
-    def get_offset(pc):
+    def get_offset(pc: int):
         offset = 0
         for data in app().rv.data:
             section: Section = data["section"]
@@ -203,7 +205,7 @@ class ArrowRenderer(Widget):
 
     def redraw(self):
         rv = app().rv
-        layout_manager = rv.layout_manager
+        layout_manager = cast(RecycleBoxLayout, rv.layout_manager)
         vstart, vend = rv.get_visible_range()
 
         if len(layout_manager.children) == 0: return

@@ -1,8 +1,10 @@
-import math, shutil, tempfile
+import math, shutil, tempfile, logging
 
 from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Callable, TypeVar, Type, Generator, cast, Protocol, Any, TYPE_CHECKING
+from platformdirs import PlatformDirs
+from configparser import ConfigParser
 
 from kivy.app import App
 from kivy.metrics import dp
@@ -21,6 +23,15 @@ from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
 from kivy.effects.scroll import ScrollEffect
 from kivy.graphics import Canvas
+
+dirs = PlatformDirs(
+    appname="PyDis",
+    appauthor=False,
+    ensure_exists=True
+)
+
+config_file = dirs.user_config_path / "dis.ini"
+config: ConfigParser
 
 FONT_SIZE = dp(15)
 LABEL_HEIGHT = FONT_SIZE + dp(5)
@@ -501,12 +512,38 @@ class DisApp(App):
             shutil.rmtree(_graph_tmpfolder)
         except FileNotFoundError: pass
 
+        config["window"] = window = {}
+        window["width"] = str(Window.size[0])
+        window["height"] = str(Window.size[1])
+        window["left"] = str(Window.left)
+        window["top"] = str(Window.top)
+
+        with open(config_file, "w") as fp:
+            config.write(fp)
+
         super().on_stop()
 
 def main(path: Path, ep: int, org: int):
+    global config
+    config = ConfigParser()
+    config.read(config_file)
+
     project = new_project(path, ep, org)
     global _graph_tmpfolder
     _graph_tmpfolder = tempfile.mkdtemp()
     
-    window = DisApp(project)
-    window.run()
+    logging.info(f"PyDis: Config file: {config_file}")
+    
+    if "window" in config:
+        window = config["window"]
+        if "width" in window and "height" in window:
+            Window.size = (
+                int(window["width"]), 
+                int(window["height"])
+            )
+        if "left" in window and "top" in window:
+            Window.left = int(window["left"])
+            Window.top = int(window["top"])
+
+    app = DisApp(project)
+    app.run()

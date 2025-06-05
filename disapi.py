@@ -6,6 +6,7 @@ import sys
 from collections import deque, Counter
 from queue import Queue
 from typing import Any
+from enum import Enum
 
 def insnentry_to_str(entry, ob):
     return entry.opcode + " " + ", ".join(map(lambda v: insn_to_str(v, ob), entry.instructions))
@@ -47,15 +48,24 @@ class Branch:
         if self.conditional:
             ret += " ?"
         return ret
+    
+class LabelKind(Enum):
+    FUNCTION = 1
+    LABEL = 2
+    DATA = 3
 
 class Label:
-    def __init__(self, location, count = 1, name = None, call = False):
+    def __init__(self, location, count = 1, name = None, kind = LabelKind.LABEL):
         self.location = location
         self.count = count
         if name is None:
-           if call: name = "fun_" + format(location, "X")
-           else: name = "label_" + format(location, "X")
+           loc = format(location, "X")
+           if kind == LabelKind.FUNCTION: name = "fun_" + loc
+           elif kind == LabelKind.LABEL: name = "label_" + loc
+           elif kind == LabelKind.DATA: name = "data_" + loc
+           else: assert False
         self.name = name
+        self.kind = kind
 
     def __str__(self):
         return self.name
@@ -80,8 +90,7 @@ class OutputBuffer:
             self.insnmap[ep] = lst
 
     def datalabel(self, ep):
-        name: Any = "data_" + format(ep, "X")
-        self.labels[ep] = name
+        self.labels[ep] = Label(ep, kind=LabelKind.DATA)
 
     def branch(self, ep, to, conditional = False, call = False):
         self.branchlist.append(Branch(ep, to, conditional, call))
@@ -91,9 +100,9 @@ class OutputBuffer:
         # Count occurrences of branch
         labels = Counter(map(lambda v: int(v.to), self.branchlist)).items()
         labels = filter(lambda v: v[1] > min_occurance and lower <= v[0] <= upper, labels)
-        labels = dict(map(lambda v: (v[0], Label(v[0], v[1], call = v[0] in self.calls)), labels))
+        labels = dict(map(lambda v: (v[0], Label(v[0], v[1], kind=(LabelKind.FUNCTION if v[0] in self.calls else LabelKind.LABEL))), labels))
 
-        self.labels = labels
+        self.labels.update(labels)
 
         # Update branch list with labels
         for branch in self.branchlist:
@@ -208,13 +217,13 @@ class InsnPool:
 
     # Returns a location if there has been an error and blocking,
     # otherwise calls the callback with the location
-    def poll_all(self, blocking = True, callback = None) -> int:
+    def poll_all(self, blocking = True, callback = None, threaded = True) -> int:
         if not blocking and callback is None:
             raise ValueError("If called in a non blocking way you must provide a callback function.")
 
         def poll_all_impl():
             while not self.has_finished():  # Wait for all threads to process
-                self.poll()
+                self.poll(threaded)
                 self.lock.acquire()  # Pauses the current thread and waits till batch is processed
             if callback:
                 callback(self.__error)
@@ -228,7 +237,7 @@ class InsnPool:
 
         return 0
 
-    def poll(self):
+    def poll(self, threaded = True):
         # Batch processing, we only start a new batch when the old
         # one has finished. It is only possible to jump to a location once.
         if not self.has_cycled(): return
@@ -241,7 +250,9 @@ class InsnPool:
                 self.locations.add(insn.pc)
 
             self.numThreads += 1
-            insn.start()
+            if threaded: 
+                insn.start()
+            else: insn.run()
 
 class InsnEntry:
     def __init__(self, pc, length, opcode, instructions):

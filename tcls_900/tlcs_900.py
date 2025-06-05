@@ -72,6 +72,8 @@ class Mem:
             name = insn.obuffer.datalabel(address)
         else:
             name = format(address, "X") + "h"
+
+        insn.obuffer.datalabel(address)
         
         self.name = name
         self.address = address
@@ -398,7 +400,7 @@ Rregtable = [
 ]
 
 # TODO: Actually replace T with None and have a function instead of access to cctable
-cctable = ["F", "LT", "LE", "ULE", "PE/OV", "M", "Z/EQ", "C", "T", "GE", "GT", "UGT", "PO/NOV", "P", "NZ/NE", "NC"]
+cctable = ["F", "LT", "LE", "ULE", "PE/OV", "M", "Z/EQ", "C/ULT", "T", "GE", "GT", "UGT", "PO/NOV", "P", "NZ/NE", "NC/UGE"]
 
 reg_addr = {
     "INVALID": -1,

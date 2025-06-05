@@ -1,2 +1,6 @@
 Rom loads at offset F00000
 Reset Vector is at  FFFF00 and points to FFEC19
+
+fun_F3D3F2 prints a line of text: 
+    XHL contains the address of a length prefixed string
+     DE contains the line number

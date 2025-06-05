@@ -3,3 +3,4 @@ kivy
 pytreemap
 graphviz
 pyyaml
+platformdirs
