@@ -90,7 +90,9 @@ class OutputBuffer:
             self.insnmap[ep] = lst
 
     def datalabel(self, ep):
-        self.labels[ep] = Label(ep, kind=LabelKind.DATA)
+        label = Label(ep, kind=LabelKind.DATA)
+        self.labels[ep] = label
+        return label
 
     def branch(self, ep, to, conditional = False, call = False):
         self.branchlist.append(Branch(ep, to, conditional, call))

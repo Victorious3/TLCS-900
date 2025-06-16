@@ -194,7 +194,7 @@ def popmem(insn):
         elif n == 1:
             return Mem(insn, insn.popw()) # 16
         elif n == 2:
-            return Mem(insn, insn.popw() | (insn.pop() >> 16)) # 24
+            return Mem(insn, insn.popw() | (insn.pop() << 16)) # 24
         else:
             mem = insn.pop()
             n = mem & 0x3
