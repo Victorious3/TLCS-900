@@ -15,6 +15,7 @@ from .popup import InvalidInsnPopup
 
 DATA_PER_ROW = 7
 MAX_SECTION_LENGTH = DATA_PER_ROW * 40
+FUN_SECTION_LENGTH = 0x8000
 
 class Instruction:
     def __init__(self, entry: InsnEntry):
@@ -542,7 +543,7 @@ class Project:
             labels[ep] = label
 
         with open(project_folder / "labels.json", "w") as fp:
-            json.dump(labels, fp, indent=2)
+            json.dump(labels, fp, indent=2, sort_keys=True)
 
         proj = {
             "rom": self.path.relative_to(project_folder).as_posix(),
@@ -550,15 +551,19 @@ class Project:
             "org": self.org
         }
         with open(project_folder / "proj.json", "w") as fp:
-            json.dump(proj, fp, indent=2)
+            json.dump(proj, fp, indent=2, sort_keys=True)
 
         fun_folder = project_folder / "fun"
         fun_folder.mkdir(exist_ok=True)
-
+        
         if self.functions:
             for fun in self.functions.values():
-                with open(fun_folder / (str(fun.ep) + ".json"), "w") as fp:
-                    json.dump(fun.serialize(), fp, indent=2)
+                section = (fun.ep - self.org) // FUN_SECTION_LENGTH
+                section_name = format(section * FUN_SECTION_LENGTH + self.org, "X")
+                section_folder = fun_folder / section_name
+                section_folder.mkdir(exist_ok=True)
+                with open(section_folder / (str(fun.ep) + ".json"), "w") as fp:
+                    json.dump(fun.serialize(), fp, indent=2, sort_keys=True)
 
     @staticmethod
     def read_from_file(project_folder: Path) -> "Project":
@@ -612,7 +617,8 @@ class Project:
         if fun_folder.exists() and fun_folder.is_dir():
             project.functions = {}
 
-            for fun_file in fun_folder.iterdir():
+            for fun_file in fun_folder.rglob("*"):
+                if fun_file.is_dir(): continue
                 with open(fun_file, "r") as fp:
                     fun_data = json.load(fp)
                 fun = Function.deserialize(fun_data, project)
