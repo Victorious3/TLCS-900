@@ -154,7 +154,7 @@ class InputBuffer:
         o = insn.pc + n
         o -= self.entry_point
 
-        if o >= len(self.buffer):
+        if o >= len(self.buffer) or o < 0:
             insn.kill(True)
             return -1
         o1 = o // 8
@@ -220,6 +220,7 @@ class InsnPool:
     # Returns a location if there has been an error and blocking,
     # otherwise calls the callback with the location
     def poll_all(self, blocking = True, callback = None, threaded = True) -> int:
+        self.__error = False
         if not blocking and callback is None:
             raise ValueError("If called in a non blocking way you must provide a callback function.")
 

@@ -100,6 +100,10 @@ def get_jump_location(insn: Instruction) -> Loc | None:
     if entry.opcode == "JP":
         if len(entry.instructions) == 1: 
             return entry.instructions[0]
+        else:
+            loc = entry.instructions[1]
+            if isinstance(loc, Loc): return loc
+
     elif entry.opcode in ("JR", "JRL", "DJNZ"):
         return entry.instructions[1] 
 
@@ -125,11 +129,15 @@ def get_loc(value: Reg | Mem) -> list[Reg | int]:
 
 def get_load(insn: Instruction) -> list[Reg | int]:
     if insn.entry.opcode in ("BS1B", "BS1F", "DJNZ", "DEC", "INC", "LD", "LDC", "LDCF", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "ORCF", "RL", "RLC", "RR", "RRC", "SET", "TSET", "XORCF"): #second argument
-        return get_loc(insn.entry.instructions[1])
+        if len(insn.entry.instructions) == 2:
+            return get_loc(insn.entry.instructions[1])
+        else: return get_loc(insn.entry.instructions[0])
     elif insn.entry.opcode in ("CPL", "DAA", "EXTS", "EXTZ", "MIRR", "NEG", "PAA"): # first argument
         return get_loc(insn.entry.instructions[0])
     elif insn.entry.opcode in ("ADC", "ADD", "AND", "ANDCF", "BIT", "DIV", "DIVS", "EX", "MUL", "MULS", "OR", "RLD", "RRD", "SBC", "SLA", "SLL", "SRA", "SRL", "SUB", "XOR"): #first and second argument
-        return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1])
+        if len(insn.entry.instructions) == 2:
+            return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1])
+        else: return get_loc(insn.entry.instructions[0]) 
     elif insn.entry.opcode in ("CPD", "CPDR", "CPI", "CPIR"):
         return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1]) + [Reg(True, WORD, 0xE4)] # BC
     elif insn.entry.opcode == "MULA":
@@ -146,7 +154,9 @@ def get_store(insn: Instruction) -> list[Reg | int]:
     if insn.entry.opcode in ("ADC", "ADD", "AND", "BS1B", "BS1F", "CHG", "CPL", "DAA", "DIV", "DIVS", "DJNZ", "EXTS", "EXTZ", "LD", "LDA", "LDC", "MIRR", "MUL", "MULA", "MULS", "NEG", "OR", "PAA", "SBC", "SUB", "XOR"): # first argument
         return get_loc(insn.entry.instructions[0])
     elif insn.entry.opcode in ("DEC", "INC", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "RES", "RL", "RLC", "RR", "RRC", "SCC", "SET", "SLA", "SLL", "SRA", "SRL", "STCF", "TSET", "XORCF"): # second arument
-        return get_loc(insn.entry.instructions[1])
+        if len(insn.entry.instructions) == 2:
+            return get_loc(insn.entry.instructions[1])
+        else: return get_loc(insn.entry.instructions[0])
     elif insn.entry.opcode in ("EX", "RLD", "RRD"):  #first and second argument
         return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1])
     elif insn.entry.opcode == "SWI":
@@ -483,13 +493,19 @@ class Function:
                                 state.unclobber(last)
                         else: raise Underflow()
                     elif insn.entry.opcode in ("CALL", "CALR"):
+                        fun = None
                         if len(insn.entry.instructions) == 1:
                             fun = proj.functions.get(int(insn.entry.instructions[0]))
-                            if fun:
-                                if not fun.state: fun.analyze(proj, tick)
-                                fun.callers.append((insn.entry.pc, self.ep))
-                                self.callees.append((insn.entry.pc, fun.ep))
-                                state.push_function(pc, fun)
+                        else:
+                            loc = insn.entry.instructions[1]
+                            if isinstance(loc, Loc): fun = proj.functions.get(int(loc))
+
+                        if fun:
+                            if not fun.state: fun.analyze(proj, tick)
+                            fun.callers.append((insn.entry.pc, self.ep))
+                            self.callees.append((insn.entry.pc, fun.ep))
+                            state.push_function(pc, fun)
+
                     else:
                         load = get_load(insn)
                         for r in load:

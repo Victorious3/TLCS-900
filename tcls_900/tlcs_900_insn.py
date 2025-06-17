@@ -1,6 +1,8 @@
 from disapi import Loc
 from tcls_900.tlcs_900 import *
 
+A = Reg(False, 0, 1)
+
 # 1) Load Instructions
 
 #LD
@@ -65,7 +67,7 @@ def PUSH_F(insn):
     return "PUSH", "F"
 def PUSH_A(insn):
     insn.pop()
-    return "PUSH", "A"
+    return "PUSH", A
 def PUSH_RR(insn): 
     return "PUSH", popR(insn, 's')
 def PUSH_r(insn): 
@@ -86,7 +88,7 @@ def POP_F(insn):
     return "POP", "F"
 def POP_A(insn):
     insn.pop()
-    return "POP", "A"
+    return "POP", A
 def POP_RR(insn): 
     return "POP", popR(insn, '?', WORD)
 def POP_XRR(insn): 
@@ -142,9 +144,13 @@ def MIRR(insn):
 # Helper function for special register code
 def LD(insn):
     if (insn.lastinsn & 0xF) == 0b0011:
-        return "(XDE+)", "(XHL+)"
+        r1 = Reg(False, LWORD, 2)
+        r2 = Reg(False, LWORD, 3)
+        return MemReg(insn, 0, "XDE+", r1), MemReg(insn, 0, "XHL+", r2)
     elif (insn.lastinsn & 0xF) == 0b0101:
-        return "(XIX+)", "(XIY+)"
+        r1 = Reg(False, LWORD, 4)
+        r2 = Reg(False, LWORD, 5)
+        return MemReg(insn, 0, "XIX+", r1), MemReg(insn, 0, "XIY+", r2)
     else:
         return "INVALID", "INVALID"
 
@@ -163,13 +169,15 @@ def LDDR(insn):
     return ("LDDRW" if insn.lastsize == WORD else "LDDR"), r1, r2
 
 #CPXX
-def CPI(insn): 
+def CPI(insn):
     insn.pop()
-    return "CPI", ("A" if insn.lastsize == WORD else "WA"), "(" + str(insn.lastr) + "+)"
+    regr = insn.lastinsn & 0x7
+    return "CPI", (A if insn.lastsize == WORD else "WA"), MemReg(insn, 0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
     
 def CPIR(insn):
     insn.pop()
-    return "CPIR", ("A" if insn.lastsize == WORD else "WA"), "(" + str(insn.lastr) + "+)"
+    regr = insn.lastinsn & 0x7
+    return "CPIR", (A if insn.lastsize == WORD else "WA"), MemReg(insn, 0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
 
 def CPD(insn): 
     insn.pop()
@@ -437,7 +445,7 @@ def LDCF_X_r(insn):
     return "LDCF", insn.lastr, (insn.pop() & 0xF) 
 def LDCF_A_r(insn):
     insn.pop()
-    return "LDCF", "A", insn.lastr
+    return "LDCF", A, insn.lastr
 def LDCF_X3_mem(n):
     def LDCF_N_mem(insn):
         insn.pop()
@@ -445,7 +453,7 @@ def LDCF_X3_mem(n):
     return LDCF_N_mem
 def LDCF_A_mem(insn):
     insn.pop()
-    return "LDCF", "A", insn.lastmem
+    return "LDCF", A, insn.lastmem
 
 #STCF
 def STCF_X_r(insn): 
@@ -453,7 +461,7 @@ def STCF_X_r(insn):
     return "STCF", insn.lastr, (insn.pop() & 0xF) 
 def STCF_A_r(insn): 
     insn.pop()
-    return "STCF", "A", insn.lastr
+    return "STCF", A, insn.lastr
 def STCF_X3_mem(n):
     def STCF_N_mem(insn):
         insn.pop()
@@ -461,7 +469,7 @@ def STCF_X3_mem(n):
     return STCF_N_mem
 def STCF_A_mem(insn):
     insn.pop()
-    return "STCF", "A", insn.lastmem
+    return "STCF", A, insn.lastmem
 
 #ANDCF
 def ANDCF_X_r(insn):
@@ -469,7 +477,7 @@ def ANDCF_X_r(insn):
     return "ANDCF", insn.lastr, (insn.pop() & 0xF) 
 def ANDCF_A_r(insn):
     insn.pop()
-    return "ANDCF", "A", insn.lastr
+    return "ANDCF", A, insn.lastr
 def ANDCF_X3_mem(n):
     def ANDCF_N_mem(insn):
         insn.pop()
@@ -477,7 +485,7 @@ def ANDCF_X3_mem(n):
     return ANDCF_N_mem
 def ANDCF_A_mem(insn):
     insn.pop()
-    return "ANDCF", "A", insn.lastmem
+    return "ANDCF", A, insn.lastmem
 
 #ORCF
 def ORCF_X_r(insn): 
@@ -485,7 +493,7 @@ def ORCF_X_r(insn):
     return "ORCF", insn.lastr, (insn.pop() & 0xF) 
 def ORCF_A_r(insn):
     insn.pop()
-    return "ORCF", "A", insn.lastr
+    return "ORCF", A, insn.lastr
 def ORCF_X3_mem(n):
     def ORCF_N_mem(insn):
         insn.pop()
@@ -493,7 +501,7 @@ def ORCF_X3_mem(n):
     return ORCF_N_mem
 def ORCF_A_mem(insn):
     insn.pop()
-    return "ORCF", "A", insn.lastmem
+    return "ORCF", A, insn.lastmem
 
 #XORCF
 def XORCF_X_r(insn):
@@ -501,7 +509,7 @@ def XORCF_X_r(insn):
     return "XORCF", insn.lastr, (insn.pop() & 0xF) 
 def XORCF_A_r(insn):
     insn.pop()
-    return "XORCF", "A", insn.lastr
+    return "XORCF", A, insn.lastr
 def XORCF_X3_mem(n):
     def XORCF_N_mem(insn):
         insn.pop()
@@ -509,7 +517,7 @@ def XORCF_X3_mem(n):
     return XORCF_N_mem
 def XORCF_A_mem(insn):
     insn.pop()
-    return "XORCF", "A", insn.lastmem
+    return "XORCF", A, insn.lastmem
 
 #RCF, SCF, CCF, ZCF
 def RCF(insn): insn.pop(); return "RCF"
@@ -570,10 +578,10 @@ def TSET_X3_mem(n):
 #BS1
 def BS1F(insn): 
     insn.pop()
-    return "BS1F", "A", insn.lastr
+    return "BS1F", A, insn.lastr
 def BS1B(insn): 
     insn.pop()
-    return "BS1B", "A", insn.lastr
+    return "BS1B", A, insn.lastr
 
 # 7) Special operations and CPU control
 
@@ -668,7 +676,7 @@ def RLC_X_r(insn):
     return "RLC", (insn.pop() & 0xF), insn.lastr
 def RLC_A_r(insn): 
     insn.pop()
-    return "RLC", "A", insn.lastr
+    return "RLC", A, insn.lastr
 def RLC_mem(insn): 
     return ("RLCW" if insn.lastsize == WORD else "RLC"), insn.lastmem
 
@@ -678,7 +686,7 @@ def RRC_X_r(insn):
     return "RRC", (insn.pop() & 0xF), insn.lastr
 def RRC_A_r(insn):
     insn.pop()
-    return "RRC", "A", insn.lastr
+    return "RRC", A, insn.lastr
 def RRC_mem(insn):
     return ("RRCW" if insn.lastsize == WORD else "RRC"), insn.lastmem
 
@@ -688,7 +696,7 @@ def RL_X_r(insn):
     return "RL", (insn.pop() & 0xF), insn.lastr
 def RL_A_r(insn): 
     insn.pop()
-    return "RL", "A", insn.lastr
+    return "RL", A, insn.lastr
 def RL_mem(insn):
     return ("RLW" if insn.lastsize == WORD else "RL"), insn.lastmem
 
@@ -698,7 +706,7 @@ def RR_X_r(insn):
     return "RR", (insn.pop() & 0xF), insn.lastr
 def RR_A_r(insn):
     insn.pop()
-    return "RR", "A", insn.lastr
+    return "RR", A, insn.lastr
 def RR_mem(insn):
     return ("RRW" if insn.lastsize == WORD else "RR"), insn.lastmem
 
@@ -708,7 +716,7 @@ def SLA_X_r(insn):
     return "RR", (insn.pop() & 0xF), insn.lastr
 def SLA_A_r(insn):
     insn.pop()
-    return "RR", "A", insn.lastr
+    return "RR", A, insn.lastr
 def SLA_mem(insn):
     return ("SLAW" if insn.lastsize == WORD else "SLA"), insn.lastmem
 
@@ -718,7 +726,7 @@ def SRA_X_r(insn):
     return "SRA", (insn.pop() & 0xF), insn.lastr
 def SRA_A_r(insn): 
     insn.pop()
-    return "SRA", "A", insn.lastr
+    return "SRA", A, insn.lastr
 def SRA_mem(insn):
     return ("SRAW" if insn.lastsize == WORD else "SRA"), insn.lastmem
 
@@ -728,7 +736,7 @@ def SLL_X_r(insn):
     return "SLL", (insn.pop() & 0xF), insn.lastr
 def SLL_A_r(insn):
     insn.pop()
-    return "SLL", "A", insn.lastr
+    return "SLL", A, insn.lastr
 def SLL_mem(insn):
     return ("SLLW" if insn.lastsize == WORD else "SLL"), insn.lastmem
 
@@ -738,17 +746,17 @@ def SRL_X_r(insn):
     return "SRL", (insn.pop() & 0xF), insn.lastr
 def SRL_A_r(insn):
     insn.pop()
-    return "SRL", "A", insn.lastr
+    return "SRL", A, insn.lastr
 def SRL_mem(insn):
     return ("SRLW" if insn.lastsize == WORD else "SRL"), insn.lastmem
 
 #RLD / RRD
 def RLD(insn):
     insn.pop()
-    return "RLD", "A", insn.lastmem
+    return "RLD", A, insn.lastmem
 def RRD(insn): 
     insn.pop()
-    return "RRD", "A", insn.lastmem
+    return "RRD", A, insn.lastmem
 
 # 9) Jump, call and return
 
@@ -767,7 +775,16 @@ def JP_nnn(insn):
     return "JP", to
 def JP_cc_mem(insn):
     cc = cctable[popcc(insn)]
-    return "JP", cc, insn.lastmem
+    if cc == "T": insn.kill()
+
+    lastmem = insn.lastmem
+    lastmem.plain_addr = True
+    if not isinstance(lastmem, MemReg):
+        loc = Loc(lastmem.address)
+        if cc != "F": insn.branch(loc, True)
+        return "JP", cc, loc
+    
+    return "JP", cc, lastmem
     
 def JR_cc(insn): 
     pc = insn.pc
@@ -803,7 +820,18 @@ def CALL_nnn(insn):
     insn.branch(to, True, call = True)
     return "CALL", to
 def CALL_cc_mem(insn): 
-    return "CALL", cctable[popcc(insn)], insn.lastmem
+    cc = cctable[popcc(insn)]
+    if cc == "T": insn.kill()
+
+    lastmem = insn.lastmem
+    lastmem.plain_addr = True
+    if not isinstance(lastmem, MemReg):
+        loc = Loc(lastmem.address)
+        if cc != "F": insn.branch(loc, True)
+        return "CALL", cc, loc
+
+    return "CALL", cc, lastmem
+    
 def CALR(insn): 
     insn.pop()
     offset = insn.popw()
