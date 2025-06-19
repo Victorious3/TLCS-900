@@ -449,6 +449,7 @@ class DisApp(App):
 
         # Update data
         self.rv.update_data()
+        self.minimap.redraw()
         
     def analyze_functions(self, callback):
         wait: ClockEvent = None
@@ -512,11 +513,12 @@ class DisApp(App):
             shutil.rmtree(_graph_tmpfolder)
         except FileNotFoundError: pass
 
-        config["window"] = window = {}
+        window = {}
         window["width"] = str(Window.size[0])
         window["height"] = str(Window.size[1])
         window["left"] = str(Window.left)
         window["top"] = str(Window.top)
+        config["window"] = window
 
         with open(config_file, "w") as fp:
             config.write(fp)

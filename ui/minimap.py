@@ -34,6 +34,6 @@ class Minimap(KWidget, Widget):
                 group = list(group)
                 height = sum(map(section_height, group))
                 if key == CodeSection:
-                    Rectangle(pos=(self.x, self.y + (1 - (offset / total_height)) * self.height), size=(self.width, height / total_height * self.height))
+                    Rectangle(pos=(self.x, self.y + (1 - ((offset + height) / total_height)) * self.height), size=(self.width, height / total_height * self.height))
 
                 offset += height

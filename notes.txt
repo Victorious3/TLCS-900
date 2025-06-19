@@ -1,6 +1,41 @@
 Rom loads at offset F00000
 Reset Vector is at  FFFF00 and points to FFEC19
 
+The LCD controller is controlled by addresses 10000 and 10001
+where 10000 is supposedly the control register and 10001 is used for data.
+
+The display is split up into columns and rows where every Page is 8 rows.
+So you have to write 8 pixels at a time from top to bottom. The column can be picked independently.
+
+The commands available are as follows:
+- ADC
+- CLFrequencyRegister
+- ColumnLSB
+- ColumnMSB
+- Data
+- DisplayMode
+- DutyRatioRegister
+- EntireMode
+- HighPowerMode
+- InitialDisplayLine
+- InverseMode
+- LCDBiasSelectRegister
+- Page
+- PowerControl
+- RegulatorResistorSelect
+- Reset
+- ResetModifyRead
+- SetCLFrequencyMode
+- SetContrastControlMode
+- SetContrastControlRegister
+- SetDutyRatioMode
+- SetLCDBiasSelectMode
+- SetModifyRead
+- SHL
+- StaticIndicatorMode
+- StaticIndicatorRegister
+- Status
+
 fun_F3D3F2 prints a line of text: 
     XHL contains the address of a length prefixed string
      DE contains the line number
