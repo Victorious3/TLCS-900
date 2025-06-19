@@ -27,8 +27,8 @@ class AnalyzerFilter(HideableTextInput, EscapeTrigger):
         Clock.schedule_once(lambda dt: panel.ids["analyzer_table"].filter(self.text), 0)
 
 
-HEADER_NAMES = ["name", "address", "frequency", "complexity", "input", "clobber", "output"]
-COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(100), dp(200), dp(200), dp(200)]
+HEADER_NAMES = ["name", "address", "frequency", "complexity", "input", "clobber", "output", "stack"]
+COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(100), dp(200), dp(200), dp(200), dp(100)]
 
 class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
     def __init__(self, **kwargs):
@@ -125,6 +125,13 @@ class AnalyzerTable(ResizableRecycleTable):
             row.append(", ".join(map(lambda x: str(x[1]), filter(lambda r: isinstance(r[1], Reg), fun.state.clobbers))))
             #output registers
             row.append(", ".join(map(str, filter(lambda r: isinstance(r, Reg), fun.state.output))))
+            #stack
+            if fun.underflow:
+                row.append("underflow")
+            elif len(fun.state.stack) == 0:
+                row.append("empty")
+            else:
+                row.append("overflow")
 
             self.original_data.append(row)
 

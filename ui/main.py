@@ -449,6 +449,8 @@ class DisApp(App):
 
         # Update data
         self.rv.update_data()
+        self.arrows.recompute_arrows()
+        self.arrows.redraw()
         self.minimap.redraw()
         
     def analyze_functions(self, callback):

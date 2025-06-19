@@ -1,7 +1,9 @@
 from disapi import Loc
 from tcls_900.tlcs_900 import *
 
-A = Reg(False, 0, 1)
+A = Reg(False, BYTE, 1)
+W = Reg(False, BYTE, 0)
+WA = Reg(False, WORD, 0)
 
 # 1) Load Instructions
 
@@ -172,21 +174,21 @@ def LDDR(insn):
 def CPI(insn):
     insn.pop()
     regr = insn.lastinsn & 0x7
-    return "CPI", (A if insn.lastsize == WORD else "WA"), MemReg(insn, 0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
+    return "CPI", (A if insn.lastsize == WORD else WA), MemReg(insn, 0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
     
 def CPIR(insn):
     insn.pop()
     regr = insn.lastinsn & 0x7
-    return "CPIR", (A if insn.lastsize == WORD else "WA"), MemReg(insn, 0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
+    return "CPIR", (A if insn.lastsize == WORD else WA), MemReg(insn, 0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
 
 def CPD(insn): 
     insn.pop()
-    r1 = "AW" if insn.lastsize == WORD else "W"
+    r1 = WA if insn.lastsize == WORD else W
     r2 = str(insn.lastr) + "-" 
     return "CPD", r1, r2
 def CPDR(insn): 
     insn.pop()
-    r1 = "AW" if insn.lastsize == WORD else "W"
+    r1 = WA if insn.lastsize == WORD else W
     r2 = str(insn.lastr) + "-" 
     return "CPDR", r1, r2
 

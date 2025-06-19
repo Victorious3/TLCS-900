@@ -13,7 +13,7 @@ from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, Sten
 def clear_cache():
     ArrowRenderer.get_offset.cache_clear()
 
-from .project import Section, CodeSection
+from .project import Section, CodeSection, get_jump_location
 from .main import LABEL_HEIGHT, app, FONT_HEIGHT, KWidget
 from disapi import Loc
 
@@ -95,19 +95,13 @@ class ArrowRenderer(KWidget, Widget):
         for section in app().project.sections.values():
             if not isinstance(section, CodeSection): continue
             for insn in section.instructions:
-                location: Loc | None = None
+                location = get_jump_location(insn)
+                
                 cond = False
-                if insn.entry.opcode == "JP":
-                    if len(insn.entry.instructions) == 1:
-                        location = insn.entry.instructions[0]
-                elif insn.entry.opcode == "DJNZ":
-                    cond = True
-                    location = insn.entry.instructions[1]
-                elif insn.entry.opcode == "JR" or insn.entry.opcode == "JRL":
+                if insn.entry.opcode == "JR" or insn.entry.opcode == "JRL":
                     cc = insn.entry.instructions[0]
                     if cc != "T": cond = True
                     elif cc == "F": continue
-                    location = insn.entry.instructions[1]
 
                 if not location: continue
                 arrows.append(Arrow(min(insn.entry.pc, location.loc), max(insn.entry.pc, location.loc), insn.entry.pc < location.loc, [], cond))

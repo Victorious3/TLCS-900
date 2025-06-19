@@ -128,44 +128,48 @@ def get_loc(value: Reg | Mem) -> list[Reg | int]:
     return []
 
 def get_load(insn: Instruction) -> list[Reg | int]:
-    if insn.entry.opcode in ("BS1B", "BS1F", "DJNZ", "DEC", "INC", "LD", "LDC", "LDCF", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "ORCF", "RL", "RLC", "RR", "RRC", "SET", "TSET", "XORCF"): #second argument
+    opcode: str = insn.entry.opcode
+    if opcode.endswith("W"): opcode = opcode[:-1]
+    if opcode in ("BS1B", "BS1F", "DJNZ", "DEC", "INC", "LD", "LDC", "LDCF", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "ORCF", "RL", "RLC", "RR", "RRC", "SET", "TSET", "XORCF"): #second argument
         if len(insn.entry.instructions) == 2:
             return get_loc(insn.entry.instructions[1])
         else: return get_loc(insn.entry.instructions[0])
-    elif insn.entry.opcode in ("CPL", "DAA", "EXTS", "EXTZ", "MIRR", "NEG", "PAA"): # first argument
+    elif opcode in ("CPL", "DAA", "EXTS", "EXTZ", "MIRR", "NEG", "PAA"): # first argument
         return get_loc(insn.entry.instructions[0])
-    elif insn.entry.opcode in ("ADC", "ADD", "AND", "ANDCF", "BIT", "DIV", "DIVS", "EX", "MUL", "MULS", "OR", "RLD", "RRD", "SBC", "SLA", "SLL", "SRA", "SRL", "SUB", "XOR"): #first and second argument
+    elif opcode in ("ADC", "ADD", "AND", "ANDCF", "BIT", "CP", "DIV", "DIVS", "EX", "MUL", "MULS", "OR", "RLD", "RRD", "SBC", "SLA", "SLL", "SRA", "SRL", "SUB", "XOR"): #first and second argument
         if len(insn.entry.instructions) == 2:
             return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1])
         else: return get_loc(insn.entry.instructions[0]) 
-    elif insn.entry.opcode in ("CPD", "CPDR", "CPI", "CPIR"):
+    elif opcode in ("CPD", "CPDR", "CPI", "CPIR"):
         return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1]) + [Reg(True, WORD, 0xE4)] # BC
-    elif insn.entry.opcode == "MULA":
+    elif opcode == "MULA":
         return get_loc(insn.entry.instructions[0]) + [Reg(True, LWORD, 0xEC), Reg(True, LWORD, 0xE8)] # XHL, XDE
-    elif insn.entry.opcode == "SWI":
+    elif opcode == "SWI":
         return [Reg(True, LWORD, 0xFC)] # XSP
-    elif insn.entry.opcode in ("UNLK", "LINK"):
+    elif opcode in ("UNLK", "LINK"):
         return get_loc(insn.entry.instructions[0]) + [Reg(True, LWORD, 0xFC)] # XSP
-    elif insn.entry.opcode in ("LDD", "LDDR", "LDI", "LDIR", "LDDR"):
+    elif opcode in ("LDD", "LDDR", "LDI", "LDIR", "LDDR"):
         return get_loc(insn.entry.instructions[1]) + [Reg(True, WORD, 0xE4)] # BC
     return []
         
 def get_store(insn: Instruction) -> list[Reg | int]:
-    if insn.entry.opcode in ("ADC", "ADD", "AND", "BS1B", "BS1F", "CHG", "CPL", "DAA", "DIV", "DIVS", "DJNZ", "EXTS", "EXTZ", "LD", "LDA", "LDC", "MIRR", "MUL", "MULA", "MULS", "NEG", "OR", "PAA", "SBC", "SUB", "XOR"): # first argument
+    opcode: str = insn.entry.opcode
+    if opcode.endswith("W"): opcode = opcode[:-1]
+    if opcode in ("ADC", "ADD", "AND", "BS1B", "BS1F", "CHG", "CPL", "DAA", "DIV", "DIVS", "DJNZ", "EXTS", "EXTZ", "LD", "LDA", "LDC", "MIRR", "MUL", "MULA", "MULS", "NEG", "OR", "PAA", "SBC", "SUB", "XOR"): # first argument
         return get_loc(insn.entry.instructions[0])
-    elif insn.entry.opcode in ("DEC", "INC", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "RES", "RL", "RLC", "RR", "RRC", "SCC", "SET", "SLA", "SLL", "SRA", "SRL", "STCF", "TSET", "XORCF"): # second arument
+    elif opcode in ("DEC", "INC", "MDEC1", "MDEC2", "MDEC4", "MINC1", "MINC2", "MINC4", "RES", "RL", "RLC", "RR", "RRC", "SCC", "SET", "SLA", "SLL", "SRA", "SRL", "STCF", "TSET", "XORCF"): # second arument
         if len(insn.entry.instructions) == 2:
             return get_loc(insn.entry.instructions[1])
         else: return get_loc(insn.entry.instructions[0])
-    elif insn.entry.opcode in ("EX", "RLD", "RRD"):  #first and second argument
+    elif opcode in ("EX", "RLD", "RRD"):  #first and second argument
         return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1])
-    elif insn.entry.opcode == "SWI":
+    elif opcode == "SWI":
         return [Reg(True, LWORD, 0xFC)] # XSP
-    elif insn.entry.opcode in ("UNLK", "LINK"):
+    elif opcode in ("UNLK", "LINK"):
         return get_loc(insn.entry.instructions[0]) + [Reg(True, LWORD, 0xFC)] # XSP
-    elif insn.entry.opcode in ("LDD", "LDDR", "LDI", "LDIR", "LDDR"):
+    elif opcode in ("LDD", "LDDR", "LDI", "LDIR", "LDDR"):
         return get_loc(insn.entry.instructions[0]) + [Reg(True, WORD, 0xE4)] # BC    
-    elif insn.entry.opcode in ("CPD", "CPDR", "CPI", "CPIR"):
+    elif opcode in ("CPD", "CPDR", "CPI", "CPIR"):
         return [Reg(True, WORD, 0xE4)] # BC
     return []
 
@@ -483,13 +487,18 @@ class Function:
                             state.stack.append((pc, reg_or_mem.address))
                         elif isinstance(reg_or_mem, Reg):
                             state.stack.append((pc, reg_or_mem.normalize()))
-                        elif reg_or_mem == "A":
-                            state.stack.append((pc, Reg(True, BYTE, 0xE0))) #A
+                        elif reg_or_mem == "SR":
+                            state.stack.append((pc, -1)) # SR special flag
+                        elif reg_or_mem == "F":
+                            state.stack.append((pc, -2)) # F special flag
                     elif insn.entry.opcode == "POP":
                         if len(state.stack) > 0:
                             pc, last = state.stack.pop()
+                            reg_or_mem = insn.entry.instructions[0]
+                            if reg_or_mem == "SR": reg_or_mem = -1
+                            elif reg_or_mem == "F": reg_or_mem = -2
                             #print("unclobber", last, pc, state.is_clobbered(pc, last))
-                            if last == insn.entry.instructions[0] and not state.is_clobbered(pc, last):
+                            if last == reg_or_mem and not state.is_clobbered(pc, last):
                                 state.unclobber(last)
                         else: raise Underflow()
                     elif insn.entry.opcode in ("CALL", "CALR"):
