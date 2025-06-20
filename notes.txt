@@ -1,5 +1,53 @@
 Rom loads at offset F00000
-Reset Vector is at  FFFF00 and points to FFEC19
+Reset Vector is at FFFF00 and points to FFEC19
+
+Interrupt Vector Table:
+
+RESET / SWI 0 : FFEC19
+
+SWI 1         : FFEC18 (disabled)
+SWI 2 / UNDEF : FFEC18 (disabled)
+SWI 3 - 7     : FFEC18 (disabled)
+ 
+INT 0         : FFBFA4
+INT 1         : FFBFA0
+INT 2         : FFBFAC
+INT 3         : FFBFB0
+
+Alarms:
+ALM0 (8k Hz)  : FFEC18 (disabled)
+ALM1 (512Hz)  : FFEC18 (disabled)
+ALM2 (64Hz)   : FFBF94
+ALM3 (2Hz)    : FFBF98
+ALM4 (1Hz)    : FFEC18 (disabled)
+
+8 Bit timers:
+INTTA0        : FFEC18 (disabled)
+INTTA1        : FFEC18 (disabled)
+INTTA2        : FFEC18 (disabled)
+INTTA3        : FFEC18 (disabled)
+
+Serial Interface:
+INTRX0        : FFEC18 (disabled)
+INTTX0        : FFEC18 (disabled)
+INTRX1        : FFF10E
+INTTX1        : FFEC18 (disabled)
+
+INTKEY        : FFBF9C
+INTRTC        : FFEC18 (disabled)
+INTLCD        : FFEC18 (disabled)
+INTP0         : FFEC18 (disabled)
+INTP1         : FFEC18 (disabled)
+
+Micro DMA:
+INTTC0        : FFEC18 (disabled)
+INTTC1        : FFEC18 (disabled)
+INTTC2        : FFEC18 (disabled)
+INTTC3        : FFEC18 (disabled)
+
+INTVLD0       : FFBFA8
+INTVLD1       : FFEC18 (disabled)
+INTVLD2       : FFEC18 (disabled)
 
 The LCD controller is controlled by addresses 10000 and 10001
 where 10000 is supposedly the control register and 10001 is used for data.

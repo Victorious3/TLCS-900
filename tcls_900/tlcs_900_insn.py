@@ -5,6 +5,12 @@ A = Reg(False, BYTE, 1)
 W = Reg(False, BYTE, 0)
 WA = Reg(False, WORD, 0)
 
+# If a displacement looks like an address, insert a memory location here
+def check_address(insn, address):
+    if insn.ibuffer.min <= address < insn.ibuffer.max:
+        return Mem(insn, address, plain_addr=True)
+    return address
+
 # 1) Load Instructions
 
 #LD
@@ -20,11 +26,11 @@ def LD_r_3X(n):
     return LD_N
 
 def LD_R_n(insn):
-    return "LD", popR(insn, 'zzz'), insn.pop()
+    return "LD", popR(insn, 'zzz'), check_address(insn, insn.pop())
 def LD_RR_nn(insn):
-    return "LD", popR(insn, 'zzz'), insn.popw()
-def LD_XRR_nnnn(insn): 
-    return "LD", popR(insn, 'zzz'), insn.popl()
+    return "LD", popR(insn, 'zzz'), check_address(insn, insn.popw())
+def LD_XRR_nnnn(insn):
+    return "LD", popR(insn, 'zzz'), check_address(insn, insn.popl())
 def LD_r_X(insn):
     insn.pop()
     return "LD", insn.lastr, popn_sz(insn, insn.lastsize) 
