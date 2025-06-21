@@ -527,7 +527,7 @@ class DisApp(App):
 
         super().on_stop()
 
-def main(path: Path, ep: int, org: int):
+def main(path: Path, ep: int | list[int], org: int):
     global config
     config = ConfigParser()
     config.read(config_file)

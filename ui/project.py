@@ -544,7 +544,7 @@ def label_list(label):
 class ProjectLoadException(Exception): pass
 
 class Project:
-    def __init__(self, path: Path, org: int, ep: int):
+    def __init__(self, path: Path, org: int, ep: int | list[int]):
         self.path = path
         self.filename = os.path.basename(path)
         self.sections = TreeMap()
@@ -884,8 +884,10 @@ class Project:
         for section in sections:
             self.sections[section.offset] = section
 
-    def rescan(self, ep: int, org: int):
+    def rescan(self, ep: int | list[int], org: int):
+        self.ep = ep
         self.org = org
+        
         clear_cache()
         self.sections.clear()
         self.file_len = os.path.getsize(self.path)
@@ -896,10 +898,15 @@ class Project:
             self.ob = ob
             self.ib = ib
  
-            self.pool = InsnPool(proc)
-            insn = Insn(self.pool, ib, ob, ep)
+        self.pool = InsnPool(proc)
 
-        self.pool.query(insn)
+        if isinstance(ep, int):
+            ep = [ep]
+        
+        for entry in ep:
+            insn = Insn(self.pool, ib, ob, entry)
+            self.pool.query(insn)
+        
         self.pool.poll_all()
 
         ob.compute_labels(org, self.file_len + org)
@@ -1043,7 +1050,7 @@ class Project:
         fun = Function(ep, name, start, blocks)
         return fun
 
-def new_project(path: Path, ep: int, org: int) -> Project:
+def new_project(path: Path, ep: int | list[int], org: int) -> Project:
     proj = Project(path, org, ep)
     proj.rescan(ep, org)
     return proj

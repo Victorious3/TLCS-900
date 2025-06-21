@@ -165,15 +165,19 @@ def LD(insn):
 #LDXX
 def LDI(insn): 
     r1, r2 = LD(insn)
+    insn.pop()
     return ("LDIW" if insn.lastsize == WORD else "LDI"), r1, r2
 def LDIR(insn): 
     r1, r2 = LD(insn)
+    insn.pop()
     return ("LDIRW" if insn.lastsize == WORD else "LDIR"), r1, r2
 def LDD(insn): 
     r1, r2 = LD(insn)
+    insn.pop()
     return ("LDDW" if insn.lastsize == WORD else "LDD"), r1, r2
 def LDDR(insn): 
     r1, r2 = LD(insn)
+    insn.pop()
     return ("LDDRW" if insn.lastsize == WORD else "LDDR"), r1, r2
 
 #CPXX

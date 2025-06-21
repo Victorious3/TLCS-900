@@ -5,6 +5,8 @@ import os
 import shutil
 import sys
 import time
+
+from typing import TextIO
 from tcls_900 import microc
 
 # Command line arguments
@@ -158,12 +160,12 @@ if not os.path.isfile(INPUTFILE):
     print("Input file \"" + INPUTFILE + "\" does not exist.", file=sys.stderr)
     sys.exit(1)
 
+if START_POINT is None:
+    START_POINT = ENTRY_POINT
+
 if START_POINT < ENTRY_POINT:
     print("Start address must be greater or equal to the entry point.", file=sys.stderr)
     sys.exit(1)
-
-if START_POINT is None:
-    START_POINT = ENTRY_POINT
 
 if SILENT:
     # Silent flag overrides print to do nothing
@@ -218,11 +220,11 @@ try:
     pool.poll_all()
 
     if OUTPUTFILE is not None:
-        f = io.open(OUTPUTFILE, 'w')
+        f2: TextIO = io.open(OUTPUTFILE, 'w')
 
         def output(*args):
             print(*args)
-            f.write(" ".join(args) + "\n")
+            f2.write(" ".join(args) + "\n")
     else:
         output = print
 
@@ -311,7 +313,7 @@ try:
         output("; Done in " + str(end) + " seconds.")
 
     if OUTPUTFILE is not None:
-        f.close()
+        f2.close()
 
 except KeyboardInterrupt:
     print("\n! Received keyboard interrupt, quitting threads.\n")

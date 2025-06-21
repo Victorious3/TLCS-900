@@ -84,6 +84,10 @@ The commands available are as follows:
 - StaticIndicatorRegister
 - Status
 
+## To Investigate
+
 fun_F3D3F2 prints a line of text: 
     XHL contains the address of a length prefixed string
      DE contains the line number
+
+F04129-F041D0: Array of memory addresses
