@@ -90,4 +90,7 @@ fun_F3D3F2 prints a line of text:
     XHL contains the address of a length prefixed string
      DE contains the line number
 
-F04129-F041D0: Array of memory addresses
+F04129-F041D0: Array of memory addresses (pointing to code)
+F55873-F55CE1: Array of memory addresses (pointing to code)
+F2E43A-F2E475: Array of memory addresses (pointing to data)
+F2E5C0-F2E5FB: Array of memory addresses (pointing to data)

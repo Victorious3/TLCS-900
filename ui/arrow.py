@@ -98,10 +98,13 @@ class ArrowRenderer(KWidget, Widget):
                 location = get_jump_location(insn)
                 
                 cond = False
-                if insn.entry.opcode == "JR" or insn.entry.opcode == "JRL":
+                if (insn.entry.opcode == "JR" or insn.entry.opcode == "JRL" or 
+                    (insn.entry.opcode == "JP" and len(insn.entry.instructions) == 2)):
                     cc = insn.entry.instructions[0]
                     if cc != "T": cond = True
                     elif cc == "F": continue
+                elif insn.entry.opcode == "DJNZ": 
+                    cond = True
 
                 if not location: continue
                 arrows.append(Arrow(min(insn.entry.pc, location.loc), max(insn.entry.pc, location.loc), insn.entry.pc < location.loc, [], cond))

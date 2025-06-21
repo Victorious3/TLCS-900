@@ -53,31 +53,31 @@ main_menu_handler = MainMenuHandler()
 
 if sys.platform == "darwin":
     import objc
-    from Foundation import NSObject
-    from AppKit import NSApp, NSApplication, NSMenu, NSMenuItem
+    from Foundation import NSObject # type: ignore
+    from AppKit import NSApp, NSApplication, NSMenu, NSMenuItem # type: ignore
 
     NSMenuDelegate = objc.protocolNamed("NSMenuDelegate")
 
-    class NativeMenuDelegate(NSObject, protocols=[NSMenuDelegate]):
+    class NativeMenuDelegate(NSObject, protocols=[NSMenuDelegate]): # type: ignore
         def initWithHandler_(self, handler):
-            self = objc.super(NativeMenuDelegate, self).init()
+            self = objc.super(NativeMenuDelegate, self).init() # type: ignore
             if self is None: return None
             self.handler = handler
             return self
 
-        @objc.selector
+        @objc.selector # type: ignore
         def menuDidClose_(self, menu):
             Clock.schedule_once(lambda dt: self.handler.on_close(), 0)
 
     class NativeMenuHandler(NSObject):
         def initWithItem_handler_(self, item, handler):
-            self = objc.super(NativeMenuHandler, self).init()
+            self = objc.super(NativeMenuHandler, self).init() # type: ignore
             if self is None: return None
             self.item = item
             self.handler = handler
             return self
             
-        @objc.selector
+        @objc.selector # type: ignore
         def select_(self, sender):
             Clock.schedule_once(lambda dt: self.handler.on_select(self.item), 0)
 
@@ -92,6 +92,7 @@ if sys.platform == "darwin":
 
         def build_rec(menu: MenuItem, parent: NSMenuItem):
             sub_menu = NSMenu.alloc().initWithTitle_(menu.text)
+            assert menu.child_menu is not None
             for item in menu.child_menu:
                 native_handler = NativeMenuHandler.alloc().initWithItem_handler_(item.id, main_menu_handler)
                 global_handlers.append(native_handler)

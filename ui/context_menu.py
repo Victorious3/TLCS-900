@@ -45,7 +45,7 @@ if sys.platform == "darwin":
     # Native MacOS context menu
 
     import objc
-    from AppKit import NSMenu, NSMenuItem, NSEvent
+    from AppKit import NSMenu, NSMenuItem, NSEvent # type: ignore
     from .main_menu import NativeMenuDelegate, NativeMenuHandler
 
     def show_context_menu(handler: MenuHandler, menu_items: list[MenuItem]):
