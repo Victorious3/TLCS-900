@@ -170,9 +170,9 @@ def popmem(insn):
             d = insn.pop()
             if d > 127:
                 d -= 256 # signed
-                name += "-" + (str(-d) if d < -1 else "")
+                name += "-" + str(-d)
             else:
-                name += "+" + (str(d) if d > 1 else "")
+                name += "+" + str(d)
             return MemReg(insn, 0xE0 + reg + d, name, r)
     elif (mem & 0x4) == 0x4:
         
@@ -210,9 +210,9 @@ def popmem(insn):
                 d = insn.popw()
                 if d > 32767:
                     d -= 65536  # signed
-                    name += "-" + (str(-d) if d < -1 else "")
+                    name += "-" + str(-d)
                 else:
-                    name += "+" + (str(d) if d > 1 else "")
+                    name += "+" + str(d)
                 return MemReg(insn, reg + d, name, r) # r32 + d16
             elif mem == 0x3:
                 reg1 = insn.pop()

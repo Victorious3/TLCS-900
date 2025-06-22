@@ -138,7 +138,9 @@ def get_load(insn: Instruction) -> list[Reg | int]:
         return get_loc(insn.entry.instructions[0])
     elif opcode in ("ADC", "ADD", "AND", "ANDCF", "BIT", "CP", "DIV", "DIVS", "EX", "MUL", "MULS", "OR", "RLD", "RRD", "SBC", "SLA", "SLL", "SRA", "SRL", "SUB", "XOR"): #first and second argument
         if len(insn.entry.instructions) == 2:
-            return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1])
+            l = get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1])
+            if opcode == "XOR" and len(l) == 2 and l[0] == l[1]: return [] # XOR X, X doesn't depend on the value of X, it just sets everything to 0
+            return l
         else: return get_loc(insn.entry.instructions[0]) 
     elif opcode in ("CPD", "CPDR", "CPI", "CPIR"):
         return get_loc(insn.entry.instructions[0]) + get_loc(insn.entry.instructions[1]) + [Reg(True, WORD, 0xE4)] # BC
@@ -493,12 +495,12 @@ class Function:
                             state.stack.append((pc, -2)) # F special flag
                     elif insn.entry.opcode == "POP":
                         if len(state.stack) > 0:
-                            pc, last = state.stack.pop()
+                            pc2, last = state.stack.pop()
                             reg_or_mem = insn.entry.instructions[0]
                             if reg_or_mem == "SR": reg_or_mem = -1
                             elif reg_or_mem == "F": reg_or_mem = -2
                             #print("unclobber", last, pc, state.is_clobbered(pc, last))
-                            if last == reg_or_mem and not state.is_clobbered(pc, last):
+                            if last == reg_or_mem and not state.is_clobbered(pc2, last):
                                 state.unclobber(last)
                         else: raise Underflow()
                     elif insn.entry.opcode in ("CALL", "CALR"):
@@ -518,12 +520,12 @@ class Function:
                     else:
                         load = get_load(insn)
                         for r in load:
-                            #print("input", pc, r)
+                            #print(self.ep, "input", pc, r)
                             state.add_input(pc, r)
 
                         store = get_store(insn)
                         for r in store:
-                            #print("clobber", pc, r)
+                            #print(self.ep, "clobber", pc, r)
                             state.add_clobber(pc, r)
                     pc += 1
 

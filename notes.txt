@@ -94,3 +94,6 @@ F04129-F041D0: Array of memory addresses (pointing to code)
 F55873-F55CE1: Array of memory addresses (pointing to code)
 F2E43A-F2E475: Array of memory addresses (pointing to data)
 F2E5C0-F2E5FB: Array of memory addresses (pointing to data)
+
+F02C56-F02C82: Array of a structure containing a memory address (pointing to code) 
+               and an extra byte (keycode?). Could be some sort of key listener thing.
