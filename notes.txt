@@ -49,6 +49,40 @@ INTVLD0       : FFBFA8
 INTVLD1       : FFEC18 (disabled)
 INTVLD2       : FFEC18 (disabled)
 
+## Memory map:
+
+LCD controller?
+Memory size 0: 32768 == 32kib
+Memory offset 0: 0x010000
+Data bus size: 8
+Enabled: yes
+Waits: 2
+
+RAM
+Memory size 1: 65536 == 64kib
+Memory offset 1: 0x400000
+Data bus size: 8
+Enabled: yes
+Waits: 0
+
+ROM
+Memory size 2: 1048576 == 1mib
+Memory offset 2: 0xF00000
+Data bus size: 16
+Enabled: yes
+Waits: 0
+
+???
+Memory size 3: 32768 == 32kib
+Memory offset 3: 0x100000
+Data bus size: 8
+Enabled: yes
+Waits: 2
+
+BEXCS
+Data bus size: 8
+Waits: 1 + n
+
 The LCD controller is controlled by addresses 10000 and 10001
 where 10000 is supposedly the control register and 10001 is used for data.
 
