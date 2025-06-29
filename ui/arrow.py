@@ -89,7 +89,7 @@ class ArrowRenderer(KWidget, Widget):
         self.recompute_arrows()
 
     def recompute_arrows(self):
-        arrows = []
+        arrows : list[Arrow] = []
         for section in app().project.sections.values():
             if not isinstance(section, CodeSection): continue
             for insn in section.instructions:
@@ -109,8 +109,8 @@ class ArrowRenderer(KWidget, Widget):
 
         arrows = sorted(arrows, key = lambda x: x.start)
         
-        arrows2 = []
-        active_arrows: list = []
+        arrows2: list[Arrow] = []
+        active_arrows: list[Arrow] = []
         for a1 in arrows:
             active_arrows = list(filter(lambda a: a.end >= a1.start, active_arrows))
 
@@ -131,7 +131,7 @@ class ArrowRenderer(KWidget, Widget):
 
         arrows = arrows2
 
-        arrow_offsets = {}
+        arrow_offsets: dict[Arrow, int] = {}
         active_arrows = []
         for a1 in arrows:
             l = len(active_arrows)
@@ -221,7 +221,7 @@ class ArrowRenderer(KWidget, Widget):
             Rectangle(pos=self.pos, size=self.size)
             StencilUse()
 
-            arrows_to_render = []
+            arrows_to_render: list[Arrow] = []
             for arrow in self.arrows:
                 if arrow.start > first.length + last.offset: continue
                 if arrow.end < first.offset: continue

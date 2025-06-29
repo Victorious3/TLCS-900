@@ -23,6 +23,7 @@ from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
 from kivy.effects.scroll import ScrollEffect
 from kivy.graphics import Canvas
+from kivy.metrics import Metrics
 
 dirs = PlatformDirs(
     appname="PyDis",
@@ -542,8 +543,8 @@ def main(path: Path, ep: int | list[int], org: int):
         window = config["window"]
         if "width" in window and "height" in window:
             Window.size = (
-                int(window["width"]), 
-                int(window["height"])
+                int(window["width"]) / Metrics.density, 
+                int(window["height"]) / Metrics.density
             )
         if "left" in window and "top" in window:
             Window.left = int(window["left"])
