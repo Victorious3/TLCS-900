@@ -17,10 +17,10 @@ class TabbedPanelApp(App):
         dock.add_tab(make_panel(2))
         dock.add_tab(make_panel(3))
 
-        #dock.split(make_panel(4))
-        #dock.split(make_panel(5), Orientation.VERTICAL)
+        dock.split(make_panel(4))
+        dock.split(make_panel(5), Orientation.VERTICAL)
 
-        #dock.add_panel(make_panel(6))
+        dock.add_tab(make_panel(6))
 
         return dock
     
