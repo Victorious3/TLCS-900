@@ -11,6 +11,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.lang import Builder
 from kivy.core.window import Window
 from kivy.graphics import Rectangle, Color
+from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
 from kivy.clock import Clock
@@ -63,7 +64,6 @@ class DockScrollView(ScrollView):
         if self.collide_point(*touch.pos) and touch.is_mouse_scrolling:
             direction = 1 if touch.button == 'scrolldown' else -1
             self.scroll_x = max(0., min(1., self.scroll_x + direction * self.SCROLL_STEP))
-            return True
         return super().on_touch_down(touch)
 
 class DockPanel(KWidget, BoxLayout, Child):
@@ -98,13 +98,17 @@ class DockPanel(KWidget, BoxLayout, Child):
         if self.pos[0] <= x <= self.pos[0] + self.width:
             sh = self._scroll_strip.height
             if self.pos[1] + self.height - sh <= y <= self.pos[1] + self.height:
-                xpos = self.x
-                i = None
-                for i, tab in enumerate(self._tab_strip.children):
+                diffx = self._tab_strip.width - self._scroll_strip.width
+                offx = self._scroll_strip.scroll_x * diffx if diffx > 0 else 0
+                xpos = self.x - offx
+                i = 0
+                for tab in reversed(self._tab_strip.children):
                     if xpos <= x <= xpos + tab.width:
                         break
+                    i += 1
                     xpos += tab.width
-                self.drop_tab = i
+                    
+                self.drop_tab = len(self._tab_strip.children) - i - 1
 
                 with self.canvas.after:
                     Color(1, 1, 1, 1)
@@ -131,31 +135,45 @@ class DockPanel(KWidget, BoxLayout, Child):
                         self.drop_quadrant = Quadrant.CENTER
 
     def on_touch_down(self, touch):
-        self.drop_quadrant = None
+        if touch.button == "left":
+            self.drop_quadrant = None
+            self.drop_tab = None
         return super().on_touch_down(touch)
 
     def on_touch_up(self, touch):
         res = super().on_touch_up(touch)
+        if touch.button != "left": return res
         self.draw_overlay()
         
         if not self.root: return
         dragged_panel = self.root.last_dragged_panel 
         if not dragged_panel: return
         if not dragged_panel.dock_panel: return
-        if self.drop_quadrant is None: return
+        if self.drop_tab is None and self.drop_quadrant is None: return
+
+        index = dragged_panel.index()
+        parent = dragged_panel.dock_panel
 
         dock_panel = dragged_panel.dock_panel
         dock_panel.remove_widget(dragged_panel)
-        self.parent_dock.split_quadrant(dragged_panel, self.drop_quadrant)
+
+        if self.drop_quadrant:
+            self.parent_dock.split_quadrant(dragged_panel, self.drop_quadrant)
+        elif self.drop_tab is not None:
+            i = self.drop_tab
+            # If we removed the panel from the same tab the index has to change
+            if index > self.drop_tab and parent == self: i += 1 
+            if parent != self: i += 1
+            self.parent_dock.add_tab(dragged_panel, i)
 
         if dock_panel.parent_dock.parent_dock:
-           dock_panel.parent_dock.parent_dock.purge_empty()
+            dock_panel.parent_dock.parent_dock.purge_empty()
 
         return res
 
-    def add_widget(self, widget: "DockTab", quadrant: Quadrant | None = None, index: int | None = None):
+    def add_widget(self, widget: "DockTab", index: int = 0):
         widget.dock_panel = self
-        self._tab_strip.add_widget(widget)
+        self._tab_strip.add_widget(widget, index)
         if self._current_widget:
             super().remove_widget(self._current_widget.content)
         self._current_widget = widget
@@ -208,12 +226,18 @@ class DockTab(KWidget, ToggleButton):
         self.root: Dock | None = None
         self.dock_panel: DockPanel | None = None
         super().__init__(**kwargs)
+        self.size_hint_x = None
+        self.bind(texture_size=lambda instance, value: setattr(instance, "width", max(dp(100), value[0] + dp(20))))
 
     def add_widget(self, widget: Widget, *args, **kwargs):
         self.content = widget
 
     def remove_widget(self, widget: Widget, *args, **kwargs):
         self.content = None
+
+    def index(self) -> int:
+        if not self.dock_panel: return -1
+        return self.dock_panel._tab_strip.children.index(self)
 
     def on_press(self):
         if self.dock_panel:
@@ -227,10 +251,10 @@ class DockTab(KWidget, ToggleButton):
 
 
     def on_touch_down(self, touch):
-        if self.root:
+        if touch.button == "left" and self.root:
             self.root.dragged_panel = self
-
-        return super().on_touch_down(touch)
+            return super().on_touch_down(touch)
+        return False
 
 class BaseDock(BoxLayout, Child):
     def __init__(self, root: "Dock | None", parent: "BaseDock | None" = None, panel: DockPanel | None = None, **kwargs):
@@ -263,15 +287,15 @@ class BaseDock(BoxLayout, Child):
     def active_panel(self, value: DockTab):
         if self.root: self.root.active_panel = value
 
-    def add_tab(self, panel: DockTab):
+    def add_tab(self, panel: DockTab, index: int = 0):
         panel.root = self.root or cast(Dock, self)
 
         if self.second_panel:
-            self.second_panel.add_tab(panel)
+            self.second_panel.add_tab(panel, index)
         elif self.first_panel:
-            self.first_panel.add_tab(panel)
+            self.first_panel.add_tab(panel, index)
         elif self.panel:
-            self.panel.add_widget(panel)
+            self.panel.add_widget(panel, index=index)
         else:
             self.panel = DockPanel(self.root or cast(Dock, self), self)
             self.panel.add_widget(panel)
@@ -403,17 +427,28 @@ class Dock(KWidget, BaseDock):
         self.canvas.after.clear()
         if not self.dragged_panel: return
         with self.canvas.after:
+            label = CoreLabel(text=self.dragged_panel.text, color=(1, 1, 1, 1), font_size=self.dragged_panel.font_size)
+            label.refresh()
+
+            pos = (Window.mouse_pos[0], Window.mouse_pos[1] - self.dragged_panel.height)
             Color(*get_color_from_hex("#585858D0"))
-            Rectangle(pos=(Window.mouse_pos[0], Window.mouse_pos[1] - self.dragged_panel.height), size=self.dragged_panel.size)
+            Rectangle(pos=pos, size=self.dragged_panel.size)
+            Color(1, 1, 1, 1)
+            Rectangle(texture=label.texture, pos=
+                      (pos[0] + self.dragged_panel.width / 2 - label.width / 2, 
+                       pos[1] + self.dragged_panel.height / 2 - label.height / 2), 
+                       size=label.texture.size)
 
     def on_touch_up(self, touch):
-        self.last_dragged_panel = self.dragged_panel
-        self.dragged_panel = None
-        self.draw_dragged_panel()
-    
-        res = super().on_touch_up(touch)
-        self.last_dragged_panel = None
-        return res
+        if touch.button == "left":
+            self.last_dragged_panel = self.dragged_panel
+            self.dragged_panel = None
+            self.draw_dragged_panel()
+        
+            res = super().on_touch_up(touch)
+            self.last_dragged_panel = None
+            return res
+        else: return super().on_touch_up(touch)
 
     @property
     def active_panel(self) -> DockTab | None:

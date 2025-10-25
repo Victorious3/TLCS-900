@@ -3,14 +3,17 @@ from kivy.uix.label import Label
 
 from ui.dock.dock import Dock, DockTab, Orientation
 
+from kivy.config import Config
+Config.set('input', 'mouse', 'mouse,multitouch_on_demand')
 
 class TabbedPanelApp(App):
     def build(self):
         dock = Dock()
 
         def make_panel(index: int):
-            panel = DockTab(text="Panel" + str(index))
-            panel.add_widget(Label(text="Panel" + str(index)))
+            text = "Panel" + str(index) + ("#" * index)
+            panel = DockTab(text=text)
+            panel.add_widget(Label(text=text))
             return panel
 
         dock.add_tab(make_panel(1))
