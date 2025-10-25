@@ -130,6 +130,10 @@ class DockPanel(KWidget, BoxLayout, Child):
                         Rectangle(pos=(self.x, self.y), size=(self.width, self.height - sh))
                         self.drop_quadrant = Quadrant.CENTER
 
+    def on_touch_down(self, touch):
+        self.drop_quadrant = None
+        return super().on_touch_down(touch)
+
     def on_touch_up(self, touch):
         res = super().on_touch_up(touch)
         self.draw_overlay()
@@ -143,7 +147,9 @@ class DockPanel(KWidget, BoxLayout, Child):
         dock_panel = dragged_panel.dock_panel
         dock_panel.remove_widget(dragged_panel)
         self.parent_dock.split_quadrant(dragged_panel, self.drop_quadrant)
-        self.parent_dock.purge_empty()
+
+        if dock_panel.parent_dock.parent_dock:
+           dock_panel.parent_dock.parent_dock.purge_empty()
 
         return res
 
@@ -227,8 +233,9 @@ class DockTab(KWidget, ToggleButton):
         return super().on_touch_down(touch)
 
 class BaseDock(BoxLayout, Child):
-    def __init__(self, root: "Dock | None", panel: DockPanel | None = None, **kwargs):
+    def __init__(self, root: "Dock | None", parent: "BaseDock | None" = None, panel: DockPanel | None = None, **kwargs):
         super().__init__(**kwargs)
+        self.parent_dock = parent
         self.panel: DockPanel | None = panel
         self.first_panel: BaseDock | None = None
         self.second_panel: BaseDock | None = None
@@ -272,13 +279,53 @@ class BaseDock(BoxLayout, Child):
 
         panel.on_press()
 
-    def purge_empty(self, panel: DockPanel):
-        assert panel.parent_dock == self
-        pass
+    def purge_empty(self):
+        if self.first_panel:
+            if len(list(self.first_panel.iterate_panels())) == 0:
+                super().remove_widget(self.first_panel)
+                self.first_panel = None
+                if self.second_panel and self.splitter: 
+                    self.first_panel = self.second_panel
+                    self.splitter.remove_widget(self.second_panel)
+                    super().remove_widget(self.splitter)
+                    super().add_widget(self.first_panel)
+                    self.splitter = None
+                    self.second_panel = None
+        if self.second_panel:
+            if len(list(self.second_panel.iterate_panels())) == 0:
+                if self.splitter:
+                    super().remove_widget(self.splitter)
+                self.splitter = None
+                self.second_panel = None
+
+        # Flatten heirarchy, if first or second panel contain only one element they should be
+        # pulled up into this panel, but only if there is no other child present
+        if self.second_panel and self.second_panel.panel and not self.first_panel:
+            dock_panel = self.second_panel.panel
+            self.second_panel.remove_widget(dock_panel)
+            if self.splitter:
+                super().remove_widget(self.splitter)
+                self.splitter = None
+            
+            super().add_widget(dock_panel)
+            dock_panel.parent_dock = self
+            self.panel = dock_panel
+            self.first_panel = None
+            self.second_panel = None
+        
+        if self.first_panel and self.first_panel.panel and not self.second_panel:
+            dock_panel = self.first_panel.panel
+            self.first_panel.remove_widget(dock_panel)
+            super().remove_widget(self.first_panel)
+            super().add_widget(dock_panel)
+            dock_panel.parent_dock = self
+            self.panel = dock_panel
+            self.first_panel = None
+            self.second_panel = None
+                
 
     def split_quadrant(self, panel: DockTab, quadrant = Quadrant.CENTER):
         orientation = Orientation.VERTICAL if quadrant in (Quadrant.TOP, Quadrant.BOTTOM) else Orientation.HORIZONTAL
-        print(self, panel, quadrant)
 
         if quadrant == Quadrant.LEFT or quadrant == Quadrant.TOP:
             if self.first_panel:
@@ -286,12 +333,13 @@ class BaseDock(BoxLayout, Child):
             elif self.panel:
                 panel.root = self.root or cast(Dock, self)
                 super().remove_widget(self.panel)
-                self.second_panel = BaseDock(self.root or cast(Dock, self), self.panel)
+                self.second_panel = BaseDock(self.root or cast(Dock, self), self, self.panel)
                 self.panel.parent_dock = self.second_panel
                 self.panel = None
                 
                 if orientation == Orientation.VERTICAL:
                     self.orientation = "vertical"
+                else: self.orientation = "horizontal"
                     
                 self.splitter = DockSplitter("left" if orientation == Orientation.HORIZONTAL else "top")
                 self.splitter.add_widget(self.second_panel)
@@ -300,7 +348,7 @@ class BaseDock(BoxLayout, Child):
                 if self.second_panel:
                     dock_panel = DockPanel(self.root or cast(Dock, self), self)
                     dock_panel.add_widget(panel)
-                    self.first_panel = BaseDock(self.root or cast(Dock, self), panel=dock_panel)
+                    self.first_panel = BaseDock(self.root or cast(Dock, self), self, panel=dock_panel)
 
                     super().add_widget(self.first_panel, 1)
             elif self.second_panel: 
@@ -319,7 +367,7 @@ class BaseDock(BoxLayout, Child):
         if self.panel:
             panel.root = self.root or cast(Dock, self)
             super().remove_widget(self.panel)
-            self.first_panel = BaseDock(self.root or cast(Dock, self), self.panel)
+            self.first_panel = BaseDock(self.root or cast(Dock, self), self, self.panel)
             self.panel.parent_dock = self.first_panel
             self.panel = None
             super().add_widget(self.first_panel)
@@ -327,10 +375,11 @@ class BaseDock(BoxLayout, Child):
         if self.first_panel:
             dock_panel = DockPanel(self.root or cast(Dock, self), self)
             dock_panel.add_widget(panel)
-            self.second_panel = BaseDock(self.root or cast(Dock, self), panel=dock_panel)
+            self.second_panel = BaseDock(self.root or cast(Dock, self), self, panel=dock_panel)
             
             if orientation == Orientation.VERTICAL:
                 self.orientation = "vertical"
+            else: self.orientation = "horizontal"
 
             self.splitter = DockSplitter("left" if orientation == Orientation.HORIZONTAL else "top")
             self.splitter.add_widget(self.second_panel)
