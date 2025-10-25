@@ -12,7 +12,7 @@ class TabbedPanelApp(App):
 
         def make_panel(index: int):
             text = "Panel" + str(index) + ("#" * index)
-            panel = DockTab(text=text)
+            panel = DockTab(text=text, closeable=(index % 2 == 0))
             panel.add_widget(Label(text=text))
             return panel
 

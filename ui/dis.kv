@@ -64,12 +64,6 @@
     RV
     ArrowRenderer
 
-<XButton>:
-    size: dp(20), dp(20)
-    icon_height: dp(20)
-    default_color: 0.1216, 0.1216, 0.1216, 1.0
-    source: "ui/resources/x.png"
-
 <AnalyzerPanel>:
     AnalyzerTable:
         id: analyzer_table
@@ -109,27 +103,6 @@
                 hint_text: "Filter Functions"
                 size_hint: 1, None
                 height: self.minimum_height
-
-
-<IconButton>:
-    background_normal: ""
-    background_down: ""
-    background_disabled_normal: ""
-    background_disabled_down: ""
-
-    default_color: 0.2, 0.2, 0.2, 1
-    hover_color: 0.25, 0.25, 0.25, 1
-    icon_default_color: 0.8, 0.8, 0.8, 1
-    icon_disabled_color: 0.5, 0.5, 0.5, 1
-
-    border: 0, 0, 0, 0
-    
-    Icon:
-        source: self.parent.source
-        color: self.parent.icon_default_color if not self.parent.disabled else self.parent.icon_disabled_color
-        height: self.parent.icon_height
-        center_x: self.parent.center_x
-        center_y: self.parent.center_y
 
 <ArrowRenderer>:
     size_hint: None, 1

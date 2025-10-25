@@ -6,6 +6,10 @@ from kivy.metrics import dp
 
 from .main import KWidget
 
+from kivy.lang import Builder
+
+Builder.load_file("ui/buttons.kv")
+
 class Icon(Image):
     def on_touch_down(self, touch):
         return False

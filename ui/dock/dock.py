@@ -7,6 +7,7 @@ from kivy.uix.splitter import Splitter
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.lang import Builder
 from kivy.core.window import Window
@@ -14,9 +15,11 @@ from kivy.graphics import Rectangle, Color
 from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
+from kivy.properties import BooleanProperty, StringProperty, ObjectProperty
 from kivy.clock import Clock
 
 from ui.main import KWidget
+from ui.buttons import XButton
 
 Builder.load_file("ui/dock/dock.kv")
 
@@ -221,40 +224,72 @@ class TabStrip(GridLayout):
     def __init__(self, **kwargs):
         super().__init__(rows=1, **kwargs)
 
-class DockTab(KWidget, ToggleButton):
+class DockButton(KWidget, ToggleButton):
     def __init__(self, **kwargs):
-        self.root: Dock | None = None
-        self.dock_panel: DockPanel | None = None
         super().__init__(**kwargs)
-        self.size_hint_x = None
-        self.bind(texture_size=lambda instance, value: setattr(instance, "width", max(dp(100), value[0] + dp(20))))
-
-    def add_widget(self, widget: Widget, *args, **kwargs):
-        self.content = widget
-
-    def remove_widget(self, widget: Widget, *args, **kwargs):
-        self.content = None
-
-    def index(self) -> int:
-        if not self.dock_panel: return -1
-        return self.dock_panel._tab_strip.children.index(self)
-
+        
     def on_press(self):
-        if self.dock_panel:
-            self.dock_panel.select_widget(self)
-        if self.root:
-            self.root.active_panel = self
-            for panel in self.root.iterate_panels():
-                if panel == self: continue
-                panel.state = "normal"
+        if self.parent.dock_panel:
+            self.parent.dock_panel.select_widget(self.parent)
+        if self.parent.root:
+            self.parent.root.active_panel = self.parent
+            for panel in self.parent.root.iterate_panels():
+                if panel.button == self: continue
+                panel.button.state = "normal"
         self.state = "down"
 
 
     def on_touch_down(self, touch):
-        if touch.button == "left" and self.root:
-            self.root.dragged_panel = self
+        if touch.button == "left" and self.parent.root:
+            self.parent.root.dragged_panel = self.parent
             return super().on_touch_down(touch)
         return False
+
+class TabXButton(XButton):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def on_press(self):
+        parent: DockTab = self.parent
+        if parent.dock_panel:
+            dock_panel = parent.dock_panel
+            parent.dock_panel.remove_widget(self.parent)
+            if dock_panel.parent_dock.parent_dock:
+                dock_panel.parent_dock.parent_dock.purge_empty()
+
+            def select_last(_):
+                if dock_panel._current_widget and dock_panel._current_widget.parent:
+                    dock_panel._current_widget.button.on_press()
+                elif dock_panel.parent_dock.parent_dock:
+                    panel = next(dock_panel.parent_dock.parent_dock.iterate_panels(), None)
+                    if panel and panel.dock_panel and panel.dock_panel._current_widget:
+                        panel.dock_panel._current_widget.button.on_press()
+
+            Clock.schedule_once(select_last, 0)
+            
+class DockTab(KWidget, AnchorLayout):
+    closeable = BooleanProperty(False)
+    text = StringProperty("")
+    button = ObjectProperty(None)
+
+    def __init__(self, **kwargs):
+        self.root: Dock | None = None
+        self.dock_panel: DockPanel | None = None
+        self.button = DockButton()
+        super().__init__(anchor_x = "right", **kwargs)
+        super().add_widget(self.button)
+        super().add_widget(TabXButton())
+
+    def add_widget(self, widget: Widget, *args, **kwargs):
+        self.content = widget
+
+    def remove_widget(self, *args, **kwargs):
+        self.content = None
+
+    def index(self) -> int:
+        if not self.dock_panel: return -1
+        return self.dock_panel._tab_strip.children.index(self)  
+
 
 class BaseDock(BoxLayout, Child):
     def __init__(self, root: "Dock | None", parent: "BaseDock | None" = None, panel: DockPanel | None = None, **kwargs):
@@ -301,7 +336,7 @@ class BaseDock(BoxLayout, Child):
             self.panel.add_widget(panel)
             super().add_widget(self.panel)
 
-        panel.on_press()
+        panel.button.on_press()
 
     def purge_empty(self):
         if self.first_panel:
@@ -427,7 +462,7 @@ class Dock(KWidget, BaseDock):
         self.canvas.after.clear()
         if not self.dragged_panel: return
         with self.canvas.after:
-            label = CoreLabel(text=self.dragged_panel.text, color=(1, 1, 1, 1), font_size=self.dragged_panel.font_size)
+            label = CoreLabel(text=self.dragged_panel.text, color=(1, 1, 1, 1), font_size=self.dragged_panel.button.font_size)
             label.refresh()
 
             pos = (Window.mouse_pos[0], Window.mouse_pos[1] - self.dragged_panel.height)
