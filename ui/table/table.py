@@ -106,6 +106,7 @@ class TableBody(RecycleView):
 
         self.data = data
 
+class TableHeader(BoxLayout): pass
 
 class ResizableRecycleTable(StencilView, BoxLayout):
     column_widths = ListProperty([])
@@ -132,7 +133,7 @@ class ResizableRecycleTable(StencilView, BoxLayout):
         return self.children[0].children[0]
 
     def _build_header(self):
-        header = BoxLayout(orientation='horizontal', size_hint_y=None, height=dp(30))
+        header = TableHeader()
         for i, header_text in enumerate(self.headers):
             header.add_widget(SortableHeader(text=header_text, col_index=i, table=self, size_hint_x=None, width=self.column_widths[i]))
             if i < len(self.headers) - 1:

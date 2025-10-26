@@ -2,6 +2,7 @@
     BoxLayout: # This is only here to provide a box that clips the table body,
                # without it the children of the recycleview can't use hover events
                # because they might actually be outside of the viewport. This sucks hard
+        size_hint: 1, 1
         TableBody:
             viewclass: root.viewclass
             bar_width: dp(15)
@@ -23,6 +24,12 @@
         Rectangle:
             pos: self.center_x, self.y
             size: dp(1), self.height
+
+<TableHeader>:
+    orientation: 'horizontal'
+    size_hint: None, None
+    width: self.minimum_width
+    height: dp(30)
 
 <SortableHeader>:
     halign: "left"
