@@ -259,11 +259,11 @@ class TabXButton(XButton):
 
             def select_last(_):
                 if dock_panel._current_widget and dock_panel._current_widget.parent:
-                    dock_panel._current_widget.button.on_press()
+                    dock_panel._current_widget.select()
                 elif dock_panel.parent_dock.parent_dock:
                     panel = next(dock_panel.parent_dock.parent_dock.iterate_panels(), None)
                     if panel and panel.dock_panel and panel.dock_panel._current_widget:
-                        panel.dock_panel._current_widget.button.on_press()
+                        panel.dock_panel._current_widget.select()
 
             Clock.schedule_once(select_last, 0)
             
@@ -288,7 +288,10 @@ class DockTab(KWidget, AnchorLayout):
 
     def index(self) -> int:
         if not self.dock_panel: return -1
-        return self.dock_panel._tab_strip.children.index(self)  
+        return self.dock_panel._tab_strip.children.index(self)
+    
+    def select(self):
+        self.button.on_press()
 
 
 class BaseDock(BoxLayout, Child):
@@ -322,6 +325,11 @@ class BaseDock(BoxLayout, Child):
     def active_panel(self, value: DockTab):
         if self.root: self.root.active_panel = value
 
+    def add_widget(self, widget, *args, index: int = 0, **kwargs):
+        if isinstance(widget, DockTab):
+            self.add_tab(widget, index)
+        else: super().add_widget(widget, *args, **kwargs)
+
     def add_tab(self, panel: DockTab, index: int = 0):
         panel.root = self.root or cast(Dock, self)
 
@@ -336,7 +344,7 @@ class BaseDock(BoxLayout, Child):
             self.panel.add_widget(panel)
             super().add_widget(self.panel)
 
-        panel.button.on_press()
+        panel.select()
 
     def purge_empty(self):
         if self.first_panel:

@@ -10,15 +10,8 @@
             pos: 0, main_panel.height - self.height - app_menu.height
             height: self.parent.height - app_menu.height
 
-            BoxLayout:
-                id: content_panel
-                size_hint: 1, 1
-                orientation: "vertical"
-                MainContainer:
-                    orientation: "vertical"
-                    id: dis_panel_container
-                    MainPanel
-                        id: dis_panel
+            Dock:
+                id: main_dock
 
         FloatLayout:
             pos: 0, main_panel.height - app_menu.height
@@ -60,9 +53,12 @@
 <MainPanel>:
     size_hint: 1, 1
 
-    Minimap
-    RV
-    ArrowRenderer
+    Minimap:
+        id: minimap
+    RV:
+        id: rv
+    ArrowRenderer:  
+        id: arrows
 
 <AnalyzerPanel>:
     AnalyzerTable:
@@ -128,22 +124,26 @@
         orientation: 'vertical'
 
 <SectionPanel>:
+    rv: self.parent.parent if self.parent else None
     padding: 0
     size_hint: None, None
     orientation: 'vertical'
     
     LabelRow:
+        rv: root.rv
         id: label
 
     RelativeLayout:
         size_hint: 1, 1
         SectionData:
+            rv: root.rv
             halign: "left"
             pos: dp(270), 0
             text_size: self.width, self.height
             height: self.parent.height
             id: data
         SectionAddresses:
+            rv: root.rv
             width: dp(240)
             pos: 0, 0
             halign: "right"
@@ -151,6 +151,7 @@
             height: self.parent.height
             id: addresses
         SectionMnemonic:
+            rv: root.rv
             pos: dp(550), 0
             width: dp(400)
             size_hint: None, 1

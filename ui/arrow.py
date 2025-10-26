@@ -14,6 +14,7 @@ from kivy.clock import Clock
 def clear_cache():
     ArrowRenderer.get_offset.cache_clear()
 
+from . import main
 from .project import Section, CodeSection, get_jump_location
 from .main import LABEL_HEIGHT, app, FONT_HEIGHT, KWidget
 from disapi import Loc
@@ -40,7 +41,7 @@ COLORS =  [get_color_from_hex("#80FFCC"),
 #def DashedLine(points, dash_length = dp(5), dash_offset = dp(2), width = dp(1)):
 #    Line(points=points, dash_length=dash_length, dash_offset=dash_offset, width=width)
 
-def DashedLine(points, dash_length = dp(5), dash_offset = dp(2), width = dp(1)):
+def DashedLine(points, dash_length = dp(5), dash_offset = dp(5), width = dp(1)):
     for i in range(0, len(points) - 2, 2):
         x1, y1 = points[i], points[i + 1]
         x2, y2 = points[i + 2], points[i + 3]
@@ -78,6 +79,7 @@ class Arrow:
         return f"{self.start:X} -> {self.end:X}"
 
 class ArrowRenderer(KWidget, Widget):
+    parent: "main.MainPanel"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -87,6 +89,9 @@ class ArrowRenderer(KWidget, Widget):
         self.arrow_offsets = {}
 
         self.recompute_arrows()
+
+    def on_kv_post(self, base_widget):
+        Clock.schedule_once(lambda dt: self.redraw(), 0)
 
     def recompute_arrows(self):
         arrows : list[Arrow] = []
@@ -182,10 +187,9 @@ class ArrowRenderer(KWidget, Widget):
 
 
     @cache
-    @staticmethod
-    def get_offset(pc: int):
+    def get_offset(self, pc: int):
         offset = 0
-        for data in app().rv.data:
+        for data in self.parent.rv.data:
             section: Section = data["section"]
             if section.offset <= pc < section.length + section.offset:
                 if section.labels: 
@@ -199,7 +203,7 @@ class ArrowRenderer(KWidget, Widget):
         return offset
 
     def redraw(self):
-        rv = app().rv
+        rv = self.parent.rv
         layout_manager = cast(RecycleBoxLayout, rv.layout_manager)
         vstart, vend = rv.get_visible_range()
 
@@ -228,7 +232,7 @@ class ArrowRenderer(KWidget, Widget):
                 arrows_to_render.append(arrow)
         
             def calc_offset(x):
-                e = self.height - ArrowRenderer.get_offset(x) + (vstart - self.height)
+                e = self.height - self.get_offset(x) + (vstart - self.height)
                 return e - LABEL_HEIGHT / 2
 
             for a in arrows_to_render:

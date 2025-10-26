@@ -15,13 +15,10 @@ from kivy.uix.label import Label
 from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
 from kivy.uix.relativelayout import RelativeLayout
-from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.recycleview import RecycleView
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
-from kivy.effects.scroll import ScrollEffect
 from kivy.graphics import Canvas
 from kivy.metrics import Metrics
 
@@ -61,8 +58,9 @@ R = TypeVar("R")
 def iter_all_children_of_type(widget: Widget, widget_type: Type[R]) -> Generator[R, None, None]:
     if isinstance(widget, widget_type):
         yield widget
-    for child in widget.children:
-        yield from iter_all_children_of_type(child, widget_type)
+    if hasattr(widget, "children"):
+        for child in widget.children:
+            yield from iter_all_children_of_type(child, widget_type)
 
 class NavigationAction(ABC):
     @abstractmethod
@@ -104,12 +102,13 @@ from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, new_pro
 from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
-from .sections import SectionColumn, SectionAddresses, SectionData, SectionMnemonic
+from .sections import RV
 from .function_graph import FunctionTabItem, FunctionTabPanel
 from .buttons import IconButton
 from .analyzer import AnalyzerPanel, AnalyzerFilter
 from .context_menu import ContextMenuBehavior
 from .popup import FunctionAnalyzerPopup
+from .dock.dock import DockTab, Dock, Orientation
 
 class NavigationListing(NavigationAction):
     def __init__(self, offset: int):
@@ -119,20 +118,26 @@ class NavigationListing(NavigationAction):
         app().scroll_to_offset(self.offset, history=False)
 
 class MainPanel(RelativeLayout):
+    def __init__(self, **kw):
+        self.rv = cast(RV, None)
+        self.minimap = cast(Minimap, None)
+        self.arrows = cast(ArrowRenderer, None)
+        super().__init__(**kw)
+
+    def on_kv_post(self, base_widget):
+        self.rv = self.ids["rv"]
+        self.minimap = self.ids["minimap"]
+        self.arrows = self.ids["arrows"]
+
     def on_touch_down(self, touch):
         if super().on_touch_down(touch): return True
-        return SectionColumn.on_touch_down_selection(touch)
+        return self.rv.on_touch_down_selection(touch)
     
     def on_touch_move(self, touch):
         if super().on_touch_move(touch): return True
-        return SectionColumn.on_touch_move_section(touch)
+        return self.rv.on_touch_move_section(touch)
 
 class MainWindow(FloatLayout): pass
-class MainContainer(BoxLayout):
-    def on_touch_down(self, touch):
-        if self.collide_point(touch.x, touch.y):
-            app().active = self
-        return super().on_touch_down(touch)
 
 class GotoPosition(HideableTextInput, EscapeTrigger):
     def _on_focus(self, instance, value, *largs):
@@ -157,41 +162,6 @@ class GotoPosition(HideableTextInput, EscapeTrigger):
     
     def on_escape(self, obj):
         self.hide()
- 
-class RV(KWidget, RecycleView):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        app().rv = self
-        self.effect_x = ScrollEffect()
-        self.update_data()
-        self.bind(size=lambda *_: SectionColumn.redraw_children())
-
-    def update_data(self):
-        data = []
-        for section in app().project.sections.values():
-            columns = len(section.instructions)
-            data.append({"section": section, 
-                         "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),
-                         "width": dp(1500) })
-
-        self.data = data
-
-    def update_from_scroll(self, *largs):
-        super().update_from_scroll(*largs)
-
-        def update(dt):
-            SectionAddresses.redraw_children()
-            SectionData.redraw_children()
-
-        Clock.schedule_once(update, 0)
-        
-        app().arrows.redraw()
-
-    def get_visible_range(self):
-        content_height = self.children[0].height - self.height
-        scroll_pos = self.scroll_y * content_height
-
-        return scroll_pos, scroll_pos + self.height
     
 
 class GlobalEventBus(EventDispatcher):
@@ -209,20 +179,15 @@ class DisApp(App):
         super().__init__()
         self.project = project
         
-        self.main_panel = cast(RelativeLayout, None)
         self.goto_position = cast(GotoPosition, None)
-        self.rv = cast(RV, None)
-        self.minimap = cast(Minimap, None)
-        self.arrows = cast(ArrowRenderer, None)
         self.window = cast(MainWindow, None)
         self.back_button = cast(IconButton, None)
         self.forward_button = cast(IconButton, None)
-        self.content_panel = cast(BoxLayout, None)
         self.y_splitter = cast(Splitter, None)
         self.analyzer_panel: AnalyzerPanel | None = None
-        self.dis_panel = cast(Widget, None)
-        self.dis_panel_container = cast(BoxLayout, None )
+        self.dis_panel = cast(MainPanel, None)
         self.analyzer_filter = cast(AnalyzerFilter, None)
+        self.main_dock = cast(Dock, None)
 
         self.last_position = -1
         self.position_history: list[NavigationAction] = []
@@ -235,7 +200,6 @@ class DisApp(App):
         self.global_event_bus = GlobalEventBus()
 
         Window.bind(mouse_pos=self.on_mouse_move)
-        Window.bind(mouse_pos=SectionMnemonic.on_mouse_move)
         Window.bind(on_mouse_up=ContextMenuBehavior.on_mouse_up)
         Window.bind(on_mouse_down=ContextMenuBehavior.on_mouse_down)
         Window.bind(on_key_down=self._keydown)
@@ -245,30 +209,24 @@ class DisApp(App):
         Window.clearcolor = BG_COLOR
 
         self.window = MainWindow()
-        self.main_panel = self.window.ids["main_panel"]
         self.app_menu = self.window.ids["app_menu"]
         self.back_button = self.window.ids["back_button"]
         self.forward_button = self.window.ids["forward_button"]
-        self.content_panel = self.window.ids["content_panel"]
-        self.dis_panel = self.window.ids["dis_panel"]
-        self.dis_panel_container = self.window.ids["dis_panel_container"]
         self.goto_position = self.window.ids["goto_position"]
+        self.main_dock: Dock = self.window.ids["main_dock"]
+
+        self.dis_panel = MainPanel()
+        tab = DockTab(text="el9900.rom")
+        tab.add_widget(self.dis_panel)
+        self.main_dock.add_tab(tab)
 
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
 
-        self.active = self.dis_panel_container
+        self.active = self.dis_panel
 
         build_menu()
         return self.window
-    
-    def after_layout_is_ready(self, dt):
-        self.minimap.redraw()
-        self.arrows.redraw()
-
-    def on_start(self):
-        super().on_start()
-        Clock.schedule_once(self.after_layout_is_ready, 0)
     
     def scroll_to_label(self, label: str):
         for section in self.project.sections.values():
@@ -276,9 +234,9 @@ class DisApp(App):
                 print("Goto label:", label, "at", format(section.offset, "X"))
                 self.scroll_to_offset(section.offset)
 
-                tab_panel = self.dis_panel_container.children[0]
-                if isinstance(tab_panel, FunctionTabPanel):
-                    Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[-1]))
+                #tab_panel = self.dis_panel_container.children[0]
+                #if isinstance(tab_panel, FunctionTabPanel):
+                #    Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[-1]))
                 
                 return
         raise ValueError("Invalid label")
@@ -313,17 +271,19 @@ class DisApp(App):
         self.update_position_buttons()
     
     def scroll_to_offset(self, offset: int, history = True):
+        rv = self.dis_panel.rv
+
         self.swich_to_listing()
         scroll_pos = 0
-        for i in range(len(self.rv.data)):
-            total_height = self.rv.children[0].height - self.rv.height
-            data = self.rv.data[i]
+        for i in range(len(rv.data)):
+            total_height = rv.children[0].height - rv.height
+            data = rv.data[i]
             section: Section = data["section"]
             if section.offset <= offset < section.offset + section.length:
                 if section.labels: scroll_pos += LABEL_HEIGHT
                 scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
-                self.rv.scroll_y = 1 - (scroll_pos / total_height)                
-                SectionData.reset_selection()
+                rv.scroll_y = 1 - (scroll_pos / total_height)                
+                rv.reset_selection()
                 if history: self.update_position_history(NavigationListing(offset))
                 self.last_position = offset
                 
@@ -333,15 +293,10 @@ class DisApp(App):
         raise ValueError("Invalid location")
     
     def swich_to_listing(self):
-        if self.tab_panel:
-            self.tab_panel.switch_to(self.tab_panel.tab_list[-1])
-    
-    @property
-    def tab_panel(self):
-        panel = self.dis_panel_container.children[0]
-        if isinstance(panel, FunctionTabPanel):
-            return panel
-        return None
+        #FIXME
+        #if self.tab_panel:
+        #    self.tab_panel.switch_to(self.tab_panel.tab_list[-1])
+        pass
     
     def open_function_graph_from_label(self, ep: int):
         if not self.project.functions:
@@ -416,7 +371,7 @@ class DisApp(App):
         if keycode == 225: self.shift_down = True
         elif keycode == 224: 
             self.ctrl_down = True
-            SectionMnemonic.update_cursor()
+            RV.update_cursor()
         elif keycode == 41: 
             self.global_event_bus.dispatch("on_escape")
             return True
@@ -425,15 +380,13 @@ class DisApp(App):
         if keycode == 225: self.shift_down = False
         if keycode == 224: 
             self.ctrl_down = False
-            SectionMnemonic.update_cursor()
+            RV.update_cursor()
         elif keycode == 41:
             return True
         
     def close_tabs(self):
-        if self.tab_panel:
-            self.tab_panel.clear_widgets()
-            self.dis_panel_container.remove_widget(self.tab_panel)
-            self.dis_panel_container.add_widget(app().dis_panel)
+        #TODO
+        pass
         
     def load_project(self, project: Project):
         self.project = project
@@ -448,11 +401,11 @@ class DisApp(App):
             self.analyzer_panel.close_panel()
         self.close_tabs()
 
-        # Update data
-        self.rv.update_data()
-        self.arrows.recompute_arrows()
-        self.arrows.redraw()
-        self.minimap.redraw()
+        # Update data FIXME All
+        self.dis_panel.rv.update_data()
+        self.dis_panel.arrows.recompute_arrows()
+        self.dis_panel.arrows.redraw()
+        self.dis_panel.minimap.redraw()
         
     def analyze_functions(self, callback):
         wait: ClockEvent = None
@@ -482,19 +435,19 @@ class DisApp(App):
         popup.open()
         
     def open_function_list(self):
-        if not self.y_splitter:
+        if not self.analyzer_panel:
             self.analyzer_panel = AnalyzerPanel()
             self.analyzer_filter = self.analyzer_panel.ids["analyzer_filter"]
-            self.y_splitter = Splitter(
-                keep_within_parent = True,
-                min_size = dp(100),
-                max_size = dp(10e10),
-                sizable_from = "top"
-            )
-            self.y_splitter.add_widget(self.analyzer_panel)
             self.active = self.analyzer_panel
-        if self.y_splitter.get_root_window() is None:
-            self.content_panel.add_widget(self.y_splitter)
+
+        elif self.analyzer_panel.parent:
+            self.analyzer_panel.parent.select()
+            return
+        
+        tab = DockTab(text="Functions", closeable=True)
+        tab.add_widget(self.analyzer_panel)
+        self.main_dock.split(tab, Orientation.VERTICAL)
+
     
     def on_mouse_move(self, window, pos):
         DisApp._any_hovered = False

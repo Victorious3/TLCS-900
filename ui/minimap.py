@@ -4,21 +4,27 @@ from itertools import groupby
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.utils import get_color_from_hex
+from kivy.clock import Clock
 
+from . import main
 from .main import app, FONT_HEIGHT, LABEL_HEIGHT, BG_COLOR, KWidget
 from .project import Section, CodeSection
 
 class Minimap(KWidget, Widget):
+    parent: "main.MainPanel"
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        app().minimap = self
 
         self.bind(pos=self.redraw, size=self.redraw)
 
+    def on_kv_post(self, base_widget):
+        Clock.schedule_once(lambda dt: self.redraw(), 0)
+
     def redraw(self, *args):        
         sections = app().project.sections.values()
-        if not app().rv: return
-        total_height = app().rv.children[0].height
+        if not self.parent.rv: return
+        total_height = self.parent.rv.children[0].height
         if total_height == 0: return
 
         def section_height(section: Section): 

@@ -11,14 +11,142 @@ from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle, Line
 from kivy.utils import get_color_from_hex, escape_markup
 from kivy.properties import ObjectProperty
+from kivy.effects.scroll import ScrollEffect
+from kivy.uix.recycleview import RecycleView
 
+from . import main
 from .project import Section, DATA_PER_ROW, Instruction
 from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type, KWidget
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
+class RV(KWidget, RecycleView):
+    parent: "main.MainPanel"
+    any_hovered = False
+
+    def __init__(self, **kwargs):
+        self.selection_start = 0
+        self.selection_end = 0
+        self.outside_bounds = False
+        super().__init__(**kwargs)
+        self.effect_x = ScrollEffect()
+        self.update_data()
+        self.bind(size=lambda *_: self.redraw_children())
+        Window.bind(mouse_pos=self.on_mouse_move)
+
+    @classmethod 
+    def on_mouse_move(cls, window, pos):
+        cls.any_hovered = False
+        
+    @classmethod
+    def update_cursor(cls):
+        if cls.any_hovered and app().ctrl_down and not app().any_hovered:
+            Window.set_system_cursor("hand")
+            app().set_hover()
+
+    def update_data(self):
+        data = []
+        for section in app().project.sections.values():
+            columns = len(section.instructions)
+            data.append({"section": section, 
+                         "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),
+                         "width": dp(1500) })
+
+        self.data = data
+
+    def update_from_scroll(self, *largs):
+        super().update_from_scroll(*largs)
+
+        def update(dt):
+            self.redraw_children()
+
+        Clock.schedule_once(update, 0)
+        
+        self.parent.arrows.redraw()
+
+    def get_visible_range(self):
+        content_height = self.children[0].height - self.height
+        scroll_pos = self.scroll_y * content_height
+
+        return scroll_pos, scroll_pos + self.height
+    
+    def calculate_selection(self, pos: tuple[int, int]):
+        for panel in iter_all_children_of_type(self.children[0], SectionData):
+            x, y = panel.to_window(panel.x, panel.y)
+            if pos[0] > x + panel.width: x1 = 0
+            else: x1 = math.floor((pos[0] - x) / (FONT_WIDTH * 3))
+            if y <= pos[1] < y + panel.height:
+                section = panel.section
+                y1 = y - pos[1]
+                rows = len(section.instructions)
+                row = math.floor(rows + y1 / FONT_HEIGHT)
+                if row >= len(section.instructions): continue
+                insn = section.instructions[row]
+                x1 = min(insn.entry.length - 1, max(x1, 0))
+                offset = insn.entry.pc + x1
+                return offset
+                
+        return -1
+    
+    def reset_selection(self):
+        self.selection_start = 0
+        self.selection_end = 0
+        self.redraw_children()
+
+    def redraw_children(self):
+        for panel in iter_all_children_of_type(self.children[0], SectionColumn):
+            panel.redraw()
+
+    def on_touch_move_section(self, touch):
+        if self.outside_bounds: return
+        if touch.button != "left": return
+        tx, ty = touch.x, touch.y
+
+        panel = next(iter_all_children_of_type(self.children[0], SectionData))
+        x, y = panel.x, panel.y
+        if touch.x > x + panel.width:
+            end = self.calculate_selection((x + panel.width, ty))
+        else:
+            end = self.calculate_selection((tx, ty))
+
+        if end > 0:
+            self.selection_end = end
+
+        self.redraw_children()
+    
+    def on_touch_down_selection(self, touch):
+        if touch.button != "left": return
+        self.outside_bounds = touch.x > self.parent.minimap.x
+        if self.outside_bounds: return
+        tx, ty = touch.x, touch.y
+
+        panel = next(iter_all_children_of_type(self.children[0], SectionData))
+        x, y = panel.x, panel.y
+        if touch.x > x + panel.width:
+            selection_end = self.calculate_selection((x + panel.width, ty))
+            selection_start = self.calculate_selection((x, ty))
+        else:
+            selection_end = self.calculate_selection((tx, ty))
+            selection_start = selection_end
+
+        if not app().shift_down: 
+            self.selection_end = selection_end
+            self.selection_start = selection_start
+        else:
+            start = self.selection_start
+            end = self.selection_end
+            if start > end:
+                if selection_end < start: self.selection_end = selection_end
+                else: self.selection_start = selection_start
+            else:
+                if selection_end < end: self.selection_start = selection_start
+                else: self.selection_end = selection_end
+
+        self.redraw_children()
+
 class LabelRow(ContextMenuBehavior, TextInput):
     section = ObjectProperty(None)
+    rv: RV = ObjectProperty(None, allownone=True)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -75,7 +203,7 @@ class LabelRow(ContextMenuBehavior, TextInput):
     
     def _on_focus(self, instance, value, *largs):
         super()._on_focus(instance, value, *largs)
-        if value: SectionColumn.reset_selection()
+        if value: self.rv.reset_selection()
         else:
             self.cursor_color = (0, 0, 0, 0)
             self.is_active = False
@@ -93,109 +221,19 @@ class LabelRow(ContextMenuBehavior, TextInput):
 class SectionColumn(Label):
     section = ObjectProperty(None)
 
-    selection_start = 0
-    selection_end = 0
-    outside_bounds = False
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.size_hint = None, None
         self.font_size = FONT_SIZE
         self.font_name = FONT_NAME
     
-    def redraw(self): pass
-
-    @classmethod
-    def calculate_selection(cls, pos: tuple[int, int]):
-        for panel in cls.find_children():
-            x, y = panel.to_window(panel.x, panel.y)
-            if pos[0] > x + panel.width: x1 = 0
-            else: x1 = math.floor((pos[0] - x) / (FONT_WIDTH * 3))
-            if y <= pos[1] < y + panel.height:
-                section = panel.section
-                y1 = y - pos[1]
-                rows = len(section.instructions)
-                row = math.floor(rows + y1 / FONT_HEIGHT)
-                if row >= len(section.instructions): continue
-                insn = section.instructions[row]
-                x1 = min(insn.entry.length - 1, max(x1, 0))
-                offset = insn.entry.pc + x1
-                return offset
-                
-        return -1
-    
-    @classmethod
-    def find_children(cls):
-        yield from iter_all_children_of_type(app().rv.children[0], SectionData)
-    
-    @classmethod
-    def reset_selection(cls):
-        cls.selection_start = 0
-        cls.selection_end = 0
-        cls.redraw_children()
-
-    @classmethod
-    def redraw_children(cls):
-        for panel in cls.find_children():
-            panel.redraw()
-
-    @classmethod
-    def on_touch_move_section(cls, touch):
-        if cls.outside_bounds: return
-        if touch.button != "left": return
-        tx, ty = touch.x, touch.y
-
-        panel = next(cls.find_children())
-        x, y = panel.x, panel.y
-        if touch.x > x + panel.width:
-            end = cls.calculate_selection((x + panel.width, ty))
-        else:
-            end = cls.calculate_selection((tx, ty))
-
-        if end > 0:
-            cls.selection_end = end
-
-        cls.redraw_children()
-    
-    @classmethod
-    def on_touch_down_selection(cls, touch):
-        if touch.button != "left": return
-        cls.outside_bounds = touch.x > app().minimap.x
-        if cls.outside_bounds: return
-        tx, ty = touch.x, touch.y
-
-        panel = next(cls.find_children())
-        x, y = panel.x, panel.y
-        if touch.x > x + panel.width:
-            selection_end = cls.calculate_selection((x + panel.width, ty))
-            selection_start = cls.calculate_selection((x, ty))
-        else:
-            selection_end = cls.calculate_selection((tx, ty))
-            selection_start = selection_end
-
-        if not app().shift_down: 
-            cls.selection_end = selection_end
-            cls.selection_start = selection_start
-        else:
-            start = cls.selection_start
-            end = cls.selection_end
-            if start > end:
-                if selection_end < start: cls.selection_end = selection_end
-                else: cls.selection_start = selection_start
-            else:
-                if selection_end < end: cls.selection_start = selection_start
-                else: cls.selection_end = selection_end
-
-        cls.redraw_children()
+    def redraw(self): pass    
 
 class SectionAddresses(KWidget, SectionColumn):
+    rv: RV = ObjectProperty(None, allownone=True)
+
     def on_section(self, instance, section: Section):
         self.text = "\n".join(format(x, "X") for x in map(lambda i: i.entry.pc, section.instructions))
-
-    @classmethod
-    def redraw_children(cls):
-        for panel in iter_all_children_of_type(app().rv.children[0], SectionAddresses):
-            panel.redraw()
     
     def redraw(self):
         super().redraw()
@@ -214,6 +252,8 @@ class SectionAddresses(KWidget, SectionColumn):
         
 
 class SectionData(KWidget, SectionColumn):
+    rv: RV = ObjectProperty(None, allownone=True)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.width = DATA_PER_ROW * dp(40)
@@ -230,7 +270,7 @@ class SectionData(KWidget, SectionColumn):
         self.text = "\n".join(lines)
 
     def redraw(self):
-        start, end = SectionColumn.selection_start, SectionColumn.selection_end
+        start, end = self.rv.selection_start, self.rv.selection_end
         if end < start: start, end = end, start
 
         self.canvas.before.clear()
@@ -265,7 +305,7 @@ class SectionData(KWidget, SectionColumn):
 
                 start_x = start_column * 3 * FONT_WIDTH
                 end_x = end_column * 3 * FONT_WIDTH
-                width = app().rv.width - app().minimap.width
+                width = self.rv.width - self.rv.parent.minimap.width
 
                 if self.section.offset <= start < self.section.offset + self.section.length and row_start - 1 == row_end and end_column < end_length:
                     if start_column == 0:
@@ -339,7 +379,7 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
         text.append(row)
 
 class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
-    any_hovered = False
+    rv: RV = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -362,16 +402,6 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
 
         self.text = "\n".join(text)
 
-    @classmethod
-    def on_mouse_move(cls, window, pos):
-        cls.any_hovered = False
-        
-    @classmethod
-    def update_cursor(cls):
-        if cls.any_hovered and app().ctrl_down and not app().any_hovered:
-            Window.set_system_cursor("hand")
-            app().set_hover()
-
     def _on_mouse_move(self, window, pos):
         x, y = pos
         sx, sy = self.to_window(self.x, self.y)
@@ -379,12 +409,12 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
             label.hovered = False
             if (sx + label.x <= x <= sx + label.x + label.width and
                 sy + self.height - label.y - label.height <= y <= sy + self.height - label.y):
-                SectionMnemonic.any_hovered = True
+                RV.any_hovered = True
                 label.hovered = True
                
 
         self._on_update()
-        SectionMnemonic.update_cursor()
+        RV.update_cursor()
 
     def trigger_context_menu(self, touch):
         for label in self.labels:
@@ -411,7 +441,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
         for label in self.labels:
             if label.hovered and self.ctrl_down and touch.button == 'left':
                 try:
-                    SectionColumn.reset_selection()
+                    self.rv.reset_selection()
                     app().scroll_to_label(label.text)
                     return True
                 except ValueError: pass
@@ -446,13 +476,15 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
 
 class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, BoxLayout):
     section = ObjectProperty(None)
+    rv: RV = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def trigger_context_menu(self, touch):
         if not self.collide_point(touch.x, touch.y): return
-        if (touch.x < app().rv.width - app().minimap.width):
+        if (touch.x < self.rv.width - self.rv.parent.minimap.width):
+            rv = self.rv
             class Handler(MenuHandler):
                 def on_select(self, item):
                     if item == "dis": 
@@ -462,9 +494,9 @@ class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, BoxLayout):
                             a.minimap.redraw()
                             a.arrows.recompute_arrows()
                             a.arrows.redraw()
-                            Clock.schedule_once(lambda dt: a.scroll_to_offset(SectionColumn.selection_start), 0)
+                            Clock.schedule_once(lambda dt: a.scroll_to_offset(rv.selection_start), 0)
                 
-                        a.project.disassemble(SectionColumn.selection_start, callback)
+                        a.project.disassemble(rv.selection_start, callback)
                         
             show_context_menu(Handler(), [
                 MenuItem("label", "Insert Label"),
