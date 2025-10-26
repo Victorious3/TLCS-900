@@ -11,6 +11,7 @@ from .main import HideableTextInput, EscapeTrigger, app, iter_all_children_of_ty
 from .main_menu import MenuHandler, MenuItem
 from .context_menu import show_context_menu, ContextMenuBehavior
 from .table.table import DataTableRow, ResizableRecycleTable
+from .dock.dock import DockTab
 
 class AnalyzerFilter(HideableTextInput, EscapeTrigger):
     def on_escape(self, obj):
@@ -79,14 +80,14 @@ class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
             Window.set_system_cursor("hand")
     
 class AnalyzerPanel(RelativeLayout):
+    def __init__(self, tab: DockTab, **kw):
+        self.tab = tab
+        super().__init__(**kw)
+
     def on_touch_down(self, touch):
         if self.collide_point(touch.x, touch.y):
             app().active = self
         return super().on_touch_down(touch)
-
-    def close_panel(self):
-        app().active = app().dis_panel_container
-        app().content_panel.remove_widget(app().y_splitter)
 
 class AnalyzerTable(ResizableRecycleTable):
     def __init__(self, **kwargs):

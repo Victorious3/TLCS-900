@@ -103,7 +103,7 @@ from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
 from .sections import RV
-from .function_graph import FunctionTabItem, FunctionTabPanel
+from .function_graph import FunctionTab, FunctionPanel
 from .buttons import IconButton
 from .analyzer import AnalyzerPanel, AnalyzerFilter
 from .context_menu import ContextMenuBehavior
@@ -172,6 +172,9 @@ class GlobalEventBus(EventDispatcher):
     def on_escape(self, *args):
         pass
 
+class MainDockTab(DockTab):
+    content: MainPanel
+
 class DisApp(App):
     _any_hovered = False
 
@@ -216,7 +219,7 @@ class DisApp(App):
         self.main_dock: Dock = self.window.ids["main_dock"]
 
         self.dis_panel = MainPanel()
-        tab = DockTab(text="el9900.rom")
+        tab = MainDockTab(text="el9900.rom")
         tab.add_widget(self.dis_panel)
         self.main_dock.add_tab(tab)
 
@@ -293,10 +296,10 @@ class DisApp(App):
         raise ValueError("Invalid location")
     
     def swich_to_listing(self):
-        #FIXME
-        #if self.tab_panel:
-        #    self.tab_panel.switch_to(self.tab_panel.tab_list[-1])
-        pass
+        for tab in self.main_dock.iterate_panels():
+            if isinstance(tab, MainDockTab):
+                tab.select()
+                break
     
     def open_function_graph_from_label(self, ep: int):
         if not self.project.functions:
@@ -304,11 +307,11 @@ class DisApp(App):
             return
         for fun in self.project.functions.values():
             if ep in fun.blocks:
-                self.open_function_graph(fun.name, callback=lambda panel: panel.move_to_location(ep))
+                self.open_function_graph(fun.name, callback=lambda panel: panel.content.move_to_location(ep))
                 return
 
     
-    def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[FunctionTabItem], None] | None = None):
+    def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[FunctionTab], None] | None = None):
         if not self.project.functions:
             self.analyze_functions(lambda: self.open_function_graph(fun_name, rescale))
             return
@@ -316,48 +319,24 @@ class DisApp(App):
         fun = next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
         if not fun: return
 
-        tab_panel = self.tab_panel
-        if tab_panel is not None:
-            # We already have tabs, just open a new one if this one hasn't been opened yet
-            tab: FunctionTabItem
-            for tab in tab_panel.tab_list[:-1]:
-                if tab.fun == fun:
-                    def after(dt):
-                        tab_panel.switch_to(tab)
-                        if callback: callback(tab)
-
-                    Clock.schedule_once(after, 0)
-                    return
-        else:
-            # Open a tabbed panel
-            self.dis_panel_container.remove_widget(self.dis_panel)
-            tab_panel = FunctionTabPanel(do_default_tab = False, tab_height = dp(25))
-            item = TabbedPanelItem(text = self.project.filename, size_hint_x=None, width=dp(100))
-            item.add_widget(self.dis_panel)
-            tab_panel.add_widget(item)
-            self.dis_panel_container.add_widget(tab_panel, index=1)
-
-            def after(dt):
-                tab = tab_panel.tab_list[0]
-                tab_panel.switch_to(tab)
-                if callback: callback(tab)
-
-            Clock.schedule_once(after, 0)
+        for tab in self.main_dock.iterate_panels():
+            if isinstance(tab, FunctionTab) and tab.content.fun == fun:
+                tab.select()
+                return
         
         # Otherwise we open a new tab
-        tab = FunctionTabItem(fun)
-        tab_panel.add_widget(tab)
+        tab = FunctionTab(text=fun.name, closeable=True)
+        panel = FunctionPanel(fun, tab)
+        tab.add_widget(panel)
+
+        app().main_dock.add_tab(tab, reverse=True)
 
         def after(dt):
-            tab_panel.switch_to(tab)
-            def after(dt):
-                tab.move_to_initial_pos()
-                if callback: callback(tab)
-            if rescale: 
-                Clock.schedule_once(after, 0)
+            panel.move_to_initial_pos()
+            if callback: callback(tab)
 
         Clock.schedule_once(after, 0)
-        self.active = self.dis_panel_container
+        self.active = self.dis_panel
 
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
@@ -385,8 +364,9 @@ class DisApp(App):
             return True
         
     def close_tabs(self):
-        #TODO
-        pass
+        for tab in self.main_dock.iterate_panels():
+            if isinstance(tab, FunctionTab):
+                tab.close()
         
     def load_project(self, project: Project):
         self.project = project
@@ -398,7 +378,9 @@ class DisApp(App):
 
         # Close views
         if self.analyzer_panel:
-            self.analyzer_panel.close_panel()
+            self.analyzer_panel.tab.close()
+            self.analyzer_panel = None
+
         self.close_tabs()
 
         # Update data FIXME All
@@ -435,16 +417,17 @@ class DisApp(App):
         popup.open()
         
     def open_function_list(self):
+        tab = DockTab(text="Functions", closeable=True)
+
         if not self.analyzer_panel:
-            self.analyzer_panel = AnalyzerPanel()
+            self.analyzer_panel = AnalyzerPanel(tab=tab)
             self.analyzer_filter = self.analyzer_panel.ids["analyzer_filter"]
             self.active = self.analyzer_panel
 
-        elif self.analyzer_panel.parent:
-            self.analyzer_panel.parent.select()
+        elif self.analyzer_panel.tab.get_root_window():
+            self.analyzer_panel.tab.select()
             return
         
-        tab = DockTab(text="Functions", closeable=True)
         tab.add_widget(self.analyzer_panel)
         self.main_dock.split(tab, Orientation.VERTICAL)
 

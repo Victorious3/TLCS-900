@@ -276,9 +276,10 @@ class DockTab(KWidget, AnchorLayout):
         self.root: Dock | None = None
         self.dock_panel: DockPanel | None = None
         self.button = DockButton()
+        self.xbutton = TabXButton()
         super().__init__(anchor_x = "right", **kwargs)
         super().add_widget(self.button)
-        super().add_widget(TabXButton())
+        super().add_widget(self.xbutton)
 
     def add_widget(self, widget: Widget, *args, **kwargs):
         self.content = widget
@@ -292,6 +293,13 @@ class DockTab(KWidget, AnchorLayout):
     
     def select(self):
         self.button.on_press()
+
+    def close(self):
+        self.xbutton.on_press()
+
+    def is_visible(self) -> bool:
+        if not self.dock_panel: return False
+        return self.dock_panel._current_widget == self
 
 
 class BaseDock(BoxLayout, Child):
@@ -330,13 +338,16 @@ class BaseDock(BoxLayout, Child):
             self.add_tab(widget, index)
         else: super().add_widget(widget, *args, **kwargs)
 
-    def add_tab(self, panel: DockTab, index: int = 0):
+    def add_tab(self, panel: DockTab, index: int = 0, reverse = False):
         panel.root = self.root or cast(Dock, self)
 
-        if self.second_panel:
-            self.second_panel.add_tab(panel, index)
-        elif self.first_panel:
-            self.first_panel.add_tab(panel, index)
+        first, second = self.first_panel, self.second_panel
+        if reverse: first, second = second, first
+
+        if second:
+            second.add_tab(panel, index)
+        elif first:
+            first.add_tab(panel, index)
         elif self.panel:
             self.panel.add_widget(panel, index=index)
         else:

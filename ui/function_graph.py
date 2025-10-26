@@ -21,8 +21,9 @@ from kivy.metrics import Metrics
 from .project import Function, Section
 from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction, KWidget
 from .sections import section_to_markup, LocationLabel
-from .buttons import XButton
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuItem, MenuHandler
+
+from .dock.dock import DockTab
 
 class NavigationGraph(NavigationAction):
     def __init__(self, fun: int, location: tuple[int, int] | int, zoom: float = 0):
@@ -37,56 +38,17 @@ class NavigationGraph(NavigationAction):
         fun = functions.get(self.function)
         if not fun: return
         app().open_function_graph(fun.name, rescale=False)
-        panel = app().tab_panel
-        if not panel: return
-        for tab in panel.tab_list:
-            if isinstance(tab, FunctionTabItem):
+        dock = app().main_dock
+        if not dock: return
+        for tab in dock.iterate_panels():
+            if isinstance(tab, FunctionTab):
                 if isinstance(self.location, int):
-                    tab.move_to_location(self.location, history=False)
+                    tab.content.move_to_location(self.location, history=False)
                 else:
-                    tab.move_to_coords(self.location, self.zoom)
+                    tab.content.move_to_coords(self.location, self.zoom)
 
-class FunctionTabPanel(TabbedPanel):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.tab_width = None
-
-    def close_tab(self, item):
-        index = self.tab_list.index(item)
-        self.remove_widget(item)
-        if len(self.tab_list) == 1:
-            # Removed the last tab, collapse tabbed pane
-            app().close_tabs()
-        else:
-            Clock.schedule_once(lambda dt: self.switch_to(self.tab_list[index - 1 if index - 1 >= 0 else 0]))
-
-class FunctionTabItem(TabbedPanelItem, FloatLayout):
+class FunctionTab(DockTab):
     content: "FunctionPanel"
-
-    def __init__(self, fun: Function, **kwargs):
-        super().__init__(**kwargs)
-        self.text = fun.name
-        self.fun = fun
-        self.add_widget(FunctionPanel(fun, self))
-        box = BoxLayout(size_hint=(None, None), width=dp(22.5), height=dp(20), padding=(0, 0, dp(2.5), 0), pos_hint={"right": 1, "center_y": 0.5})
-        box.add_widget(XButton(on_press=lambda *_: self.close_tab()))
-        super(FloatLayout, self).add_widget(box)
-
-    def close_tab(self):
-        panel: FunctionTabPanel = self.parent.tabbed_panel
-        panel.close_tab(self)
-
-    def move_to_initial_pos(self):
-        self.content.move_to_initial_pos()
-
-    def move_to_label(self, label: str):
-        self.content.move_to_label(label)
-
-    def move_to_location(self, ep: int, history=True):
-        self.content.move_to_location(ep, history)
-
-    def move_to_coords(self, location: tuple[int, int], zoom: float | None = None):
-        self.content.move_to_coords(location, zoom)
 
 def parse_pos(pos_str):
     parts = pos_str.split()
@@ -142,7 +104,7 @@ class CodeBlockRect:
 class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
     canvas: Canvas
 
-    def __init__(self, fun: Function, panel: FunctionTabItem, **kwargs):
+    def __init__(self, fun: Function, panel: "FunctionPanel", **kwargs):
         super().__init__(**kwargs)
         self.fun = fun
         self.size_hint = (None, None)
@@ -189,11 +151,7 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
                         return True
 
     def on_mouse_move(self, window, pos):
-        tab_panel = app().tab_panel
-        if tab_panel: 
-            if tab_panel.current_tab != self.panel: 
-                return
-        else: return
+        if not self.panel.tab.is_visible(): return
             
         x, y = self.to_widget(*pos)
 
@@ -384,11 +342,12 @@ class ScatterPlaneNoTouch(ScatterPlane):
         return self.parent.collide_point(*self.parent.to_widget(x, y))
 
 class FunctionPanel(BoxLayout):
-    def __init__(self, fun: Function, tab: FunctionTabItem, **kwargs):
+    def __init__(self, fun: Function, tab: FunctionTab, **kwargs):
         super().__init__(**kwargs)
         self.fun = fun
 
-        self.svg = FunctionSvg(self.fun, tab)
+        self.tab = tab
+        self.svg = FunctionSvg(self.fun, self)
         self.stencil = StencilView(size_hint=(1, 1))
         self.scatter = ScatterPlaneNoTouch(do_rotation=False, do_scale=True, do_translation=True, size_hint=(1, 1))
         self.scatter.svg = self.svg
