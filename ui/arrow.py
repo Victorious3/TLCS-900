@@ -8,7 +8,7 @@ from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
 from kivy.uix.widget import Widget
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
-from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, StencilUnUse, Rectangle, PushMatrix, PopMatrix, Translate
+from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, StencilUnUse, Rectangle
 from kivy.clock import Clock
 
 def clear_cache():
@@ -89,14 +89,13 @@ class ArrowRenderer(KWidget, Widget):
         self.arrows: list[Arrow] = []
         self.arrow_offsets = {}
 
-        self.recompute_arrows()
-
     def on_kv_post(self, base_widget):
+        self.recompute_arrows()
         Clock.schedule_once(lambda dt: self.redraw(), 0)
 
     def recompute_arrows(self):
         arrows : list[Arrow] = []
-        for section in app().project.sections.values():
+        for section in self.parent.get_sections():
             if not isinstance(section, CodeSection): continue
             for insn in section.instructions:
                 location = get_jump_location(insn)
@@ -186,7 +185,6 @@ class ArrowRenderer(KWidget, Widget):
         self.arrows = list(arrows)
         self.arrow_offsets = arrow_offsets
 
-
     @cache
     def get_offset(self, pc: int):
         offset = 0
@@ -222,9 +220,6 @@ class ArrowRenderer(KWidget, Widget):
         self.canvas.after.clear()
 
         with self.canvas.after:
-            PushMatrix()
-            Translate(rv.xoffset, 0)
-
             StencilPush()
             Rectangle(pos=self.pos, size=self.size)
             StencilUse()
@@ -248,19 +243,21 @@ class ArrowRenderer(KWidget, Widget):
                 else: line = Line
 
                 tip_length = dp(5)
+
+                right = self.right + rv.xoffset
                 
                 if w < 0:
                     Color(*COLORS[15])
                     offset = (MAX_OFFSET + 1) * dp(8)
                     if a.direction:
                         def render(y): 
-                            line(points=[self.right, y, 
-                                 self.right - offset - tip_length, y,
-                                 self.right - offset - tip_length, y - LABEL_HEIGHT / 2], width=dp(1))
+                            line(points=[right, y, 
+                                 right - offset - tip_length, y,
+                                 right - offset - tip_length, y - LABEL_HEIGHT / 2], width=dp(1))
                             
-                            Line(points=[self.right - offset - 0, y - LABEL_HEIGHT / 2 + tip_length, 
-                                         self.right - offset - tip_length, y - LABEL_HEIGHT / 2,
-                                         self.right - offset - 2*tip_length, y - LABEL_HEIGHT / 2 + tip_length], width=dp(1))
+                            Line(points=[right - offset - 0, y - LABEL_HEIGHT / 2 + tip_length, 
+                                         right - offset - tip_length, y - LABEL_HEIGHT / 2,
+                                         right - offset - 2*tip_length, y - LABEL_HEIGHT / 2 + tip_length], width=dp(1))
                             
                         render(y_start)
                         for tip in a.tips:
@@ -268,13 +265,13 @@ class ArrowRenderer(KWidget, Widget):
                         
                     else:
                         def render(y):
-                            line(points=[self.right, y, 
-                                        self.right - offset - tip_length, y,
-                                        self.right - offset - tip_length, y + LABEL_HEIGHT / 2], width=dp(1))
+                            line(points=[right, y, 
+                                        right - offset - tip_length, y,
+                                        right - offset - tip_length, y + LABEL_HEIGHT / 2], width=dp(1))
                             
-                            Line(points=[self.right - offset - 0, y + LABEL_HEIGHT / 2 - tip_length, 
-                                        self.right - offset - tip_length, y + LABEL_HEIGHT / 2,
-                                        self.right - offset - 2*tip_length, y + LABEL_HEIGHT / 2 - tip_length], width=dp(1))
+                            Line(points=[right - offset - 0, y + LABEL_HEIGHT / 2 - tip_length, 
+                                        right - offset - tip_length, y + LABEL_HEIGHT / 2,
+                                        right - offset - 2*tip_length, y + LABEL_HEIGHT / 2 - tip_length], width=dp(1))
                         render(y_end)
                         for tip in a.tips:
                             render(calc_offset(tip))
@@ -282,31 +279,31 @@ class ArrowRenderer(KWidget, Widget):
                     continue
                 
                 Color(*COLORS[w])
-                left = self.right - w*dp(8) - dp(15)
+                left = right - w*dp(8) - dp(15)
                 
-                line(points=[self.right, y_start, 
+                line(points=[right, y_start, 
                              left, y_start, 
                              left, y_end,
-                             self.right, y_end], width=dp(1))
+                             right, y_end], width=dp(1))
                 
                 for tip in a.tips:
                     o = calc_offset(tip)
-                    line(points=[self.right, o, 
+                    line(points=[right, o, 
                                  left, o], width=dp(1))
                 
                 if not a.direction:
-                    Line(points=[self.right - tip_length, y_start - tip_length,
-                                 self.right, y_start,
-                                 self.right - tip_length, y_start + tip_length], width=dp(1))
+                    Line(points=[right - tip_length, y_start - tip_length,
+                                 right, y_start,
+                                 right - tip_length, y_start + tip_length], width=dp(1))
                     
                     if y_start > self.height and y_end < self.height:
                         Line(points=[left - tip_length, self.height - tip_length,
                                      left, self.height,
                                      left + tip_length, self.height - tip_length], width=dp(1))
                 else:
-                    Line(points=[self.right - tip_length, y_end - tip_length,
-                                 self.right, y_end,
-                                 self.right - tip_length, y_end + tip_length], width=dp(1))
+                    Line(points=[right - tip_length, y_end - tip_length,
+                                 right, y_end,
+                                 right - tip_length, y_end + tip_length], width=dp(1))
                     
                     if y_end < 0 and y_start > 0:
                         Line(points=[left - tip_length, tip_length,
@@ -314,5 +311,4 @@ class ArrowRenderer(KWidget, Widget):
                                      left + tip_length, tip_length], width=dp(1))
             StencilUnUse()
             StencilPop()
-            PopMatrix()
                             

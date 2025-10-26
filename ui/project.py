@@ -91,6 +91,18 @@ class CodeBlock:
         ln: int = data["len"]
         succ = [(s["ep"], s["cond"]) for s in data["succ"]]
         return CodeBlock(proj, None, data["pred"], succ, ep=ep, ln=ln)
+    
+    def to_section(self) -> CodeSection:
+        label = self.proj.ob.label(self.ep)
+        data = self.proj.ib.buffer[self.ep - self.proj.org:self.ep + self.len + 1 - self.proj.org]
+        return CodeSection(
+            offset=self.ep,
+            length=self.len,
+            labels=[label] if label else [],
+            data=data,
+            instructions=self.insn
+        )
+
 
 def is_jump_insn(insn: Instruction):
     return insn.entry.opcode in ("JR", "JRL", "JP", "DJNZ")

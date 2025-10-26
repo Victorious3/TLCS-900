@@ -132,11 +132,12 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
                                 app().open_function_graph(hovered_label.text)
                             else:
                                 app().open_function_graph_from_label(hovered_label.ep)
+                        elif item == "listing": app().open_function_listing(hovered_label.text)
                 
                 show_context_menu(Handler1(), [
                     MenuItem("goto", f"Go to {'function' if hovered_label.is_fun else 'label'}"),
-                    MenuItem("graph", "Open in function graph")
-                ])
+                    MenuItem("graph", "Open function graph")
+                ] + [MenuItem("listing", "Open function listing")] if hovered_label.is_fun else [])
                 return True
             else:
                 for block in self.code_blocks.values():

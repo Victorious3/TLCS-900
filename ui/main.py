@@ -27,6 +27,7 @@ dirs = PlatformDirs(
     ensure_exists=True
 )
 
+project_to_open: Path | None = None
 config_file = dirs.user_config_path / "dis.ini"
 config: ConfigParser
 
@@ -126,8 +127,27 @@ class MainPanel(RelativeLayout):
     def on_touch_move(self, touch):
         if super().on_touch_move(touch): return True
         return self.rv.on_touch_move_section(touch)
+    
+    def get_sections(self):
+        return app().project.sections.values()
 
 class MainWindow(FloatLayout): pass
+
+class FunctionListing(MainPanel):
+    def __init__(self, function: Function, **kw):
+        self.fun = function
+        self.sections: list[Section] | None = None
+        super().__init__(**kw)
+
+    def get_sections(self):
+        if self.sections: return self.sections
+        self.sections = list(
+            sorted(map(lambda b: b.to_section(), self.fun.blocks.values()), 
+                   key=lambda s: s.offset))
+        return self.sections
+
+class FunctionListingTab(DockTab):
+    content: FunctionListing
 
 class GotoPosition(HideableTextInput, EscapeTrigger):
     def _on_focus(self, instance, value, *largs):
@@ -197,6 +217,8 @@ class DisApp(App):
         Window.bind(on_mouse_down=ContextMenuBehavior.on_mouse_down)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
+
+        Clock.schedule_once(lambda dt: self.on_post(), 0)
     
     def build(self):
         Window.clearcolor = BG_COLOR
@@ -220,6 +242,11 @@ class DisApp(App):
 
         build_menu()
         return self.window
+    
+    def on_post(self):
+        global project_to_open
+        if project_to_open:
+            self.load_project(Project.read_from_file(project_to_open))
     
     def scroll_to_label(self, label: str):
         for section in self.project.sections.values():
@@ -300,13 +327,35 @@ class DisApp(App):
                 self.open_function_graph(fun.name, callback=lambda panel: panel.content.move_to_location(ep))
                 return
 
+    def find_function(self, fun_name: str):
+        if not self.project.functions: return None
+        return next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
+
+    def open_function_listing(self, fun_name: str):
+        if not self.project.functions:
+            self.analyze_functions(lambda: self.open_function_listing(fun_name))
+            return
+        
+        fun = self.find_function(fun_name)
+        if not fun: return
+
+        for tab in self.main_dock.iterate_panels():
+            if isinstance(tab, FunctionListingTab) and tab.content.fun == fun:
+                tab.select()
+                return
+        
+        tab = FunctionTab(text=fun.name, closeable=True) #TODO Icon for tab
+        panel = FunctionListing(fun)
+        tab.add_widget(panel)
+
+        app().main_dock.add_tab(tab, reverse=True)
     
     def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[FunctionTab], None] | None = None):
         if not self.project.functions:
             self.analyze_functions(lambda: self.open_function_graph(fun_name, rescale))
             return
 
-        fun = next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
+        fun = self.find_function(fun_name)
         if not fun: return
 
         for tab in self.main_dock.iterate_panels():

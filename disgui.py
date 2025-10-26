@@ -12,4 +12,5 @@ if __name__ == "__main__":
         0xFFBFAC, 0xFFBFB0, 0xFFBF94, 0xFFBF98, 
         0xFFF10E, 0xFFBF9C, 0xFFBFA8
     ]
+    main.project_to_open = Path("el9900.disproj")
     main.main(Path("el9900.disproj/el9900.rom"), eps, 0xF00000)

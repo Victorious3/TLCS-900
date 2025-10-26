@@ -49,10 +49,12 @@ class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
                     def on_select(self, item):
                         if item == "goto": app().scroll_to_label(data[0])
                         elif item == "graph": app().open_function_graph(data[0])
+                        elif item == "listing": app().open_function_listing(data[0])
                 
                 show_context_menu(Handler(), [
                     MenuItem("goto", "Go to function"),
-                    MenuItem("graph", "Open in function graph")
+                    MenuItem("graph", "Open function graph"),
+                    MenuItem("listing", "Open function listing")
                 ])
                 return True
         return False

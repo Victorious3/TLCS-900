@@ -46,9 +46,11 @@ class RV(KWidget, RecycleView):
         self.outside_bounds = False
         super().__init__(**kwargs)
         self.effect_x = ScrollEffect()
-        self.update_data()
         self.bind(size=lambda *_: self.redraw_children())
         Window.bind(mouse_pos=self.on_mouse_move)
+    
+    def on_kv_post(self, base_widget):
+        self.update_data()
 
     @classmethod 
     def on_mouse_move(cls, window, pos):
@@ -67,7 +69,8 @@ class RV(KWidget, RecycleView):
 
     def update_data(self):
         data = []
-        for section in app().project.sections.values():
+        section: Section
+        for section in self.parent.get_sections():
             columns = len(section.instructions)
             data.append({"section": section, 
                          "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0)})
@@ -207,10 +210,12 @@ class LabelRow(ContextMenuBehavior, TextInput):
                             app().open_function_graph(text)
                         else:
                             app().open_function_graph_from_label(section.offset)
+                    elif item == "listing":
+                        app().open_function_listing(text)
             
             show_context_menu(Handler(), [
-                MenuItem("graph", "Open in function graph")
-            ])
+                MenuItem("graph", "Open function graph")
+            ] + [MenuItem("listing", "Open function listing")] if is_function else [])
             return True
         return False
 
@@ -462,11 +467,12 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
                                 app().open_function_graph(label.text)
                             else:
                                 app().open_function_graph_from_label(label.ep)
+                        elif item == "listing": app().open_function_listing(label.text)
                 
                 show_context_menu(Handler(), [
                     MenuItem("goto", f"Go to {'function' if label.is_fun else 'label'}"),
-                    MenuItem("graph", "Open in function graph")
-                ])
+                    MenuItem("graph", "Open function graph")
+                ] + [MenuItem("listing", "Open function listing")] if label.is_fun else [])
                 return True
 
         return False
@@ -515,7 +521,7 @@ class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, Bo
     rv: RV = ObjectProperty(None, allownone=True)
 
     def on_rv(self, instance, value):
-        if value: value.bind(xoffset=lambda i, val: setattr(self, "xoffset", val))
+        if value: value.bind(xoffset=lambda i, val: setattr(instance, "xoffset", val))
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
