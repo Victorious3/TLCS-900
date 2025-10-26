@@ -2,7 +2,7 @@ import math, shutil, tempfile, logging
 
 from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import Callable, TypeVar, Type, Generator, cast, Protocol, Any, TYPE_CHECKING
+from typing import Callable, TypeVar, Type, Generator, cast
 from platformdirs import PlatformDirs
 from configparser import ConfigParser
 
@@ -19,7 +19,6 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
-from kivy.graphics import Canvas
 from kivy.metrics import Metrics
 
 dirs = PlatformDirs(
@@ -84,17 +83,6 @@ class EscapeTrigger:
 
     def on_escape(self, obj):
         pass
-
-class HasWidget(Protocol):
-    canvas: Canvas = ...
-
-    def bind(self, **kwargs: Callable[..., Any]) -> Any: pass
-    def register_event_type(self, *args): pass
-
-if TYPE_CHECKING:
-    class KWidget(HasWidget): ...
-else:
-    class KWidget: pass
 
 from tcls_900.tlcs_900 import Reg, Mem
 
@@ -430,6 +418,7 @@ class DisApp(App):
         
         tab.add_widget(self.analyzer_panel)
         self.main_dock.split(tab, Orientation.VERTICAL)
+        tab.select()
 
     
     def on_mouse_move(self, window, pos):

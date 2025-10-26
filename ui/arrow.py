@@ -15,8 +15,9 @@ def clear_cache():
     ArrowRenderer.get_offset.cache_clear()
 
 from . import main
+from .types import KWidget
 from .project import Section, CodeSection, get_jump_location
-from .main import LABEL_HEIGHT, app, FONT_HEIGHT, KWidget
+from .main import LABEL_HEIGHT, app, FONT_HEIGHT
 from disapi import Loc
 
 MAX_OFFSET = 15

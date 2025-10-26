@@ -15,8 +15,9 @@ from kivy.effects.scroll import ScrollEffect
 from kivy.uix.recycleview import RecycleView
 
 from . import main
+from .types import KWidget
 from .project import Section, DATA_PER_ROW, Instruction
-from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type, KWidget
+from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
@@ -103,7 +104,7 @@ class RV(KWidget, RecycleView):
         tx, ty = touch.x, touch.y
 
         panel = next(iter_all_children_of_type(self.children[0], SectionData))
-        x, y = panel.x, panel.y
+        x, y = panel.to_window(panel.x, panel.y)
         if touch.x > x + panel.width:
             end = self.calculate_selection((x + panel.width, ty))
         else:
@@ -116,12 +117,17 @@ class RV(KWidget, RecycleView):
     
     def on_touch_down_selection(self, touch):
         if touch.button != "left": return
-        self.outside_bounds = touch.x > self.parent.minimap.x
-        if self.outside_bounds: return
         tx, ty = touch.x, touch.y
 
+        mx, my = self.parent.minimap.to_window(*self.parent.minimap.pos)
+        sx, sy = self.to_window(*self.pos)
+        self.outside_bounds = not (sx < tx < mx and sy < ty < sy + self.height)
+        if self.outside_bounds: 
+            self.reset_selection()
+            return
+
         panel = next(iter_all_children_of_type(self.children[0], SectionData))
-        x, y = panel.x, panel.y
+        x, y = panel.to_window(panel.x, panel.y)
         if touch.x > x + panel.width:
             selection_end = self.calculate_selection((x + panel.width, ty))
             selection_start = self.calculate_selection((x, ty))

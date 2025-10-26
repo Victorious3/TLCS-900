@@ -1,7 +1,6 @@
-from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
-from kivy.uix.recyclegridlayout import RecycleGridLayout
+from kivy.uix.stencilview import StencilView
 from kivy.uix.label import Label
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.widget import Widget
@@ -31,7 +30,7 @@ class SortableHeader(ButtonBehavior, Label):
 class ColumnResizer(ButtonBehavior, Widget):
     col_index = NumericProperty(0)
 
-    def __init__(self, table, **kwargs):
+    def __init__(self, table: "ResizableRecycleTable", **kwargs):
         super().__init__(**kwargs)
         self.table = table
         self.size_hint_x = None
@@ -69,7 +68,9 @@ class ColumnResizer(ButtonBehavior, Widget):
         return super().on_touch_up(touch)
     
     def on_mouse_pos(self, window, pos):
-        inside = self.collide_point(*self.to_widget(*pos))
+        if not self.table.collide_point(*pos): return
+        
+        inside = self.collide_point(*pos)
         if inside:
             self.on_enter()
         else:
@@ -106,7 +107,7 @@ class TableBody(RecycleView):
         self.data = data
 
 
-class ResizableRecycleTable(BoxLayout):
+class ResizableRecycleTable(StencilView, BoxLayout):
     column_widths = ListProperty([])
     cols = NumericProperty(0)
     viewclass = StringProperty("DataTableRow")

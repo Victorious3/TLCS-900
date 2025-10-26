@@ -18,7 +18,7 @@ from kivy.utils import get_color_from_hex
 from kivy.properties import BooleanProperty, StringProperty, ObjectProperty
 from kivy.clock import Clock
 
-from ui.main import KWidget
+from ui.types import KWidget
 from ui.buttons import XButton
 
 Builder.load_file("ui/dock/dock.kv")
@@ -141,6 +141,9 @@ class DockPanel(KWidget, BoxLayout, Child):
         if touch.button == "left":
             self.drop_quadrant = None
             self.drop_tab = None
+            if self._current_widget and self._current_widget.content:
+                if self._current_widget.content.collide_point(touch.x, touch.y):
+                    self._current_widget.select()
         return super().on_touch_down(touch)
 
     def on_touch_up(self, touch):

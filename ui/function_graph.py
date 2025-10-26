@@ -18,8 +18,9 @@ from kivy.graphics.transformation import Matrix
 from kivy.graphics import Canvas
 from kivy.metrics import Metrics
 
+from .types import KWidget
 from .project import Function, Section
-from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction, KWidget
+from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction
 from .sections import section_to_markup, LocationLabel
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuItem, MenuHandler
 
