@@ -8,7 +8,7 @@ from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
 from kivy.uix.widget import Widget
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
-from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, StencilUnUse, Rectangle
+from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, StencilUnUse, Rectangle, PushMatrix, PopMatrix, Translate
 from kivy.clock import Clock
 
 def clear_cache():
@@ -222,6 +222,9 @@ class ArrowRenderer(KWidget, Widget):
         self.canvas.after.clear()
 
         with self.canvas.after:
+            PushMatrix()
+            Translate(rv.xoffset, 0)
+
             StencilPush()
             Rectangle(pos=self.pos, size=self.size)
             StencilUse()
@@ -311,4 +314,5 @@ class ArrowRenderer(KWidget, Widget):
                                      left + tip_length, tip_length], width=dp(1))
             StencilUnUse()
             StencilPop()
+            PopMatrix()
                             

@@ -10,9 +10,10 @@ from kivy.metrics import dp
 from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle, Line
 from kivy.utils import get_color_from_hex, escape_markup
-from kivy.properties import ObjectProperty
+from kivy.properties import ObjectProperty, NumericProperty
 from kivy.effects.scroll import ScrollEffect
 from kivy.uix.recycleview import RecycleView
+from kivy.uix.scrollview import ScrollView
 
 from . import main
 from .types import KWidget
@@ -21,7 +22,20 @@ from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, M
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
+class ScrollBar(BoxLayout):
+    parent: "main.MainPanel"
+    base_width: int = NumericProperty(0)
+    view: ScrollView
+
+    def on_kv_post(self, base_widget):
+        self.view = self.ids["scroll_view"]
+
+    def on_scroll_move(self):
+        self.parent.rv.xoffset = self.view.scroll_x * (self.width - self.base_width)
+
 class RV(KWidget, RecycleView):
+    xoffset: float = NumericProperty(0)
+
     parent: "main.MainPanel"
     any_hovered = False
 
@@ -44,6 +58,9 @@ class RV(KWidget, RecycleView):
         if cls.any_hovered and app().ctrl_down and not app().any_hovered:
             Window.set_system_cursor("hand")
             app().set_hover()
+
+    def on_xoffset(self, instance, value: int):
+        self.parent.arrows.redraw()
 
     def update_data(self):
         data = []
@@ -97,6 +114,14 @@ class RV(KWidget, RecycleView):
     def redraw_children(self):
         for panel in iter_all_children_of_type(self.children[0], SectionColumn):
             panel.redraw()
+
+        max_width = 0
+        for data in iter_all_children_of_type(self.children[0], SectionMnemonic):
+            max_width = max(max_width, data.width + data.x - self.parent.rv.xoffset + dp(15))
+
+        scrollbar = self.parent.scrollbar
+        scrollbar.base_width = max_width
+        scrollbar.on_scroll_move()
 
     def on_touch_move_section(self, touch):
         if self.outside_bounds: return
@@ -162,7 +187,6 @@ class LabelRow(ContextMenuBehavior, TextInput):
         self.height = LABEL_HEIGHT
         self.background_color = 0, 0, 0, 0
         self.foreground_color = 1, 1, 1, 1
-        self.padding = dp(250), 0, 0, 0
         self.multiline = False
         self.cursor_color = 0, 0, 0, 0
         self.is_active = False
@@ -355,7 +379,8 @@ class LocationLabel:
         self.height = height
         self.is_fun = is_fun
 
-def section_to_markup(instructions: list[Instruction], text: list[str], labels: list[LocationLabel]):
+def section_to_markup(instructions: list[Instruction], text: list[str], labels: list[LocationLabel]) -> int:
+    max_width = 0
     for insn in instructions:
         row_width = len(insn.entry.opcode) + 1
         row = f"[color=#569CD6]{insn.entry.opcode}[/color] "
@@ -381,8 +406,10 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
             if i < len(insn.entry.instructions) - 1:
                 row += ", "
                 row_width += 2
+        max_width = max(max_width, row_width)
 
         text.append(row)
+    return max_width
 
 class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     rv: RV = ObjectProperty(None, allownone=True)
@@ -399,7 +426,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     def on_section(self, instance, section: Section):
         self.labels = []
         text = []
-        section_to_markup(section.instructions, text, self.labels)
+        self.width = section_to_markup(section.instructions, text, self.labels) * FONT_WIDTH
         for label in self.labels:
             label.x = label.x * FONT_WIDTH
             label.y = label.y * FONT_HEIGHT
@@ -482,7 +509,11 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
 
 class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, BoxLayout):
     section = ObjectProperty(None)
+    xoffset = NumericProperty(0)
     rv: RV = ObjectProperty(None, allownone=True)
+
+    def on_rv(self, instance, value):
+        if value: value.bind(xoffset=lambda i, val: setattr(self, "xoffset", val))
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

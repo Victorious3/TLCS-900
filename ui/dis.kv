@@ -50,6 +50,23 @@
         height: self.minimum_height
         pos_hint: { "center_x": 0.5, "top": 1 }
 
+<ScrollBar>:
+    size_hint: 1, None
+    do_scroll_x: True
+    do_scroll_y: False
+    height: dp(15)
+
+    ScrollView:
+        id: scroll_view
+        bar_width: dp(15)
+        scroll_type: ['bars']
+        on_scroll_move: root.on_scroll_move()
+
+        BoxLayout:
+            size_hint: None, None
+            width: root.base_width
+            height: dp(15)
+
 <MainPanel>:
     size_hint: 1, 1
 
@@ -59,6 +76,9 @@
         id: rv
     ArrowRenderer:  
         id: arrows
+    ScrollBar:
+        id: scrollbar
+        pos_hint: { "left": 1, "bottom": 1 }
 
 <AnalyzerPanel>:
     AnalyzerTable:
@@ -122,28 +142,28 @@
     LabelRow:
         rv: root.rv
         id: label
+        padding: dp(250) + root.xoffset, 0, 0, 0
 
     RelativeLayout:
         size_hint: 1, 1
         SectionData:
             rv: root.rv
             halign: "left"
-            pos: dp(270), 0
+            pos: dp(270) + root.xoffset, 0
             text_size: self.width, self.height
             height: self.parent.height
             id: data
         SectionAddresses:
             rv: root.rv
             width: dp(240)
-            pos: 0, 0
+            pos: root.xoffset, 0
             halign: "right"
             text_size: self.width, self.height
             height: self.parent.height
             id: addresses
         SectionMnemonic:
             rv: root.rv
-            pos: dp(550), 0
-            width: dp(400)
+            pos: dp(550) + root.xoffset, 0
             size_hint: None, 1
             halign: "left"
             markup: True

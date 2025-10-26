@@ -90,7 +90,7 @@ from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, new_pro
 from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
-from .sections import RV
+from .sections import RV, ScrollBar
 from .function_graph import FunctionTab, FunctionPanel
 from .buttons import IconButton
 from .analyzer import AnalyzerPanel, AnalyzerFilter
@@ -107,15 +107,17 @@ class NavigationListing(NavigationAction):
 
 class MainPanel(RelativeLayout):
     def __init__(self, **kw):
-        self.rv = cast(RV, None)
-        self.minimap = cast(Minimap, None)
-        self.arrows = cast(ArrowRenderer, None)
+        self.rv: RV = cast(RV, None)
+        self.minimap: Minimap = cast(Minimap, None)
+        self.arrows: ArrowRenderer = cast(ArrowRenderer, None)
+        self.scrollbar: ScrollBar = cast(ScrollBar, None)
         super().__init__(**kw)
 
     def on_kv_post(self, base_widget):
         self.rv = self.ids["rv"]
         self.minimap = self.ids["minimap"]
         self.arrows = self.ids["arrows"]
+        self.scrollbar = self.ids["scrollbar"]
 
     def on_touch_down(self, touch):
         if super().on_touch_down(touch): return True
