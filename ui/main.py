@@ -1,4 +1,4 @@
-import math, shutil, tempfile, logging
+import math, shutil, tempfile, logging, sys
 
 from pathlib import Path
 from abc import ABC, abstractmethod
@@ -7,7 +7,7 @@ from platformdirs import PlatformDirs
 from configparser import ConfigParser
 
 from kivy.app import App
-from kivy.metrics import dp
+from kivy.metrics import dp, Metrics
 from kivy.clock import Clock, ClockEvent
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
@@ -336,6 +336,14 @@ class DisApp(App):
             elif keycode == 9:
                 if self.active == self.analyzer_panel:
                     self.analyzer_filter.show()
+
+        # TODO Dynamic resizing is complicated
+        #if ("meta" in modifiers and sys.platform == "darwin" or 
+        #    "ctrl" in modifiers and sys.platform != "darwin"):
+        #    if keycode == 48: # ctrl + '+'
+        #        Metrics.density += 1
+        #    elif keycode == 56: # ctrl + '-'
+        #        Metrics.density -= 1
 
         if keycode == 225: self.shift_down = True
         elif keycode == 224: 

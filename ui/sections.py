@@ -14,6 +14,7 @@ from kivy.properties import ObjectProperty, NumericProperty
 from kivy.effects.scroll import ScrollEffect
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.stencilview import StencilView
 
 from . import main
 from .types import KWidget
@@ -61,14 +62,15 @@ class RV(KWidget, RecycleView):
 
     def on_xoffset(self, instance, value: int):
         self.parent.arrows.redraw()
+        for data in iter_all_children_of_type(self.children[0], SectionData):
+            data.redraw()
 
     def update_data(self):
         data = []
         for section in app().project.sections.values():
             columns = len(section.instructions)
             data.append({"section": section, 
-                         "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),
-                         "width": dp(1500) })
+                         "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0)})
 
         self.data = data
 
@@ -507,7 +509,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
             self.ctrl_down = False
             self._on_update()
 
-class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, BoxLayout):
+class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, BoxLayout):
     section = ObjectProperty(None)
     xoffset = NumericProperty(0)
     rv: RV = ObjectProperty(None, allownone=True)

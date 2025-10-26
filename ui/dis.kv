@@ -138,15 +138,14 @@
     viewclass: 'SectionPanel'
 
     RecycleBoxLayout:
-        size_hint: None, None
+        size_hint: 1, None
         height: self.minimum_height
         orientation: 'vertical'
 
 <SectionPanel>:
     rv: self.parent.parent if self.parent else None
-    padding: 0
-    size_hint: None, None
     orientation: 'vertical'
+    width: self.parent.width - dp(15) if self.parent else 0
     
     LabelRow:
         rv: root.rv
