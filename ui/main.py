@@ -92,7 +92,7 @@ from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
 from .sections import RV, ScrollBar
-from .function_graph import FunctionTab, FunctionPanel
+from .function_graph import GraphTab, FunctionPanel
 from .buttons import IconButton
 from .analyzer import AnalyzerPanel, AnalyzerFilter
 from .context_menu import ContextMenuBehavior
@@ -132,6 +132,8 @@ class MainPanel(RelativeLayout):
         return app().project.sections.values()
 
 class MainWindow(FloatLayout): pass
+
+class ListingTab(DockTab): pass
 
 class FunctionListing(MainPanel):
     def __init__(self, function: Function, **kw):
@@ -344,13 +346,13 @@ class DisApp(App):
                 tab.select()
                 return
         
-        tab = FunctionTab(text=fun.name, closeable=True) #TODO Icon for tab
+        tab = ListingTab(text=fun.name, closeable=True, source="ui/resources/code-listing.png")
         panel = FunctionListing(fun)
         tab.add_widget(panel)
 
         app().main_dock.add_tab(tab, reverse=True)
     
-    def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[FunctionTab], None] | None = None):
+    def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[GraphTab], None] | None = None):
         if not self.project.functions:
             self.analyze_functions(lambda: self.open_function_graph(fun_name, rescale))
             return
@@ -359,12 +361,12 @@ class DisApp(App):
         if not fun: return
 
         for tab in self.main_dock.iterate_panels():
-            if isinstance(tab, FunctionTab) and tab.content.fun == fun:
+            if isinstance(tab, GraphTab) and tab.content.fun == fun:
                 tab.select()
                 return
         
         # Otherwise we open a new tab
-        tab = FunctionTab(text=fun.name, closeable=True)
+        tab = GraphTab(text=fun.name, closeable=True, source="ui/resources/graph.png")
         panel = FunctionPanel(fun, tab)
         tab.add_widget(panel)
 
@@ -412,7 +414,7 @@ class DisApp(App):
         
     def close_tabs(self):
         for tab in self.main_dock.iterate_panels():
-            if isinstance(tab, FunctionTab):
+            if isinstance(tab, GraphTab):
                 tab.close()
         
     def load_project(self, project: Project):

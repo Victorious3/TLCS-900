@@ -2,13 +2,23 @@
     size_hint_x: None
     text: self.parent.text if self.parent else ""
     width: self.texture_size[0] + dp(20)
-    padding: 0, 0, dp(20), 0
+    padding: dp(20), 0, dp(20), 0
 
 <DockTab>:
     size_hint_x: None
     width: self.button.width if self.button else dp(100)
 
+<TabXButton>:
+    pos: ((self.parent.width - self.width - dp(2.5)) if self.parent else 0), dp(2.5)
 
-<TabXButton>
     opacity: 1 if self.parent and self.parent.closeable else 0
     disabled: not (self.parent and self.parent.closeable)
+
+<DockTabIcon>
+    pos: dp(2.5), dp(2.5)
+
+    source: self.parent.source if self.parent else None
+    opacity: 1 if self.source else 0
+    size_hint: None, None
+    width: dp(20) 
+    height: dp(20)

@@ -10,14 +10,14 @@ class TabbedPanelApp(App):
     def build(self):
         dock = Dock()
 
-        def make_panel(index: int):
+        def make_panel(index: int, source = None):
             text = "Panel" + str(index) + ("#" * index)
-            panel = DockTab(text=text, closeable=(index % 2 == 0))
+            panel = DockTab(text=text, closeable=(index % 2 == 0), source=source)
             panel.add_widget(Label(text=text))
             return panel
 
-        dock.add_tab(make_panel(1))
-        dock.add_tab(make_panel(2))
+        dock.add_tab(make_panel(1, source="ui/resources/code-listing.png"))
+        dock.add_tab(make_panel(2, source="ui/resources/graph.png"))
         dock.add_tab(make_panel(3))
 
         dock.split(make_panel(4))

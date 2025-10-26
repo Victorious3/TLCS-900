@@ -7,8 +7,9 @@ from kivy.uix.splitter import Splitter
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
 from kivy.uix.gridlayout import GridLayout
-from kivy.uix.anchorlayout import AnchorLayout
+from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.image import Image
 from kivy.lang import Builder
 from kivy.core.window import Window
 from kivy.graphics import Rectangle, Color
@@ -269,20 +270,24 @@ class TabXButton(XButton):
                         panel.dock_panel._current_widget.select()
 
             Clock.schedule_once(select_last, 0)
+
+class DockTabIcon(Image): pass
             
-class DockTab(KWidget, AnchorLayout):
+class DockTab(KWidget, RelativeLayout):
     closeable = BooleanProperty(False)
     text = StringProperty("")
     button = ObjectProperty(None)
+    source = StringProperty(None)
 
     def __init__(self, **kwargs):
         self.root: Dock | None = None
         self.dock_panel: DockPanel | None = None
         self.button = DockButton()
         self.xbutton = TabXButton()
-        super().__init__(anchor_x = "right", **kwargs)
+        super().__init__(**kwargs)
         super().add_widget(self.button)
         super().add_widget(self.xbutton)
+        super().add_widget(DockTabIcon())
 
     def add_widget(self, widget: Widget, *args, **kwargs):
         self.content = widget

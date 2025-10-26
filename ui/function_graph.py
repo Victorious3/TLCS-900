@@ -42,13 +42,13 @@ class NavigationGraph(NavigationAction):
         dock = app().main_dock
         if not dock: return
         for tab in dock.iterate_panels():
-            if isinstance(tab, FunctionTab):
+            if isinstance(tab, GraphTab):
                 if isinstance(self.location, int):
                     tab.content.move_to_location(self.location, history=False)
                 else:
                     tab.content.move_to_coords(self.location, self.zoom)
 
-class FunctionTab(DockTab):
+class GraphTab(DockTab):
     content: "FunctionPanel"
 
 def parse_pos(pos_str):
@@ -344,7 +344,7 @@ class ScatterPlaneNoTouch(ScatterPlane):
         return self.parent.collide_point(*self.parent.to_widget(x, y))
 
 class FunctionPanel(BoxLayout):
-    def __init__(self, fun: Function, tab: FunctionTab, **kwargs):
+    def __init__(self, fun: Function, tab: GraphTab, **kwargs):
         super().__init__(**kwargs)
         self.fun = fun
 
