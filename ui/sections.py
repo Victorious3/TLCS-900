@@ -25,7 +25,7 @@ from disapi import Loc
 
 class ScrollBar(BoxLayout):
     parent: "main.MainPanel"
-    base_width: int = NumericProperty(0)
+    base_width: float = NumericProperty(0)
     view: ScrollView
 
     def on_kv_post(self, base_widget):
@@ -63,11 +63,9 @@ class RV(KWidget, RecycleView):
             app().set_hover()
 
     def on_xoffset(self, instance, value: int):
-        def handler(dt):
-            self.parent.arrows.redraw()
-            for data in iter_all_children_of_type(self.children[0], SectionColumn):
-                data.redraw()
-        Clock.schedule_once(handler, 0)
+        self.parent.arrows.redraw()
+        for data in iter_all_children_of_type(self.children[0], SectionColumn):
+            data.redraw()
 
     def update_data(self):
         data = []
@@ -75,18 +73,14 @@ class RV(KWidget, RecycleView):
         for section in self.parent.get_sections():
             columns = len(section.instructions)
             data.append({"section": section, 
-                         "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0)})
+                         "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),
+                         "rv": self})
 
         self.data = data
 
     def update_from_scroll(self, *largs):
         super().update_from_scroll(*largs)
-
-        def update(dt):
-            self.redraw_children()
-
-        Clock.schedule_once(update, 0)
-        
+        Clock.schedule_once(lambda dt: self.redraw_children(), 0)
         self.parent.arrows.redraw()
 
     def get_visible_range(self):
@@ -124,7 +118,7 @@ class RV(KWidget, RecycleView):
 
         max_width = 0
         for data in iter_all_children_of_type(self.children[0], SectionMnemonic):
-            max_width = max(max_width, data.width + data.x - self.parent.rv.xoffset + dp(15))
+            max_width = max(max_width, data.width + dp(550) + dp(15))
 
         scrollbar = self.parent.scrollbar
         scrollbar.base_width = max_width
@@ -528,9 +522,17 @@ class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, Bo
     rv: RV = ObjectProperty(None, allownone=True)
 
     def on_rv(self, instance, value):
-        if value: value.bind(xoffset=lambda i, val: setattr(instance, "xoffset", val))
+        if self._old_rv:
+            self._old_rv.unbind(xoffset=self.update_xoffset)
+
+        if value: value.bind(xoffset=self.update_xoffset)
+        self._old_rv = value
+
+    def update_xoffset(self, i, val):
+        self.xoffset = val
 
     def __init__(self, **kwargs):
+        self._old_rv: RV | None = None
         super().__init__(**kwargs)
 
     def trigger_context_menu(self, touch):
@@ -560,7 +562,8 @@ class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, Bo
 
             return True
 
-    def refresh_view_attrs(self, rv, index, data):
+    def refresh_view_attrs(self, rv: RV, index, data):
+        self.xoffset = rv.xoffset
         super().refresh_view_attrs(rv, index, data)
 
         section: Section = data["section"]
