@@ -210,7 +210,6 @@ class DisApp(App):
 
         self.ctrl_down = False
         self.shift_down = False
-        self.active: Widget
 
         self.global_event_bus = GlobalEventBus()
 
@@ -239,8 +238,6 @@ class DisApp(App):
 
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
-
-        self.active = self.dis_panel
 
         build_menu()
         return self.window
@@ -379,7 +376,6 @@ class DisApp(App):
             if callback: callback(tab)
 
         Clock.schedule_once(after, 0)
-        self.active = self.dis_panel
 
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
@@ -387,7 +383,7 @@ class DisApp(App):
             if keycode == 10:
                 self.goto_position.show()
             elif keycode == 9:
-                if self.active == self.analyzer_panel:
+                if self.analyzer_panel and self.main_dock.active_content == self.analyzer_panel:
                     self.analyzer_filter.show()
 
         # TODO Dynamic resizing is complicated
@@ -473,7 +469,6 @@ class DisApp(App):
         if not self.analyzer_panel:
             self.analyzer_panel = AnalyzerPanel(tab=tab)
             self.analyzer_filter = self.analyzer_panel.ids["analyzer_filter"]
-            self.active = self.analyzer_panel
 
         elif self.analyzer_panel.tab.get_root_window():
             self.analyzer_panel.tab.select()

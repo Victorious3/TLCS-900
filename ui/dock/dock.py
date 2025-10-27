@@ -515,6 +515,11 @@ class Dock(KWidget, BaseDock):
     @property
     def active_panel(self) -> DockTab | None:
         return self._active_panel
+    
+    @property
+    def active_content(self) -> Widget | None:
+        if self._active_panel: return self._active_panel.content
+        return None
 
     @active_panel.setter
     def active_panel(self, value: DockTab):

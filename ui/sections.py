@@ -64,7 +64,7 @@ class RV(KWidget, RecycleView):
 
     def on_xoffset(self, instance, value: int):
         self.parent.arrows.redraw()
-        for data in iter_all_children_of_type(self.children[0], SectionData):
+        for data in iter_all_children_of_type(self.children[0], SectionColumn):
             data.redraw()
 
     def update_data(self):
@@ -246,9 +246,13 @@ class LabelRow(ContextMenuBehavior, TextInput):
             self.is_active = False
 
     def _key_down(self, key, repeat=False):
-        if key[2].startswith("cursor") and not self.is_active:
+        if key[2].startswith("cursor") or key[2] in ("del", "backspace") and not self.is_active:
             return
         super()._key_down(key, repeat)
+
+    def delete_selection(self, from_undo=False):
+        if not self.is_active: return
+        return super().delete_selection(from_undo)
 
     def keyboard_on_textinput(self, window, text):
         if not self.is_active: return
@@ -536,20 +540,21 @@ class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, Bo
                     if item == "dis": 
                         a = app()
                         def callback():
-                            a.rv.update_data()
-                            a.minimap.redraw()
-                            a.arrows.recompute_arrows()
-                            a.arrows.redraw()
+                            a.dis_panel.rv.update_data()
+                            a.dis_panel.minimap.redraw()
+                            a.dis_panel.arrows.recompute_arrows()
+                            a.dis_panel.arrows.redraw()
                             Clock.schedule_once(lambda dt: a.scroll_to_offset(rv.selection_start), 0)
                 
                         a.project.disassemble(rv.selection_start, callback)
                         
             show_context_menu(Handler(), [
-                MenuItem("label", "Insert Label"),
+                MenuItem("label", "Insert Label")
+            ] + ([
                 MenuItem("dis", "Disassemble from here"),
                 MenuItem("dis_oneshot", "Disassemble oneshot"),
                 MenuItem("dis_selected", "Disassemble selected"),
-            ])
+            ] if not isinstance(self.rv.parent, main.FunctionListing) else []))
 
             return True
 
