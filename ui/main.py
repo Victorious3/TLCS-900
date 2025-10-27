@@ -99,11 +99,12 @@ from .popup import FunctionAnalyzerPopup
 from .dock.dock import DockTab, Dock, Orientation
 
 class NavigationListing(NavigationAction):
-    def __init__(self, offset: int):
+    def __init__(self, panel: "MainPanel | None", offset: int):
         self.offset = offset
+        self.panel = panel
 
     def navigate(self):
-        app().scroll_to_offset(self.offset, history=False)
+        app().scroll_to_offset(self.offset, self.panel, history=False)
 
 class MainPanel(RelativeLayout):
     def __init__(self, **kw):
@@ -291,7 +292,7 @@ class DisApp(App):
                 scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
                 rv.scroll_y = 1 - (scroll_pos / total_height)                
                 rv.reset_selection()
-                if history: self.update_position_history(NavigationListing(offset))
+                if history: self.update_position_history(NavigationListing(main_panel, offset))
                 self.last_position = offset
                 
                 return

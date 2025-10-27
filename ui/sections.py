@@ -17,7 +17,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.stencilview import StencilView
 
 from . import main
-from .types import KWidget
+from .kivytypes import KWidget
 from .project import Section, DATA_PER_ROW, Instruction
 from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem

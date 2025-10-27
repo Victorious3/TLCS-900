@@ -7,7 +7,7 @@ from kivy.utils import get_color_from_hex
 from kivy.clock import Clock
 
 from . import main
-from .types import KWidget
+from .kivytypes import KWidget
 from .main import app, FONT_HEIGHT, LABEL_HEIGHT, BG_COLOR
 from .project import Section, CodeSection
 

@@ -19,7 +19,7 @@ from kivy.utils import get_color_from_hex
 from kivy.properties import BooleanProperty, StringProperty, ObjectProperty
 from kivy.clock import Clock
 
-from ui.types import KWidget
+from ui.kivytypes import KWidget
 from ui.buttons import XButton
 
 Builder.load_file("ui/dock/dock.kv")
