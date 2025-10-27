@@ -459,9 +459,10 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     def trigger_context_menu(self, touch):
         for label in self.labels:
             if label.hovered and self.ctrl_down:
+                main_panel = self.rv.parent
                 class Handler(MenuHandler):
                     def on_select(self, item):
-                        if item == "goto": app().scroll_to_label(label.text)
+                        if item == "goto": app().scroll_to_label(label.text, main_panel)
                         elif item == "graph": 
                             if label.is_fun:
                                 app().open_function_graph(label.text)
@@ -483,7 +484,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
             if label.hovered and self.ctrl_down and touch.button == 'left':
                 try:
                     self.rv.reset_selection()
-                    app().scroll_to_label(label.text)
+                    app().scroll_to_label(label.text, self.rv.parent)
                     return True
                 except ValueError: pass
 

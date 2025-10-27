@@ -250,16 +250,12 @@ class DisApp(App):
         if project_to_open:
             self.load_project(Project.read_from_file(project_to_open))
     
-    def scroll_to_label(self, label: str):
-        for section in self.project.sections.values():
+    def scroll_to_label(self, label: str, main_panel: MainPanel | None = None):
+        sections = main_panel.get_sections() if main_panel else self.project.sections.values()
+        for section in sections:
             if section.labels and section.labels[0].name == label:
                 print("Goto label:", label, "at", format(section.offset, "X"))
-                self.scroll_to_offset(section.offset)
-
-                #tab_panel = self.dis_panel_container.children[0]
-                #if isinstance(tab_panel, FunctionTabPanel):
-                #    Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[-1]))
-                
+                self.scroll_to_offset(section.offset, main_panel)
                 return
         raise ValueError("Invalid label")
     
@@ -292,10 +288,10 @@ class DisApp(App):
         position.navigate()
         self.update_position_buttons()
     
-    def scroll_to_offset(self, offset: int, history = True):
-        rv = self.dis_panel.rv
+    def scroll_to_offset(self, offset: int, main_panel: MainPanel | None = None, history = True):
+        rv = main_panel.rv if main_panel else self.dis_panel.rv
 
-        self.swich_to_listing()
+        self.switch_to_listing(main_panel)
         scroll_pos = 0
         for i in range(len(rv.data)):
             total_height = rv.children[0].height - rv.height
@@ -314,11 +310,17 @@ class DisApp(App):
             scroll_pos += data["height"]
         raise ValueError("Invalid location")
     
-    def swich_to_listing(self):
-        for tab in self.main_dock.iterate_panels():
-            if isinstance(tab, MainDockTab):
-                tab.select()
-                break
+    def switch_to_listing(self, main_panel: MainPanel | None = None):
+        if main_panel:
+            for tab in self.main_dock.iterate_panels():
+                if tab.content == main_panel:
+                    tab.select()
+                    break
+        else:
+            for tab in self.main_dock.iterate_panels():
+                if isinstance(tab, MainDockTab):
+                    tab.select()
+                    break
     
     def open_function_graph_from_label(self, ep: int):
         if not self.project.functions:

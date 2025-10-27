@@ -22,8 +22,11 @@ class Minimap(KWidget, Widget):
     def on_kv_post(self, base_widget):
         Clock.schedule_once(lambda dt: self.redraw(), 0)
 
-    def redraw(self, *args):        
-        sections = app().project.sections.values()
+    def redraw(self, *args):
+        if isinstance(self.parent, main.FunctionListing):
+            return # We don't draw this for normal function listings because they are all code anyway
+
+        sections = self.parent.get_sections()
         if not self.parent.rv: return
         total_height = self.parent.rv.children[0].height
         if total_height == 0: return
