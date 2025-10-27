@@ -63,9 +63,11 @@ class RV(KWidget, RecycleView):
             app().set_hover()
 
     def on_xoffset(self, instance, value: int):
-        self.parent.arrows.redraw()
-        for data in iter_all_children_of_type(self.children[0], SectionColumn):
-            data.redraw()
+        def handler(dt):
+            self.parent.arrows.redraw()
+            for data in iter_all_children_of_type(self.children[0], SectionColumn):
+                data.redraw()
+        Clock.schedule_once(handler, 0)
 
     def update_data(self):
         data = []

@@ -27,7 +27,6 @@ dirs = PlatformDirs(
     ensure_exists=True
 )
 
-project_to_open: Path | None = None
 config_file = dirs.user_config_path / "dis.ini"
 config: ConfigParser
 
@@ -218,8 +217,6 @@ class DisApp(App):
         Window.bind(on_mouse_down=ContextMenuBehavior.on_mouse_down)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
-
-        Clock.schedule_once(lambda dt: self.on_post(), 0)
     
     def build(self):
         Window.clearcolor = BG_COLOR
@@ -241,11 +238,6 @@ class DisApp(App):
 
         build_menu()
         return self.window
-    
-    def on_post(self):
-        global project_to_open
-        if project_to_open:
-            self.load_project(Project.read_from_file(project_to_open))
     
     def scroll_to_label(self, label: str, main_panel: MainPanel | None = None):
         sections = main_panel.get_sections() if main_panel else self.project.sections.values()
@@ -498,40 +490,15 @@ class DisApp(App):
         try:
             shutil.rmtree(_graph_tmpfolder)
         except FileNotFoundError: pass
-
-        window = {}
-        window["width"] = str(Window.size[0])
-        window["height"] = str(Window.size[1])
-        window["left"] = str(Window.left)
-        window["top"] = str(Window.top)
-        config["window"] = window
-
-        with open(config_file, "w") as fp:
-            config.write(fp)
-
         super().on_stop()
 
-def main(path: Path, ep: int | list[int], org: int):
+def main(project: Project):
     global config
     config = ConfigParser()
     config.read(config_file)
 
-    project = new_project(path, ep, org)
     global _graph_tmpfolder
     _graph_tmpfolder = tempfile.mkdtemp()
-    
-    logging.info(f"PyDis: Config file: {config_file}")
-    
-    if "window" in config:
-        window = config["window"]
-        if "width" in window and "height" in window:
-            Window.size = (
-                int(window["width"]) / Metrics.density, 
-                int(window["height"]) / Metrics.density
-            )
-        if "left" in window and "top" in window:
-            Window.left = int(window["left"])
-            Window.top = int(window["top"])
 
     app = DisApp(project)
     app.run()
