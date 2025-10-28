@@ -22,7 +22,7 @@ from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction
 from .sections import section_to_markup, LocationLabel
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuItem, MenuHandler
 
-from .dock.dock import DockTab
+from .dock.dock import DockTab, SerializableTab
 
 class NavigationGraph(NavigationAction):
     def __init__(self, fun: int, location: tuple[int, int] | int, zoom: float = 0):
@@ -46,8 +46,34 @@ class NavigationGraph(NavigationAction):
                 else:
                     tab.content.move_to_coords(self.location, self.zoom)
 
-class GraphTab(DockTab):
+class GraphTab(SerializableTab):
     content: "FunctionPanel"
+
+    def __init__(self, text: str, **kwargs):
+        super().__init__(text=text, closable=True, source="ui/resources/code-listing.png", **kwargs)
+
+    def serialize(self) -> dict:
+        data = super().serialize()
+        data["function"] = self.content.fun.ep
+        data["x"] = self.content.scatter.x
+        data["y"] = self.content.scatter.y
+        return data
+    
+    @classmethod
+    def deserialize(cls, data: dict) -> "GraphTab":
+        ep = data["function"]
+        functions = app().project.functions
+        assert functions
+        fun = functions[ep]
+        tab = GraphTab(fun.name)
+        panel = FunctionPanel(fun, tab)
+        tab.add_widget(panel)
+        return tab
+    
+    def deserialize_post(self, data: dict):
+        if "x" in data and "y" in data:
+            self.content.scatter._set_pos((data["x"], data["y"]))
+        
 
 def parse_pos(pos_str):
     parts = pos_str.split()

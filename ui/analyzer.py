@@ -2,6 +2,7 @@
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
 from kivy.uix.relativelayout import RelativeLayout
+from kivy.uix.scrollview import ScrollView
 from kivy.metrics import dp
 from kivy.clock import Clock
 
@@ -11,7 +12,27 @@ from .main import HideableTextInput, EscapeTrigger, app, iter_all_children_of_ty
 from .main_menu import MenuHandler, MenuItem
 from .context_menu import show_context_menu, ContextMenuBehavior
 from .table.table import DataTableRow, ResizableRecycleTable
-from .dock.dock import DockTab
+from .dock.dock import DockTab, SerializableTab
+
+class AnalyzerTab(SerializableTab):
+    content: "AnalyzerPanel"
+
+    def __init__(self, **kwargs):
+        super().__init__(text="Functions", closeable=True, **kwargs)
+
+    def serialize(self) -> dict:
+        data = super().serialize()
+        return data
+
+    def deserialize_post(self, data: dict):
+        pass
+    
+    @classmethod
+    def deserialize(cls, data: dict) -> "AnalyzerTab":
+        tab = AnalyzerTab()
+        analyzer = AnalyzerPanel(tab)
+        tab.add_widget(analyzer)
+        return tab
 
 class AnalyzerFilter(HideableTextInput, EscapeTrigger):
     def on_escape(self, obj):
@@ -84,7 +105,13 @@ class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
 class AnalyzerPanel(RelativeLayout):
     def __init__(self, tab: DockTab, **kw):
         self.tab = tab
+        self.table: AnalyzerTable
+        self.scrollview: ScrollView
         super().__init__(**kw)
+
+    def on_kv_post(self, base_widget):
+        self.scrollview = self.ids["scroll_view"]
+        self.table = self.ids["table"]
 
 class AnalyzerTable(ResizableRecycleTable):
     def __init__(self, **kwargs):

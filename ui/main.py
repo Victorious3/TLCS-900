@@ -1,7 +1,9 @@
+import json
+from pathlib import Path
 import math, shutil, tempfile, sys
 
 from abc import ABC, abstractmethod
-from typing import Callable, TypeVar, Type, Generator, cast
+from typing import Any, Callable, TypeVar, Type, Generator, cast
 from platformdirs import PlatformDirs
 from configparser import ConfigParser
 
@@ -90,10 +92,10 @@ from .main_menu import build_menu
 from .sections import RV, ScrollBar
 from .function_graph import GraphTab, FunctionPanel
 from .buttons import IconButton
-from .analyzer import AnalyzerPanel, AnalyzerFilter
+from .analyzer import AnalyzerPanel, AnalyzerFilter, AnalyzerTab
 from .context_menu import ContextMenuBehavior
 from .popup import FunctionAnalyzerPopup
-from .dock.dock import DockTab, Dock, Orientation
+from .dock.dock import BaseDock, DockTab, Dock, Orientation, SerializableTab
 
 class NavigationListing(NavigationAction):
     def __init__(self, panel: "MainPanel | None", offset: int):
@@ -127,16 +129,24 @@ class MainPanel(RelativeLayout):
     
     def get_sections(self):
         return app().project.sections.values()
+    
+    def serialize(self, data: dict):
+        data["scroll_y"] = self.rv.scroll_y
+        data["scroll_x"] = self.scrollbar.view.scroll_x
+    
+    def deserialize_post(self, data: dict):
+        if "scroll_y" in data:
+            self.rv.scroll_y = data["scroll_y"]
+        if "scroll_x" in data:
+            self.scrollbar.view.scroll_x = data["scroll_x"]
 
 class MainWindow(FloatLayout): pass
 
-class ListingTab(DockTab): pass
-
 class FunctionListing(MainPanel):
-    def __init__(self, function: Function, **kw):
+    def __init__(self, function: Function, **kwargs):
         self.fun = function
         self.sections: list[Section] | None = None
-        super().__init__(**kw)
+        super().__init__(**kwargs)
 
     def get_sections(self):
         if self.sections: return self.sections
@@ -145,8 +155,30 @@ class FunctionListing(MainPanel):
                    key=lambda s: s.offset))
         return self.sections
 
-class FunctionListingTab(DockTab):
+class ListingTab(SerializableTab):
     content: FunctionListing
+
+    def __init__(self, text: str, **kwargs):
+        super().__init__(text=text, closeable=True, source="ui/resources/code-listing.png", **kwargs)
+
+    def serialize(self) -> dict:
+        res = super().serialize()
+        res["function"] = self.content.fun.ep
+        return res
+    
+    @classmethod
+    def deserialize(cls, data: dict) -> "ListingTab":
+        ep = data["function"]
+        functions = app().project.functions
+        assert functions
+        fun = functions[ep]
+        tab = ListingTab(fun.name)
+        listing = FunctionListing(fun)
+        tab.add_widget(listing)
+        return tab
+
+    def deserialize_post(self, data: dict):
+        self.content.deserialize_post(data)
 
 class GotoPosition(HideableTextInput, EscapeTrigger):
     def _on_focus(self, instance, value, *largs):
@@ -181,8 +213,20 @@ class GlobalEventBus(EventDispatcher):
     def on_escape(self, *args):
         pass
 
-class MainDockTab(DockTab):
+class MainDockTab(SerializableTab):
     content: MainPanel
+
+    def serialize(self) -> dict:
+        return super().serialize()
+    
+    @classmethod
+    def deserialize(cls, dict) -> "MainDockTab":
+        tab = MainDockTab()
+        tab.add_widget(MainPanel(text=app().project.filename))
+        return tab
+    
+    def deserialize_post(self, dict):
+        self.content.deserialize_post(dict)
 
 class DisApp(App):
     _any_hovered = False
@@ -227,7 +271,7 @@ class DisApp(App):
         self.main_dock: Dock = self.window.ids["main_dock"]
 
         self.dis_panel = MainPanel()
-        tab = MainDockTab(text="el9900.rom")
+        tab = MainDockTab(self.project.filename)
         tab.add_widget(self.dis_panel)
         self.main_dock.add_tab(tab)
 
@@ -235,7 +279,39 @@ class DisApp(App):
         self.forward_button.bind(on_press=lambda w: self.go_forward())
 
         build_menu()
+        if self.project: self.load_ui_state()
         return self.window
+    
+    def load_ui_state(self):
+        pass
+
+    def save_ui_state(self):
+        file = self.get_project_ui_file()
+        file.parent.mkdir(parents=True, exist_ok=True)
+
+        def serialize(panel: BaseDock) -> dict[str, Any]:
+            res = {}
+            if panel.first_panel:
+                res["first"] = serialize(panel.first_panel)
+            if panel.second_panel:
+                res["second"] = serialize(panel.second_panel)
+
+            if panel.panel:
+                tabs = []
+
+                res["tab"] = tabs 
+
+            res["orientation"] = panel.orientation
+            if panel.splitter:
+                res["splitter_pos"] = panel.splitter.width
+
+            return res
+
+        with open(file, "w") as fp:
+            json.dump(serialize(self.main_dock), fp)
+
+    def get_project_ui_file(self) -> Path:
+        return dirs.user_config_path / self.project.get_project_id() / "ui_state.json"
     
     def scroll_to_label(self, label: str, main_panel: MainPanel | None = None):
         sections = main_panel.get_sections() if main_panel else self.project.sections.values()
@@ -331,11 +407,11 @@ class DisApp(App):
         if not fun: return
 
         for tab in self.main_dock.iterate_panels():
-            if isinstance(tab, FunctionListingTab) and tab.content.fun == fun:
+            if isinstance(tab, ListingTab) and tab.content.fun == fun:
                 tab.select()
                 return
         
-        tab = ListingTab(text=fun.name, closeable=True, source="ui/resources/code-listing.png")
+        tab = ListingTab(text=fun.name)
         panel = FunctionListing(fun)
         tab.add_widget(panel)
 
@@ -355,7 +431,7 @@ class DisApp(App):
                 return
         
         # Otherwise we open a new tab
-        tab = GraphTab(text=fun.name, closeable=True, source="ui/resources/graph.png")
+        tab = GraphTab(fun.name)
         panel = FunctionPanel(fun, tab)
         tab.add_widget(panel)
 
@@ -455,7 +531,7 @@ class DisApp(App):
         popup.open()
         
     def open_function_list(self):
-        tab = DockTab(text="Functions", closeable=True)
+        tab = AnalyzerTab()
 
         if not self.analyzer_panel:
             self.analyzer_panel = AnalyzerPanel(tab=tab)

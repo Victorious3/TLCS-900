@@ -1,3 +1,4 @@
+from hashlib import md5
 import os, json
 from threading import Thread
 from typing import Callable, cast
@@ -558,7 +559,8 @@ def label_list(label):
 class ProjectLoadException(Exception): pass
 
 class Project:
-    def __init__(self, path: Path, org: int, ep: int | list[int]):
+    def __init__(self, project_folder: Path, path: Path, org: int, ep: int | list[int]):
+        self.project_folder = project_folder
         self.path = path
         self.filename = os.path.basename(path)
         self.sections = TreeMap()
@@ -569,6 +571,9 @@ class Project:
         self.pool: InsnPool
         self.file_len = 0
         self.functions: dict[int, Function] | None = None
+
+    def get_project_id(self) -> str:
+        return md5(str(self.path).encode()).hexdigest()
 
     def write_to_file(self, project_folder: Path):
         project_folder.mkdir(exist_ok=True)
@@ -621,7 +626,7 @@ class Project:
         path = project_folder / proj_json["rom"]
         file_len = os.path.getsize(path)
 
-        project = Project(path, proj_json["org"], proj_json["ep"])
+        project = Project(project_folder, path, proj_json["org"], proj_json["ep"])
         project.file_len = file_len
 
         with open(path, "rb") as fp:
@@ -1065,7 +1070,7 @@ class Project:
         return fun
 
 def new_project(path: Path, ep: int | list[int], org: int) -> Project:
-    proj = Project(path, org, ep)
+    proj = Project(path.parent, path, org, ep)
     proj.rescan(ep, org)
     return proj
 
