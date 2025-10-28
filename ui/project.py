@@ -277,7 +277,7 @@ class FunctionState:
         for i in data["input"]:
             state.input.add(deserialize_reg_mem(i))
         for o in data["output"]:
-            state.input.add(deserialize_reg_mem(o))
+            state.output.add(deserialize_reg_mem(o))
         for stack in data["stack"]:
             state.stack.append((stack["ep"], deserialize_reg_mem(stack["value"])))
         for stack in data["fun_stack"]:
