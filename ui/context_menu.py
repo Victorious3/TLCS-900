@@ -69,7 +69,7 @@ else:
     from kivy.uix.label import Label
     from kivy_garden.contextmenu import ContextMenu, ContextMenuTextItem
 
-    from .types import HasWidget
+    from .kivytypes import HasWidget
 
     if TYPE_CHECKING:
         class KMenuItem(HasWidget, Label, ContextMenuTextItem): pass

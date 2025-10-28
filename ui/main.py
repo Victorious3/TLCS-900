@@ -27,7 +27,6 @@ dirs = PlatformDirs(
     ensure_exists=True
 )
 
-project_to_open: Path | None = None
 config_file = dirs.user_config_path / "dis.ini"
 config: ConfigParser
 
@@ -100,11 +99,12 @@ from .popup import FunctionAnalyzerPopup
 from .dock.dock import DockTab, Dock, Orientation
 
 class NavigationListing(NavigationAction):
-    def __init__(self, offset: int):
+    def __init__(self, panel: "MainPanel | None", offset: int):
         self.offset = offset
+        self.panel = panel
 
     def navigate(self):
-        app().scroll_to_offset(self.offset, history=False)
+        app().scroll_to_offset(self.offset, self.panel, history=False)
 
 class MainPanel(RelativeLayout):
     def __init__(self, **kw):
@@ -210,7 +210,6 @@ class DisApp(App):
 
         self.ctrl_down = False
         self.shift_down = False
-        self.active: Widget
 
         self.global_event_bus = GlobalEventBus()
 
@@ -219,8 +218,6 @@ class DisApp(App):
         Window.bind(on_mouse_down=ContextMenuBehavior.on_mouse_down)
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
-
-        Clock.schedule_once(lambda dt: self.on_post(), 0)
     
     def build(self):
         Window.clearcolor = BG_COLOR
@@ -240,26 +237,15 @@ class DisApp(App):
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
 
-        self.active = self.dis_panel
-
         build_menu()
         return self.window
     
-    def on_post(self):
-        global project_to_open
-        if project_to_open:
-            self.load_project(Project.read_from_file(project_to_open))
-    
-    def scroll_to_label(self, label: str):
-        for section in self.project.sections.values():
+    def scroll_to_label(self, label: str, main_panel: MainPanel | None = None):
+        sections = main_panel.get_sections() if main_panel else self.project.sections.values()
+        for section in sections:
             if section.labels and section.labels[0].name == label:
                 print("Goto label:", label, "at", format(section.offset, "X"))
-                self.scroll_to_offset(section.offset)
-
-                #tab_panel = self.dis_panel_container.children[0]
-                #if isinstance(tab_panel, FunctionTabPanel):
-                #    Clock.schedule_once(lambda dt: tab_panel.switch_to(tab_panel.tab_list[-1]))
-                
+                self.scroll_to_offset(section.offset, main_panel)
                 return
         raise ValueError("Invalid label")
     
@@ -292,10 +278,10 @@ class DisApp(App):
         position.navigate()
         self.update_position_buttons()
     
-    def scroll_to_offset(self, offset: int, history = True):
-        rv = self.dis_panel.rv
+    def scroll_to_offset(self, offset: int, main_panel: MainPanel | None = None, history = True):
+        rv = main_panel.rv if main_panel else self.dis_panel.rv
 
-        self.swich_to_listing()
+        self.switch_to_listing(main_panel)
         scroll_pos = 0
         for i in range(len(rv.data)):
             total_height = rv.children[0].height - rv.height
@@ -306,7 +292,7 @@ class DisApp(App):
                 scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
                 rv.scroll_y = 1 - (scroll_pos / total_height)                
                 rv.reset_selection()
-                if history: self.update_position_history(NavigationListing(offset))
+                if history: self.update_position_history(NavigationListing(main_panel, offset))
                 self.last_position = offset
                 
                 return
@@ -314,11 +300,17 @@ class DisApp(App):
             scroll_pos += data["height"]
         raise ValueError("Invalid location")
     
-    def swich_to_listing(self):
-        for tab in self.main_dock.iterate_panels():
-            if isinstance(tab, MainDockTab):
-                tab.select()
-                break
+    def switch_to_listing(self, main_panel: MainPanel | None = None):
+        if main_panel:
+            for tab in self.main_dock.iterate_panels():
+                if tab.content == main_panel:
+                    tab.select()
+                    break
+        else:
+            for tab in self.main_dock.iterate_panels():
+                if isinstance(tab, MainDockTab):
+                    tab.select()
+                    break
     
     def open_function_graph_from_label(self, ep: int):
         if not self.project.functions:
@@ -377,7 +369,6 @@ class DisApp(App):
             if callback: callback(tab)
 
         Clock.schedule_once(after, 0)
-        self.active = self.dis_panel
 
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
@@ -385,7 +376,7 @@ class DisApp(App):
             if keycode == 10:
                 self.goto_position.show()
             elif keycode == 9:
-                if self.active == self.analyzer_panel:
+                if self.analyzer_panel and self.main_dock.active_content == self.analyzer_panel:
                     self.analyzer_filter.show()
 
         # TODO Dynamic resizing is complicated
@@ -471,7 +462,6 @@ class DisApp(App):
         if not self.analyzer_panel:
             self.analyzer_panel = AnalyzerPanel(tab=tab)
             self.analyzer_filter = self.analyzer_panel.ids["analyzer_filter"]
-            self.active = self.analyzer_panel
 
         elif self.analyzer_panel.tab.get_root_window():
             self.analyzer_panel.tab.select()
@@ -501,40 +491,15 @@ class DisApp(App):
         try:
             shutil.rmtree(_graph_tmpfolder)
         except FileNotFoundError: pass
-
-        window = {}
-        window["width"] = str(Window.size[0])
-        window["height"] = str(Window.size[1])
-        window["left"] = str(Window.left)
-        window["top"] = str(Window.top)
-        config["window"] = window
-
-        with open(config_file, "w") as fp:
-            config.write(fp)
-
         super().on_stop()
 
-def main(path: Path, ep: int | list[int], org: int):
+def main(project: Project):
     global config
     config = ConfigParser()
     config.read(config_file)
 
-    project = new_project(path, ep, org)
     global _graph_tmpfolder
     _graph_tmpfolder = tempfile.mkdtemp()
-    
-    logging.info(f"PyDis: Config file: {config_file}")
-    
-    if "window" in config:
-        window = config["window"]
-        if "width" in window and "height" in window:
-            Window.size = (
-                int(window["width"]) / Metrics.density, 
-                int(window["height"]) / Metrics.density
-            )
-        if "left" in window and "top" in window:
-            Window.left = int(window["left"])
-            Window.top = int(window["top"])
 
     app = DisApp(project)
     app.run()

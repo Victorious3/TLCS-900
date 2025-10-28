@@ -59,8 +59,9 @@
     ScrollView:
         id: scroll_view
         bar_width: dp(15)
-        scroll_type: ['bars']
+        scroll_type: ["bars"]
         on_scroll_move: root.on_scroll_move()
+        effect_cls: "ScrollEffect"
 
         BoxLayout:
             size_hint: None, None
@@ -143,7 +144,6 @@
         orientation: 'vertical'
 
 <SectionPanel>:
-    rv: self.parent.parent if self.parent else None
     orientation: 'vertical'
     width: self.parent.width - dp(15) if self.parent else 0
     

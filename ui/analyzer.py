@@ -15,7 +15,7 @@ from .dock.dock import DockTab
 
 class AnalyzerFilter(HideableTextInput, EscapeTrigger):
     def on_escape(self, obj):
-        if app().active == app().analyzer_panel:
+        if app().analyzer_panel and app().main_dock.active_content == app().analyzer_panel:
             self.hide()
             panel = app().analyzer_panel
             assert panel
@@ -85,11 +85,6 @@ class AnalyzerPanel(RelativeLayout):
     def __init__(self, tab: DockTab, **kw):
         self.tab = tab
         super().__init__(**kw)
-
-    def on_touch_down(self, touch):
-        if self.collide_point(touch.x, touch.y):
-            app().active = self
-        return super().on_touch_down(touch)
 
 class AnalyzerTable(ResizableRecycleTable):
     def __init__(self, **kwargs):

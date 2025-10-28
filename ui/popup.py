@@ -1,7 +1,7 @@
 from kivy.uix.popup import Popup
 from kivy.properties import NumericProperty, StringProperty
 
-from .types import KWidget
+from .kivytypes import KWidget
 
 class InvalidInsnPopup(KWidget, Popup):
     instruction = NumericProperty(0)

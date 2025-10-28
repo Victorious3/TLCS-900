@@ -17,7 +17,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.stencilview import StencilView
 
 from . import main
-from .types import KWidget
+from .kivytypes import KWidget
 from .project import Section, DATA_PER_ROW, Instruction
 from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
@@ -25,7 +25,7 @@ from disapi import Loc
 
 class ScrollBar(BoxLayout):
     parent: "main.MainPanel"
-    base_width: int = NumericProperty(0)
+    base_width: float = NumericProperty(0)
     view: ScrollView
 
     def on_kv_post(self, base_widget):
@@ -64,7 +64,7 @@ class RV(KWidget, RecycleView):
 
     def on_xoffset(self, instance, value: int):
         self.parent.arrows.redraw()
-        for data in iter_all_children_of_type(self.children[0], SectionData):
+        for data in iter_all_children_of_type(self.children[0], SectionColumn):
             data.redraw()
 
     def update_data(self):
@@ -73,18 +73,14 @@ class RV(KWidget, RecycleView):
         for section in self.parent.get_sections():
             columns = len(section.instructions)
             data.append({"section": section, 
-                         "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0)})
+                         "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),
+                         "rv": self})
 
         self.data = data
 
     def update_from_scroll(self, *largs):
         super().update_from_scroll(*largs)
-
-        def update(dt):
-            self.redraw_children()
-
-        Clock.schedule_once(update, 0)
-        
+        Clock.schedule_once(lambda dt: self.redraw_children(), 0)
         self.parent.arrows.redraw()
 
     def get_visible_range(self):
@@ -122,7 +118,7 @@ class RV(KWidget, RecycleView):
 
         max_width = 0
         for data in iter_all_children_of_type(self.children[0], SectionMnemonic):
-            max_width = max(max_width, data.width + data.x - self.parent.rv.xoffset + dp(15))
+            max_width = max(max_width, data.width + dp(550) + dp(15))
 
         scrollbar = self.parent.scrollbar
         scrollbar.base_width = max_width
@@ -246,9 +242,13 @@ class LabelRow(ContextMenuBehavior, TextInput):
             self.is_active = False
 
     def _key_down(self, key, repeat=False):
-        if key[2].startswith("cursor") and not self.is_active:
+        if key[2].startswith("cursor") or key[2] in ("del", "backspace") and not self.is_active:
             return
         super()._key_down(key, repeat)
+
+    def delete_selection(self, from_undo=False):
+        if not self.is_active: return
+        return super().delete_selection(from_undo)
 
     def keyboard_on_textinput(self, window, text):
         if not self.is_active: return
@@ -459,9 +459,10 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     def trigger_context_menu(self, touch):
         for label in self.labels:
             if label.hovered and self.ctrl_down:
+                main_panel = self.rv.parent
                 class Handler(MenuHandler):
                     def on_select(self, item):
-                        if item == "goto": app().scroll_to_label(label.text)
+                        if item == "goto": app().scroll_to_label(label.text, main_panel)
                         elif item == "graph": 
                             if label.is_fun:
                                 app().open_function_graph(label.text)
@@ -483,7 +484,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
             if label.hovered and self.ctrl_down and touch.button == 'left':
                 try:
                     self.rv.reset_selection()
-                    app().scroll_to_label(label.text)
+                    app().scroll_to_label(label.text, self.rv.parent)
                     return True
                 except ValueError: pass
 
@@ -521,9 +522,17 @@ class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, Bo
     rv: RV = ObjectProperty(None, allownone=True)
 
     def on_rv(self, instance, value):
-        if value: value.bind(xoffset=lambda i, val: setattr(instance, "xoffset", val))
+        if self._old_rv:
+            self._old_rv.unbind(xoffset=self.update_xoffset)
+
+        if value: value.bind(xoffset=self.update_xoffset)
+        self._old_rv = value
+
+    def update_xoffset(self, i, val):
+        self.xoffset = val
 
     def __init__(self, **kwargs):
+        self._old_rv: RV | None = None
         super().__init__(**kwargs)
 
     def trigger_context_menu(self, touch):
@@ -535,24 +544,26 @@ class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, Bo
                     if item == "dis": 
                         a = app()
                         def callback():
-                            a.rv.update_data()
-                            a.minimap.redraw()
-                            a.arrows.recompute_arrows()
-                            a.arrows.redraw()
+                            a.dis_panel.rv.update_data()
+                            a.dis_panel.minimap.redraw()
+                            a.dis_panel.arrows.recompute_arrows()
+                            a.dis_panel.arrows.redraw()
                             Clock.schedule_once(lambda dt: a.scroll_to_offset(rv.selection_start), 0)
                 
                         a.project.disassemble(rv.selection_start, callback)
                         
             show_context_menu(Handler(), [
-                MenuItem("label", "Insert Label"),
+                MenuItem("label", "Insert Label")
+            ] + ([
                 MenuItem("dis", "Disassemble from here"),
                 MenuItem("dis_oneshot", "Disassemble oneshot"),
                 MenuItem("dis_selected", "Disassemble selected"),
-            ])
+            ] if not isinstance(self.rv.parent, main.FunctionListing) else []))
 
             return True
 
-    def refresh_view_attrs(self, rv, index, data):
+    def refresh_view_attrs(self, rv: RV, index, data):
+        self.xoffset = rv.xoffset
         super().refresh_view_attrs(rv, index, data)
 
         section: Section = data["section"]

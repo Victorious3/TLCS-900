@@ -15,7 +15,7 @@ def clear_cache():
     ArrowRenderer.get_offset.cache_clear()
 
 from . import main
-from .types import KWidget
+from .kivytypes import KWidget
 from .project import Section, CodeSection, get_jump_location
 from .main import LABEL_HEIGHT, app, FONT_HEIGHT
 from disapi import Loc
@@ -42,7 +42,7 @@ COLORS =  [get_color_from_hex("#80FFCC"),
 #def DashedLine(points, dash_length = dp(5), dash_offset = dp(2), width = dp(1)):
 #    Line(points=points, dash_length=dash_length, dash_offset=dash_offset, width=width)
 
-def DashedLine(points, dash_length = dp(5), dash_offset = dp(5), width = dp(1)):
+def DashedLine(points, dash_length = dp(5), dash_offset = dp(2), width = dp(1)):
     for i in range(0, len(points) - 2, 2):
         x1, y1 = points[i], points[i + 1]
         x2, y2 = points[i + 2], points[i + 3]

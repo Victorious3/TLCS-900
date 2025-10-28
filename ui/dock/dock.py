@@ -19,7 +19,7 @@ from kivy.utils import get_color_from_hex
 from kivy.properties import BooleanProperty, StringProperty, ObjectProperty
 from kivy.clock import Clock
 
-from ui.types import KWidget
+from ui.kivytypes import KWidget
 from ui.buttons import XButton
 
 Builder.load_file("ui/dock/dock.kv")
@@ -515,6 +515,11 @@ class Dock(KWidget, BaseDock):
     @property
     def active_panel(self) -> DockTab | None:
         return self._active_panel
+    
+    @property
+    def active_content(self) -> Widget | None:
+        if self._active_panel: return self._active_panel.content
+        return None
 
     @active_panel.setter
     def active_panel(self, value: DockTab):
