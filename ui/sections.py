@@ -1,4 +1,5 @@
 import math
+import sys
 
 from kivy.uix.textinput import TextInput
 from kivy.uix.label import Label
@@ -424,7 +425,6 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.labels: list[LocationLabel] = []
-        self.ctrl_down = False
 
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
@@ -458,7 +458,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
 
     def trigger_context_menu(self, touch):
         for label in self.labels:
-            if label.hovered and self.ctrl_down:
+            if label.hovered and app().ctrl_down:
                 main_panel = self.rv.parent
                 class Handler(MenuHandler):
                     def on_select(self, item):
@@ -481,7 +481,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     def on_touch_up(self, touch):
         if super().on_touch_up(touch): return True
         for label in self.labels:
-            if label.hovered and self.ctrl_down and touch.button == 'left':
+            if label.hovered and app().ctrl_down and touch.button == 'left':
                 try:
                     self.rv.reset_selection()
                     app().scroll_to_label(label.text, self.rv.parent)
@@ -492,7 +492,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
         self.canvas.after.clear()
 
         for label in self.labels:
-            if label.hovered and self.ctrl_down:
+            if label.hovered and app().ctrl_down:
                 color = get_color_from_hex("#64B5F6")
 
                 cl = CoreLabel(text = label.text, font_size = FONT_SIZE, font_name = FONT_NAME)
@@ -507,13 +507,11 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
                     ], width=dp(1))
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
-        if keycode == 224: 
-            self.ctrl_down = True
+        if keycode == 227 and sys.platform == "darwin" or keycode == 224: 
             self._on_update()
     
     def _keyup(self, window, keyboard: int, keycode: int):
-        if keycode == 224: 
-            self.ctrl_down = False
+        if keycode == 227 and sys.platform == "darwin" or keycode == 224: 
             self._on_update()
 
 class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, BoxLayout):

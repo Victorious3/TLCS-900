@@ -1,13 +1,12 @@
-import math, shutil, tempfile, logging, sys
+import math, shutil, tempfile, sys
 
-from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Callable, TypeVar, Type, Generator, cast
 from platformdirs import PlatformDirs
 from configparser import ConfigParser
 
 from kivy.app import App
-from kivy.metrics import dp, Metrics
+from kivy.metrics import dp
 from kivy.clock import Clock, ClockEvent
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
@@ -16,10 +15,8 @@ from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
-from kivy.metrics import Metrics
 
 dirs = PlatformDirs(
     appname="PyDis",
@@ -372,12 +369,13 @@ class DisApp(App):
 
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
-        if "ctrl" in modifiers: # ctrl + g
-            if keycode == 10:
+        if "ctrl" in modifiers:
+            if keycode == 10: # ctrl + g
                 self.goto_position.show()
-            elif keycode == 9:
-                if self.analyzer_panel and self.main_dock.active_content == self.analyzer_panel:
-                    self.analyzer_filter.show()
+
+        if ("meta" in modifiers and sys.platform == "darwin" or "ctrl" in modifiers) and keycode == 9:
+            if self.analyzer_panel and self.main_dock.active_content == self.analyzer_panel:
+                self.analyzer_filter.show()
 
         # TODO Dynamic resizing is complicated
         #if ("meta" in modifiers and sys.platform == "darwin" or 
@@ -388,7 +386,7 @@ class DisApp(App):
         #        Metrics.density -= 1
 
         if keycode == 225: self.shift_down = True
-        elif keycode == 224: 
+        elif keycode == 227 and sys.platform == "darwin" or keycode == 224: 
             self.ctrl_down = True
             RV.update_cursor()
         elif keycode == 41: 
@@ -397,7 +395,7 @@ class DisApp(App):
     
     def _keyup(self, window, keyboard: int, keycode: int):
         if keycode == 225: self.shift_down = False
-        if keycode == 224: 
+        if keycode == 227 and sys.platform == "darwin" or keycode == 224: 
             self.ctrl_down = False
             RV.update_cursor()
         elif keycode == 41:

@@ -8,7 +8,7 @@ from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
 from kivy.uix.widget import Widget
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
-from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, StencilUnUse, Rectangle
+from kivy.graphics import Color, Line, StencilPush, StencilPop, StencilUse, StencilUnUse, Rectangle, ClearColor, ClearBuffers, Fbo
 from kivy.clock import Clock
 
 def clear_cache():
@@ -37,33 +37,37 @@ COLORS =  [get_color_from_hex("#80FFCC"),
            get_color_from_hex("#808CFF"),
            get_color_from_hex("#BFFF80"),
            get_color_from_hex("#FF80B3")]
-
-# TODO This doesn't seem to work reliably
-#def DashedLine(points, dash_length = dp(5), dash_offset = dp(2), width = dp(1)):
-#    Line(points=points, dash_length=dash_length, dash_offset=dash_offset, width=width)
-
+           
+cached_texures = {}
 def DashedLine(points, dash_length = dp(5), dash_offset = dp(2), width = dp(1)):
+    texture = cached_texures.get((dash_length, dash_offset, width))
+
+    if not texture:
+        fbo = Fbo(size=(dash_length + dash_offset, width))
+        with fbo:
+            ClearColor(0, 0, 0, 0)
+            ClearBuffers()
+            Color(1, 1, 1, 1)
+            Rectangle(pos=(0, 0), size=(dash_length, width))
+        texture = fbo.texture
+        texture.wrap = 'repeat'
+
+        cached_texures[(dash_length, dash_offset, width)] = texture
+
     for i in range(0, len(points) - 2, 2):
         x1, y1 = points[i], points[i + 1]
         x2, y2 = points[i + 2], points[i + 3]
+        if x1 > x2: x2, x1 = x1, x2
+        if y1 > y2: y2, y1 = y1, y2
 
-        dx = x2 - x1
-        dy = y2 - y1
-        dist = math.hypot(dx, dy)
-        steps = int(dist // (dash_length + dash_offset))
-        if dist == 0:
-            continue
-
-        for j in range(steps + 1):
-            start_ratio = ((dash_length + dash_offset) * j) / dist
-            end_ratio = ((dash_length + dash_offset) * j + dash_length) / dist
-            if end_ratio > 1:
-                end_ratio = 1
-            sx = x1 + dx * start_ratio
-            sy = y1 + dy * start_ratio
-            ex = x1 + dx * end_ratio
-            ey = y1 + dy * end_ratio
-            Line(points=[sx, sy, ex, ey], width=width)
+        if y1 == y2:
+            texture.uvsize = ((x2 - x1) / (dash_length + dash_offset), 1)
+            Rectangle(texture=texture, pos=(x1, y1 - width), size=(x2 - x1, width * 2))
+        elif x1 == x2:
+            texture.uvsize = (1, (y2 - y1) / (dash_length + dash_offset))
+            rect = Rectangle(texture=texture, pos=(x1 - width, y1), size=(width * 2, y2 - y1))
+            u_size, v_size = texture.uvsize
+            rect.tex_coords = [0, 1 - 0, 0, 1 - u_size, v_size, 1 - u_size, v_size, 1 - 0]
 
 @dataclass
 class Arrow:

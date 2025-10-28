@@ -17,14 +17,18 @@ class ContextMenuBehavior(Widget):
         return False
 
     def on_touch_down(self, touch):
-        if super().on_touch_down(touch): return True
-        if touch.button == "right" and sys.platform == "darwin":
-            return self.trigger_context_menu(touch)
+        #if super().on_touch_down(touch): return True
+        #if touch.button == "right" and sys.platform == "darwin":
+        #    return self.trigger_context_menu(touch)
+        pass
     
     def on_touch_up(self, touch):
         if super().on_touch_up(touch): return True
-        if touch.button == "right" and sys.platform != "darwin":
+        if touch.button == "right":
             return self.trigger_context_menu(touch)
+        #if touch.button == "right" and sys.platform != "darwin":
+        #    return self.trigger_context_menu(touch)
+        pass
     
     @classmethod
     def on_mouse_up(cls, window, x, y, button, modifiers):

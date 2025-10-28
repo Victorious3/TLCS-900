@@ -1,12 +1,10 @@
-import math, json
+import json
 
-from kivy.uix.tabbedpanel import TabbedPanelItem, TabbedPanel, TabbedPanelStrip
 from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.scatter import ScatterPlane
 from kivy.uix.stencilview import StencilView
 from kivy.uix.label import Label
-from kivy.uix.floatlayout import FloatLayout
 from kivy.graphics import Triangle, Color, Line, Rectangle
 from kivy.metrics import dp
 from kivy.utils import colormap, get_color_from_hex
