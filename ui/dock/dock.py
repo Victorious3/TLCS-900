@@ -1,7 +1,6 @@
 from enum import Enum
 from typing import Generator, cast
 from abc import ABC, abstractmethod
-from typing_extensions import Self
 
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.splitter import Splitter
@@ -230,6 +229,8 @@ class TabStrip(GridLayout):
         super().__init__(rows=1, **kwargs)
 
 class DockButton(KWidget, ToggleButton):
+    parent: "DockTab"
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
@@ -312,8 +313,8 @@ class DockTab(KWidget, RelativeLayout):
 
 serializable_panels = {}
 class SerializableTab(DockTab):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def __init_subclass__(cls) -> None:
         serializable_panels[cls.__name__] = cls
@@ -323,8 +324,8 @@ class SerializableTab(DockTab):
     def serialize(self) -> dict:
         return {"type": self.__class__.__name__}
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def deserialize(cls, data: dict) -> "SerializableTab": pass
 
     def deserialize_post(self, data: dict): pass
@@ -335,7 +336,7 @@ class SerializableTab(DockTab):
         if panel_type and panel_type in serializable_panels:
             panel_cls = serializable_panels[panel_type]
             panel = panel_cls.deserialize(data)
-            Clock.schedule_once(lambda dt: panel_cls.deserialize_post(panel, data), 0)
+            return panel
         raise ValueError("Unknown panel type: " + str(panel_type))
 
 class BaseDock(BoxLayout, Child):

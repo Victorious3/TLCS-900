@@ -1,6 +1,5 @@
-import json
 from pathlib import Path
-import math, shutil, tempfile, sys
+import json, math, shutil, tempfile, sys, traceback
 
 from abc import ABC, abstractmethod
 from typing import Any, Callable, TypeVar, Type, Generator, cast
@@ -8,7 +7,7 @@ from platformdirs import PlatformDirs
 from configparser import ConfigParser
 
 from kivy.app import App
-from kivy.metrics import dp
+from kivy.metrics import dp, Metrics
 from kivy.clock import Clock, ClockEvent
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
@@ -95,7 +94,7 @@ from .buttons import IconButton
 from .analyzer import AnalyzerPanel, AnalyzerFilter, AnalyzerTab
 from .context_menu import ContextMenuBehavior
 from .popup import FunctionAnalyzerPopup
-from .dock.dock import BaseDock, DockTab, Dock, Orientation, SerializableTab
+from .dock.dock import BaseDock, Dock, Orientation, SerializableTab, DockSplitter, DockPanel
 
 class NavigationListing(NavigationAction):
     def __init__(self, panel: "MainPanel | None", offset: int):
@@ -131,14 +130,22 @@ class MainPanel(RelativeLayout):
         return app().project.sections.values()
     
     def serialize(self, data: dict):
-        data["scroll_y"] = self.rv.scroll_y
         data["scroll_x"] = self.scrollbar.view.scroll_x
+        data["scroll_y"] = self.rv.scroll_y
+        data["selection_start"] = self.rv.selection_start
+        data["selection_end"] = self.rv.selection_end
     
     def deserialize_post(self, data: dict):
         if "scroll_y" in data:
             self.rv.scroll_y = data["scroll_y"]
         if "scroll_x" in data:
             self.scrollbar.view.scroll_x = data["scroll_x"]
+        if "selection_start" in data:  
+            self.rv.selection_start = data["selection_start"]
+        if "selection_end" in data:
+            self.rv.selection_end = data["selection_end"]
+
+        self.rv.redraw_children()
 
 class MainWindow(FloatLayout): pass
 
@@ -164,6 +171,7 @@ class ListingTab(SerializableTab):
     def serialize(self) -> dict:
         res = super().serialize()
         res["function"] = self.content.fun.ep
+        self.content.serialize(res)
         return res
     
     @classmethod
@@ -217,12 +225,14 @@ class MainDockTab(SerializableTab):
     content: MainPanel
 
     def serialize(self) -> dict:
-        return super().serialize()
+        res = super().serialize()
+        self.content.serialize(res)
+        return res
     
     @classmethod
     def deserialize(cls, dict) -> "MainDockTab":
-        tab = MainDockTab()
-        tab.add_widget(MainPanel(text=app().project.filename))
+        tab = MainDockTab(text=app().project.filename)
+        tab.add_widget(MainPanel())
         return tab
     
     def deserialize_post(self, dict):
@@ -271,19 +281,79 @@ class DisApp(App):
         self.main_dock: Dock = self.window.ids["main_dock"]
 
         self.dis_panel = MainPanel()
-        tab = MainDockTab(self.project.filename)
-        tab.add_widget(self.dis_panel)
-        self.main_dock.add_tab(tab)
-
+    
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
 
         build_menu()
-        if self.project: self.load_ui_state()
+        if not self.load_ui_state():
+            tab = MainDockTab(text=self.project.filename)
+            tab.add_widget(self.dis_panel)
+            self.main_dock.add_tab(tab)
+
         return self.window
     
-    def load_ui_state(self):
-        pass
+    def load_ui_state(self) -> bool:
+        file = self.get_project_ui_file()
+        if not file.exists(): return False
+
+        try:
+            with open(file, "r") as fp:
+                data = json.load(fp)
+
+            Window.left = data.get("left", Window.left)
+            Window.top = data.get("top", Window.top)
+
+            if "width" in data and "height" in data:
+                w, h = data["width"] / Metrics.density, data["height"] / Metrics.density
+                Window.size = (w, h)
+
+            active_tab: SerializableTab | None = None
+            def deserialize(root: Dock, dock: BaseDock, data: dict[str, Any]):
+                if "orientation" in data:
+                    dock.orientation = data["orientation"]
+
+                if "first" in data:
+                    dock.first_panel = BaseDock(root, dock)
+                    dock.add_widget(dock.first_panel)
+                    deserialize(root, dock.first_panel, data["first"])
+                
+                if "splitter_pos" in data:
+                    dock.splitter = DockSplitter("left" if dock.orientation == "horizontal" else "top")
+                    dock.splitter.width = data["splitter_pos"]
+                    dock.add_widget(dock.splitter)
+                
+                if "tab" in data:
+                    dock.panel = DockPanel(root, dock)
+                    dock.add_widget(dock.panel)
+
+                    tab_index = data.get("tab_index", 0)
+                    for i, tab_data in enumerate(reversed(data["tab"])):
+                        tab = SerializableTab.deserialize_panel(tab_data)
+                        if tab:
+                            tab.root = root
+                            dock.panel.add_widget(tab)
+                            tab.deserialize_post(tab_data)
+                            if i == tab_index: tab.select()
+                            if tab_data.get("active", False):
+                                nonlocal active_tab
+                                active_tab = tab
+
+                if "second" in data:
+                    assert dock.splitter
+                    dock.second_panel = BaseDock(root, dock)
+                    dock.splitter.add_widget(dock.second_panel)
+                    deserialize(root, dock.second_panel, data["second"])
+                
+
+            deserialize(self.main_dock, self.main_dock, data)
+            if active_tab: active_tab.select()
+            return True
+        except:
+            print("Error loading UI state:")
+            traceback.print_exc()
+
+        return False # FIXME Loading not implemented yet
 
     def save_ui_state(self):
         file = self.get_project_ui_file()
@@ -291,6 +361,7 @@ class DisApp(App):
 
         def serialize(panel: BaseDock) -> dict[str, Any]:
             res = {}
+
             if panel.first_panel:
                 res["first"] = serialize(panel.first_panel)
             if panel.second_panel:
@@ -298,8 +369,14 @@ class DisApp(App):
 
             if panel.panel:
                 tabs = []
-
-                res["tab"] = tabs 
+                for tab in panel.panel.iterate_panels():
+                    if isinstance(tab, SerializableTab):
+                        data = tab.serialize()
+                        if tab.root and tab.root.active_panel == tab:
+                            data["active"] = True
+                        tabs.append(data)
+                res["tab"] = tabs
+                res["tab_index"] = panel.panel._tab_strip.children.index(panel.panel._current_widget)
 
             res["orientation"] = panel.orientation
             if panel.splitter:
@@ -308,7 +385,14 @@ class DisApp(App):
             return res
 
         with open(file, "w") as fp:
-            json.dump(serialize(self.main_dock), fp)
+            data = serialize(self.main_dock)
+
+            data["left"] = Window.left
+            data["top"] = Window.top
+            data["width"] = Window.width
+            data["height"] = Window.height
+
+            json.dump(data, fp)
 
     def get_project_ui_file(self) -> Path:
         return dirs.user_config_path / self.project.get_project_id() / "ui_state.json"
@@ -479,7 +563,7 @@ class DisApp(App):
         
     def close_tabs(self):
         for tab in self.main_dock.iterate_panels():
-            if isinstance(tab, GraphTab):
+            if isinstance(tab, (GraphTab, ListingTab)):
                 tab.close()
         
     def load_project(self, project: Project):
@@ -565,6 +649,7 @@ class DisApp(App):
         try:
             shutil.rmtree(_graph_tmpfolder)
         except FileNotFoundError: pass
+        self.save_ui_state()
         super().on_stop()
 
 def main(project: Project):

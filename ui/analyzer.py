@@ -22,15 +22,26 @@ class AnalyzerTab(SerializableTab):
 
     def serialize(self) -> dict:
         data = super().serialize()
+        data["scroll_x"] = self.content.scrollview.scroll_x
+        data["scroll_y"] = self.content.table.body.scroll_y
+        data["ordered_by"] = self.content.table.ordered_by
+        data["reverse"] = self.content.table.reverse
+
         return data
 
     def deserialize_post(self, data: dict):
-        pass
-    
+        self.content.scrollview.scroll_x = data.get("scroll_x", 0)
+        self.content.table.body.scroll_y = data.get("scroll_y", 1)
+
+        self.content.table.ordered_by = data.get("ordered_by", -1)
+        self.content.table.reverse = data.get("reverse", -1)
+        self.content.table.sort_data()
+        
     @classmethod
     def deserialize(cls, data: dict) -> "AnalyzerTab":
         tab = AnalyzerTab()
         analyzer = AnalyzerPanel(tab)
+        app().analyzer_panel = analyzer
         tab.add_widget(analyzer)
         return tab
 
@@ -111,7 +122,7 @@ class AnalyzerPanel(RelativeLayout):
 
     def on_kv_post(self, base_widget):
         self.scrollview = self.ids["scroll_view"]
-        self.table = self.ids["table"]
+        self.table = self.ids["analyzer_table"]
 
 class AnalyzerTable(ResizableRecycleTable):
     def __init__(self, **kwargs):

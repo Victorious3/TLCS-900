@@ -50,7 +50,7 @@ class GraphTab(SerializableTab):
     content: "FunctionPanel"
 
     def __init__(self, text: str, **kwargs):
-        super().__init__(text=text, closable=True, source="ui/resources/code-listing.png", **kwargs)
+        super().__init__(text=text, closeable=True, source="ui/resources/graph.png", **kwargs)
 
     def serialize(self) -> dict:
         data = super().serialize()
