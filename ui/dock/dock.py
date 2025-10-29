@@ -41,7 +41,7 @@ class Child(Widget):
 
 class DockSplitter(Splitter, Child):
     def __init__(self, sizable_from: str, **kwargs):
-        super().__init__(sizable_from=sizable_from, keep_within_parent=True, max_size=dp(10e10), min_size=0, **kwargs)
+        super().__init__(sizable_from=sizable_from, max_size=dp(10e10), min_size=0, **kwargs)
 
     @property
     def dock(self) -> "BaseDock":

@@ -15,6 +15,7 @@ from kivy.uix.label import Label
 from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
 from kivy.uix.relativelayout import RelativeLayout
+from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
@@ -315,17 +316,16 @@ class DisApp(App):
 
                 if "first" in data:
                     dock.first_panel = BaseDock(root, dock)
-                    dock.add_widget(dock.first_panel)
+                    BoxLayout.add_widget(dock, dock.first_panel)
                     deserialize(root, dock.first_panel, data["first"])
                 
                 if "splitter_pos" in data:
                     dock.splitter = DockSplitter("left" if dock.orientation == "horizontal" else "top")
-                    dock.splitter.width = data["splitter_pos"]
-                    dock.add_widget(dock.splitter)
+                    BoxLayout.add_widget(dock, dock.splitter)
                 
                 if "tab" in data:
                     dock.panel = DockPanel(root, dock)
-                    dock.add_widget(dock.panel)
+                    BoxLayout.add_widget(dock, dock.panel)
 
                     tab_index = data.get("tab_index", 0)
                     for i, tab_data in enumerate(reversed(data["tab"])):
@@ -344,7 +344,13 @@ class DisApp(App):
                     dock.second_panel = BaseDock(root, dock)
                     dock.splitter.add_widget(dock.second_panel)
                     deserialize(root, dock.second_panel, data["second"])
-                
+
+                    #if dock.orientation == Orientation.HORIZONTAL:
+                        #dock.splitter.width = data["splitter_pos"]
+                    #else:
+                    #    dock.splitter.height = data["splitter_pos"]
+                    #print(dock.splitter.width, dock.splitter.height)
+                    
 
             deserialize(self.main_dock, self.main_dock, data)
             if active_tab: active_tab.select()
