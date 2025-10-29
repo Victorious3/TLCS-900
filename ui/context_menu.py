@@ -17,7 +17,7 @@ class ContextMenuBehavior(Widget):
         return False
 
     def on_touch_down(self, touch):
-        #if super().on_touch_down(touch): return True
+        if super().on_touch_down(touch): return True
         #if touch.button == "right" and sys.platform == "darwin":
         #    return self.trigger_context_menu(touch)
         pass

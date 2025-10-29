@@ -1,5 +1,5 @@
 from pathlib import Path
-import json, math, shutil, tempfile, sys, traceback
+import json, math, shutil, tempfile, sys, traceback, logging
 
 from abc import ABC, abstractmethod
 from typing import Any, Callable, TypeVar, Type, Generator, cast
@@ -83,9 +83,7 @@ class EscapeTrigger:
     def on_escape(self, obj):
         pass
 
-from tcls_900.tlcs_900 import Reg, Mem
-
-from .project import Section, DATA_PER_ROW, MAX_SECTION_LENGTH, Project, new_project, Function
+from .project import Section, DATA_PER_ROW, Project, Function
 from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
@@ -98,14 +96,18 @@ from .popup import FunctionAnalyzerPopup
 from .dock.dock import BaseDock, Dock, Orientation, SerializableTab, DockSplitter, DockPanel
 
 class NavigationListing(NavigationAction):
-    def __init__(self, panel: "MainPanel | None", offset: int):
+    def __init__(self, panel: "ListingPanel | None", offset: int):
         self.offset = offset
         self.panel = panel
 
     def navigate(self):
-        app().scroll_to_offset(self.offset, self.panel, history=False)
+        try:
+            app().switch_to_listing(self.panel)
+            app().scroll_to_offset(self.offset, self.panel, history=False)
+        except ValueError as e:
+            pass # Invalid location
 
-class MainPanel(RelativeLayout):
+class ListingPanel(RelativeLayout):
     def __init__(self, **kw):
         self.rv: RV = cast(RV, None)
         self.minimap: Minimap = cast(Minimap, None)
@@ -150,7 +152,7 @@ class MainPanel(RelativeLayout):
 
 class MainWindow(FloatLayout): pass
 
-class FunctionListing(MainPanel):
+class FunctionListing(ListingPanel):
     def __init__(self, function: Function, **kwargs):
         self.fun = function
         self.sections: list[Section] | None = None
@@ -223,7 +225,7 @@ class GlobalEventBus(EventDispatcher):
         pass
 
 class MainDockTab(SerializableTab):
-    content: MainPanel
+    content: ListingPanel
 
     def serialize(self) -> dict:
         res = super().serialize()
@@ -233,7 +235,9 @@ class MainDockTab(SerializableTab):
     @classmethod
     def deserialize(cls, dict) -> "MainDockTab":
         tab = MainDockTab(text=app().project.filename)
-        tab.add_widget(MainPanel())
+        panel = ListingPanel()
+        tab.add_widget(panel)
+        app().dis_panel = panel
         return tab
     
     def deserialize_post(self, dict):
@@ -245,16 +249,16 @@ class DisApp(App):
     def __init__(self, project: Project):
         super().__init__()
         self.project = project
-        
-        self.goto_position = cast(GotoPosition, None)
-        self.window = cast(MainWindow, None)
-        self.back_button = cast(IconButton, None)
-        self.forward_button = cast(IconButton, None)
-        self.y_splitter = cast(Splitter, None)
+
+        self.goto_position: GotoPosition
+        self.window: MainWindow
+        self.back_button: IconButton
+        self.forward_button: IconButton
+        self.y_splitter: Splitter
         self.analyzer_panel: AnalyzerPanel | None = None
-        self.dis_panel = cast(MainPanel, None)
-        self.analyzer_filter = cast(AnalyzerFilter, None)
-        self.main_dock = cast(Dock, None)
+        self.dis_panel: ListingPanel
+        self.analyzer_filter: AnalyzerFilter
+        self.main_dock: Dock
 
         self.last_position = -1
         self.position_history: list[NavigationAction] = []
@@ -279,15 +283,14 @@ class DisApp(App):
         self.back_button = self.window.ids["back_button"]
         self.forward_button = self.window.ids["forward_button"]
         self.goto_position = self.window.ids["goto_position"]
-        self.main_dock: Dock = self.window.ids["main_dock"]
-
-        self.dis_panel = MainPanel()
+        self.main_dock = self.window.ids["main_dock"]
     
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
 
         build_menu()
         if not self.load_ui_state():
+            self.dis_panel = ListingPanel()
             tab = MainDockTab(text=self.project.filename)
             tab.add_widget(self.dis_panel)
             self.main_dock.add_tab(tab)
@@ -297,6 +300,7 @@ class DisApp(App):
     def load_ui_state(self) -> bool:
         file = self.get_project_ui_file()
         if not file.exists(): return False
+        logging.info("Config: Loading ui state from %s", file)
 
         try:
             with open(file, "r") as fp:
@@ -345,24 +349,23 @@ class DisApp(App):
                     dock.splitter.add_widget(dock.second_panel)
                     deserialize(root, dock.second_panel, data["second"])
 
-                    #if dock.orientation == Orientation.HORIZONTAL:
-                        #dock.splitter.width = data["splitter_pos"]
-                    #else:
-                    #    dock.splitter.height = data["splitter_pos"]
-                    #print(dock.splitter.width, dock.splitter.height)
-                    
+                    if dock.orientation == "horizontal":
+                        dock.splitter.width = data["splitter_pos"]
+                    else:
+                        dock.splitter.height = data["splitter_pos"]
 
             deserialize(self.main_dock, self.main_dock, data)
             if active_tab: active_tab.select()
             return True
         except:
-            print("Error loading UI state:")
+            logging.error("Error loading UI state:")
             traceback.print_exc()
 
-        return False # FIXME Loading not implemented yet
+        return False
 
     def save_ui_state(self):
         file = self.get_project_ui_file()
+        logging.info("Config: Saving ui state to %s", file)
         file.parent.mkdir(parents=True, exist_ok=True)
 
         def serialize(panel: BaseDock) -> dict[str, Any]:
@@ -386,7 +389,10 @@ class DisApp(App):
 
             res["orientation"] = panel.orientation
             if panel.splitter:
-                res["splitter_pos"] = panel.splitter.width
+                if panel.orientation == "horizontal":
+                    res["splitter_pos"] = panel.splitter.width
+                else:
+                    res["splitter_pos"] = panel.splitter.height
 
             return res
 
@@ -403,11 +409,11 @@ class DisApp(App):
     def get_project_ui_file(self) -> Path:
         return dirs.user_config_path / self.project.get_project_id() / "ui_state.json"
     
-    def scroll_to_label(self, label: str, main_panel: MainPanel | None = None):
-        sections = main_panel.get_sections() if main_panel else self.project.sections.values()
+    def scroll_to_label(self, label: str, main_panel: ListingPanel | None = None):
+        sections = self.project.sections.values()
         for section in sections:
             if section.labels and section.labels[0].name == label:
-                print("Goto label:", label, "at", format(section.offset, "X"))
+                logging.info("Goto label: %s at %s", label, format(section.offset, "X"))
                 self.scroll_to_offset(section.offset, main_panel)
                 return
         raise ValueError("Invalid label")
@@ -441,11 +447,12 @@ class DisApp(App):
         position.navigate()
         self.update_position_buttons()
     
-    def scroll_to_offset(self, offset: int, main_panel: MainPanel | None = None, history = True):
+    def scroll_to_offset(self, offset: int, main_panel: ListingPanel | None = None, history = True):
         rv = main_panel.rv if main_panel else self.dis_panel.rv
 
         self.switch_to_listing(main_panel)
         scroll_pos = 0
+        found_pos = False
         for i in range(len(rv.data)):
             total_height = rv.children[0].height - rv.height
             data = rv.data[i]
@@ -457,18 +464,30 @@ class DisApp(App):
                 rv.reset_selection()
                 if history: self.update_position_history(NavigationListing(main_panel, offset))
                 self.last_position = offset
+                found_pos = True
                 
-                return
+                break
 
             scroll_pos += data["height"]
-        raise ValueError("Invalid location")
+        
+        # Try again with main panel if we can't find the symbol in the current panel
+        if not found_pos:
+            if main_panel: 
+                self.scroll_to_offset(offset)
+        else:
+            raise ValueError("Invalid location")
     
-    def switch_to_listing(self, main_panel: MainPanel | None = None):
+    def switch_to_listing(self, main_panel: ListingPanel | None = None):
         if main_panel:
             for tab in self.main_dock.iterate_panels():
                 if tab.content == main_panel:
                     tab.select()
                     break
+            else: 
+                if isinstance(main_panel, FunctionListing):
+                    tab = ListingTab(text=main_panel.fun.name)
+                    tab.add_widget(main_panel)
+                    self.main_dock.add_tab(tab, reverse=True)
         else:
             for tab in self.main_dock.iterate_panels():
                 if isinstance(tab, MainDockTab):
@@ -496,16 +515,21 @@ class DisApp(App):
         fun = self.find_function(fun_name)
         if not fun: return
 
+        panel: FunctionListing | None = None
         for tab in self.main_dock.iterate_panels():
             if isinstance(tab, ListingTab) and tab.content.fun == fun:
                 tab.select()
-                return
+                panel = tab.content
+                break
         
-        tab = ListingTab(text=fun.name)
-        panel = FunctionListing(fun)
-        tab.add_widget(panel)
+        if not panel:
+            tab = ListingTab(text=fun.name)
+            panel = FunctionListing(fun)
+            tab.add_widget(panel)
 
-        app().main_dock.add_tab(tab, reverse=True)
+            app().main_dock.add_tab(tab, reverse=True)
+
+        app().update_position_history(NavigationListing(panel, fun.ep))
     
     def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[GraphTab], None] | None = None):
         if not self.project.functions:
@@ -552,7 +576,7 @@ class DisApp(App):
         #        Metrics.density -= 1
 
         if keycode == 225: self.shift_down = True
-        elif keycode == 227 and sys.platform == "darwin" or keycode == 224: 
+        elif keycode == 227 and sys.platform == "darwin" or keycode == 224 and sys.platform != "darwin": 
             self.ctrl_down = True
             RV.update_cursor()
         elif keycode == 41: 
@@ -561,7 +585,7 @@ class DisApp(App):
     
     def _keyup(self, window, keyboard: int, keycode: int):
         if keycode == 225: self.shift_down = False
-        if keycode == 227 and sys.platform == "darwin" or keycode == 224: 
+        if keycode == 227 and sys.platform == "darwin" or keycode == 224 and sys.platform != "darwin":
             self.ctrl_down = False
             RV.update_cursor()
         elif keycode == 41:

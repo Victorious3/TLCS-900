@@ -12,7 +12,7 @@ from .main import app, FONT_HEIGHT, LABEL_HEIGHT, BG_COLOR
 from .project import Section, CodeSection
 
 class Minimap(KWidget, Widget):
-    parent: "main.MainPanel"
+    parent: "main.ListingPanel"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

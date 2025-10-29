@@ -18,7 +18,7 @@ class AnalyzerTab(SerializableTab):
     content: "AnalyzerPanel"
 
     def __init__(self, **kwargs):
-        super().__init__(text="Functions", closeable=True, **kwargs)
+        super().__init__(text="Functions", closeable=True, source="ui/resources/functions.png", **kwargs)
 
     def serialize(self) -> dict:
         data = super().serialize()

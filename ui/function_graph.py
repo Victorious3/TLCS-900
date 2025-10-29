@@ -22,7 +22,7 @@ from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction
 from .sections import section_to_markup, LocationLabel
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuItem, MenuHandler
 
-from .dock.dock import DockTab, SerializableTab
+from .dock.dock import SerializableTab
 
 class NavigationGraph(NavigationAction):
     def __init__(self, fun: int, location: tuple[int, int] | int, zoom: float = 0):
@@ -57,6 +57,7 @@ class GraphTab(SerializableTab):
         data["function"] = self.content.fun.ep
         data["x"] = self.content.scatter.x
         data["y"] = self.content.scatter.y
+        data["zoom"] = self.content.scatter.scale
         return data
     
     @classmethod
@@ -71,6 +72,8 @@ class GraphTab(SerializableTab):
         return tab
     
     def deserialize_post(self, data: dict):
+        if "zoom" in data:
+            self.content.scatter._set_scale(data["zoom"])
         if "x" in data and "y" in data:
             self.content.scatter._set_pos((data["x"], data["y"]))
         

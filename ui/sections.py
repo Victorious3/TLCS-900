@@ -16,16 +16,17 @@ from kivy.effects.scroll import ScrollEffect
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.stencilview import StencilView
+from kivy.core.clipboard import Clipboard
 
 from . import main
 from .kivytypes import KWidget
-from .project import Section, DATA_PER_ROW, Instruction
-from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, MAX_SECTION_LENGTH, app, iter_all_children_of_type
+from .project import Section, DATA_PER_ROW, Instruction, MAX_SECTION_LENGTH
+from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, app, iter_all_children_of_type
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
 class ScrollBar(BoxLayout):
-    parent: "main.MainPanel"
+    parent: "main.ListingPanel"
     base_width: float = NumericProperty(0)
     view: ScrollView
 
@@ -38,7 +39,7 @@ class ScrollBar(BoxLayout):
 class RV(KWidget, RecycleView):
     xoffset: float = NumericProperty(0)
 
-    parent: "main.MainPanel"
+    parent: "main.ListingPanel"
     any_hovered = False
 
     def __init__(self, **kwargs):
@@ -289,7 +290,7 @@ class SectionAddresses(KWidget, SectionColumn):
                     break
         
 
-class SectionData(KWidget, SectionColumn):
+class SectionData(KWidget, ContextMenuBehavior, SectionColumn):
     rv: RV = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
@@ -366,6 +367,40 @@ class SectionData(KWidget, SectionColumn):
                         off_y = 0
                         if end >= self.section.offset + self.section.length: off_y = 1
                         Rectangle(pos=(self.parent.x, self.y + self.height - ((row_end + off_y) * FONT_HEIGHT)), size=(width, (row_end + off_y - row_start) * FONT_HEIGHT))
+
+    def trigger_context_menu(self, touch):
+        if not self.collide_point(touch.x, touch.y): return
+        if (touch.x < self.rv.width - self.rv.parent.minimap.width):
+            rv = self.rv
+            class Handler(MenuHandler):
+                def on_select(self, item):
+                    if item == "dis": 
+                        a = app()
+                        def callback():
+                            # FIXME
+                            a.dis_panel.rv.update_data()
+                            a.dis_panel.minimap.redraw()
+                            a.dis_panel.arrows.recompute_arrows()
+                            a.dis_panel.arrows.redraw()
+                            Clock.schedule_once(lambda dt: a.scroll_to_offset(rv.selection_start), 0)
+                
+                        a.project.disassemble(rv.selection_start, callback)
+                    elif item == "copy":
+                        data = app().project.get_data_slice(rv.selection_start, rv.selection_end)
+                        hex_data = " ".join(format(x, "0>2X") for x in data)
+                        Clipboard.copy(hex_data)
+                        rv.reset_selection()
+
+            show_context_menu(Handler(), [
+                MenuItem("label", "Insert Label"),
+                MenuItem("copy", "Copy hex data"),
+            ] + ([
+                MenuItem("dis", "Disassemble from here"),
+                MenuItem("dis_oneshot", "Disassemble oneshot"),
+                MenuItem("dis_selected", "Disassemble selected"),
+            ] if not isinstance(self.rv.parent, main.FunctionListing) else []))
+
+            return True
 
 
 
@@ -514,7 +549,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
         if keycode == 227 and sys.platform == "darwin" or keycode == 224: 
             self._on_update()
 
-class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, BoxLayout):
+class SectionPanel(RecycleDataViewBehavior, StencilView, BoxLayout):
     section = ObjectProperty(None)
     xoffset = NumericProperty(0)
     rv: RV = ObjectProperty(None, allownone=True)
@@ -532,33 +567,6 @@ class SectionPanel(RecycleDataViewBehavior, ContextMenuBehavior, StencilView, Bo
     def __init__(self, **kwargs):
         self._old_rv: RV | None = None
         super().__init__(**kwargs)
-
-    def trigger_context_menu(self, touch):
-        if not self.collide_point(touch.x, touch.y): return
-        if (touch.x < self.rv.width - self.rv.parent.minimap.width):
-            rv = self.rv
-            class Handler(MenuHandler):
-                def on_select(self, item):
-                    if item == "dis": 
-                        a = app()
-                        def callback():
-                            a.dis_panel.rv.update_data()
-                            a.dis_panel.minimap.redraw()
-                            a.dis_panel.arrows.recompute_arrows()
-                            a.dis_panel.arrows.redraw()
-                            Clock.schedule_once(lambda dt: a.scroll_to_offset(rv.selection_start), 0)
-                
-                        a.project.disassemble(rv.selection_start, callback)
-                        
-            show_context_menu(Handler(), [
-                MenuItem("label", "Insert Label")
-            ] + ([
-                MenuItem("dis", "Disassemble from here"),
-                MenuItem("dis_oneshot", "Disassemble oneshot"),
-                MenuItem("dis_selected", "Disassemble selected"),
-            ] if not isinstance(self.rv.parent, main.FunctionListing) else []))
-
-            return True
 
     def refresh_view_attrs(self, rv: RV, index, data):
         self.xoffset = rv.xoffset

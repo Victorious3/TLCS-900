@@ -43,12 +43,13 @@ def DashedLine(points, dash_length = dp(5), dash_offset = dp(2), width = dp(1)):
     texture = cached_texures.get((dash_length, dash_offset, width))
 
     if not texture:
-        fbo = Fbo(size=(dash_length + dash_offset, width))
+        fbo = Fbo(size=(dash_length + dash_offset, width * 2))
         with fbo:
             ClearColor(0, 0, 0, 0)
             ClearBuffers()
             Color(1, 1, 1, 1)
-            Rectangle(pos=(0, 0), size=(dash_length, width))
+            Rectangle(pos=(0, 0), size=(dash_length, width * 2))
+        fbo.draw()
         texture = fbo.texture
         texture.wrap = 'repeat'
 
@@ -84,7 +85,7 @@ class Arrow:
         return f"{self.start:X} -> {self.end:X}"
 
 class ArrowRenderer(KWidget, Widget):
-    parent: "main.MainPanel"
+    parent: "main.ListingPanel"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

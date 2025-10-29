@@ -1068,6 +1068,9 @@ class Project:
         assert start is not None
         fun = Function(ep, name, start, blocks)
         return fun
+    
+    def get_data_slice(self, start: int, end: int) -> bytes:
+        return self.ib.buffer[start - self.org:end - self.org + 1]
 
 def new_project(path: Path, ep: int | list[int], org: int) -> Project:
     proj = Project(path.parent, path, org, ep)

@@ -41,7 +41,11 @@ class Child(Widget):
 
 class DockSplitter(Splitter, Child):
     def __init__(self, sizable_from: str, **kwargs):
-        super().__init__(sizable_from=sizable_from, max_size=dp(10e10), min_size=0, **kwargs)
+        if sizable_from in ("left", "right"):
+            self.size_hint_x = None
+        if sizable_from in ("top", "bottom"):
+            self.size_hint_y = None
+        super().__init__(keep_within_parent=True, sizable_from=sizable_from, max_size=dp(10e10), min_size=0, **kwargs)
 
     @property
     def dock(self) -> "BaseDock":
@@ -459,6 +463,10 @@ class BaseDock(BoxLayout, Child):
                 self.splitter = DockSplitter("left" if orientation == Orientation.HORIZONTAL else "top")
                 self.splitter.add_widget(self.second_panel)
                 super().add_widget(self.splitter)
+                if orientation == Orientation.HORIZONTAL:
+                    self.splitter.width = self.width / 2
+                else:
+                    self.splitter.height = self.height / 2
 
                 if self.second_panel:
                     dock_panel = DockPanel(self.root or cast(Dock, self), self)
@@ -498,6 +506,10 @@ class BaseDock(BoxLayout, Child):
 
             self.splitter = DockSplitter("left" if orientation == Orientation.HORIZONTAL else "top")
             self.splitter.add_widget(self.second_panel)
+            if orientation == Orientation.HORIZONTAL:
+                self.splitter.width = self.width / 2
+            else:
+                self.splitter.height = self.height / 2
 
             super().add_widget(self.splitter)
 
