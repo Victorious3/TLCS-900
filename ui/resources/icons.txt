@@ -9,3 +9,11 @@ Organization chart icons created by Sebastian Belalcazar - Flaticon
 functions.png
 https://www.flaticon.com/free-icons/function
 Function icons created by Ch.designer - Flaticon
+
+goto.png
+https://www.flaticon.com/free-icons/url
+Url icons created by Muhamad Ulum - Flaticon
+
+calls.png
+https://www.flaticon.com/free-icons/data
+Data icons created by Nixxdsgn - Flaticon

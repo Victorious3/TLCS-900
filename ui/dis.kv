@@ -81,6 +81,38 @@
         id: scrollbar
         pos_hint: { "left": 1, "bottom": 1 }
 
+<AnalyzerButtons>:
+    size_hint: None, 1
+    width: self.parent.column_widths[self.column] + dp(5) if self.parent else dp(100)
+
+    IconButton:
+        source: "ui/resources/goto.png"
+        size_hint: None, None
+        size: dp(20), dp(20)
+        pos_hint: {"left": 1, "center_y": 0.5}
+        on_press: self.parent.on_press("goto")
+    IconButton:
+        source: "ui/resources/code-listing.png"
+        size_hint: None, None
+        size: dp(20), dp(20)
+        x: dp(25)
+        pos_hint: {"left": 1, "center_y": 0.5}
+        on_press: self.parent.on_press("listing")
+    IconButton:
+        source: "ui/resources/graph.png"
+        size_hint: None, None
+        size: dp(20), dp(20)
+        x: dp(50)
+        pos_hint: {"left": 1, "center_y": 0.5}
+        on_press: self.parent.on_press("graph")
+    IconButton:
+        source: "ui/resources/calls.png"
+        size_hint: None, None
+        size: dp(20), dp(20)
+        x: dp(75)
+        pos_hint: {"left": 1, "center_y": 0.5}
+        on_press: self.parent.on_press("calls")
+
 <AnalyzerPanel>:
     ScrollView:
         id: scroll_view

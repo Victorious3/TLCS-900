@@ -38,7 +38,7 @@ class ColumnResizer(ButtonBehavior, Widget):
         self._start_x = None
         self._cursor_set = False
 
-        Window.bind(mouse_pos=self.on_mouse_pos)
+        #Window.bind(mouse_pos=self.on_mouse_pos)
 
     def on_enter(self):
         if not self._cursor_set and not app().any_hovered:
@@ -67,16 +67,9 @@ class ColumnResizer(ButtonBehavior, Widget):
         self._start_x = None
         return super().on_touch_up(touch)
     
-    def on_mouse_pos(self, window, pos):
-        if not self.table.collide_point(*pos): return
-        
-        inside = self.collide_point(*pos)
-        if inside:
-            self.on_enter()
-        else:
-            self.on_leave()
-
-        if self._cursor_set: app().set_hover()
+    def on_motion(self, etype, me):
+        print("motion", etype, me)
+        return super().on_motion(etype, me)
 
 
 class DataTableRow(RecycleDataViewBehavior, BoxLayout):
@@ -92,8 +85,11 @@ class DataTableRow(RecycleDataViewBehavior, BoxLayout):
         super().refresh_view_attrs(rv, index, data)
         if not self.initialized:
             for i, column in enumerate(self.data):
-                self.add_widget(DataTableCell(column=i))
+                self.add_widget(self.new_data_cell(i))
             self.initialized = True
+
+    def new_data_cell(self, index) -> Widget:
+        return DataTableCell(column=index)
     
 class DataTableCell(Label):
     column = NumericProperty(0)

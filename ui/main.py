@@ -474,9 +474,9 @@ class DisApp(App):
         if not found_pos:
             if main_panel: 
                 self.scroll_to_offset(offset)
-        else:
-            raise ValueError("Invalid location")
-    
+            else:
+                raise ValueError("Invalid location")
+        
     def switch_to_listing(self, main_panel: ListingPanel | None = None):
         if main_panel:
             for tab in self.main_dock.iterate_panels():

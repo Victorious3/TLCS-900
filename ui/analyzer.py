@@ -60,58 +60,35 @@ class AnalyzerFilter(HideableTextInput, EscapeTrigger):
         Clock.schedule_once(lambda dt: panel.ids["analyzer_table"].filter(self.text), 0)
 
 
-HEADER_NAMES = ["name", "address", "frequency", "complexity", "input", "clobber", "output", "stack"]
-COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(100), dp(200), dp(200), dp(200), dp(100)]
+HEADER_NAMES = ["name", "navigation", "address", "frequency", "complexity", "input", "clobber", "output", "stack"]
+COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(100), dp(100), dp(200), dp(200), dp(200), dp(100)]
+
+class AnalyzerButtons(RelativeLayout):
+    parent: "AnalyzerTableRow"
+    def __init__(self, column: int, **kw):
+        self.column = column
+        super().__init__(**kw)
+
+    def on_press(self, action: str):
+        data = self.parent.data
+        if action == "goto":
+            app().scroll_to_label(data[0])
+        elif action == "graph":
+            app().open_function_graph(data[0])
+        elif action == "listing":
+            app().open_function_listing(data[0])
 
 class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        Window.bind(mouse_pos=self.on_mouse_move)
     
     @property
     def first_label(self) -> Widget:
         return self.children[-1]
 
-    def trigger_context_menu(self, touch):
-        inside = self.first_label.collide_point(touch.x, touch.y)
-        if inside:
-            if touch.button == "right":
-                data = self.data
-                class Handler(MenuHandler):
-                    def on_select(self, item):
-                        if item == "goto": app().scroll_to_label(data[0])
-                        elif item == "graph": app().open_function_graph(data[0])
-                        elif item == "listing": app().open_function_listing(data[0])
-                
-                show_context_menu(Handler(), [
-                    MenuItem("goto", "Go to function"),
-                    MenuItem("graph", "Open function graph"),
-                    MenuItem("listing", "Open function listing")
-                ])
-                return True
-        return False
-
-    def on_touch_down(self, touch):
-        inside = self.first_label.collide_point(touch.x, touch.y)
-        if inside:
-            if touch.button == "left":
-                app().scroll_to_label(self.data[0])
-                return True
-        return super().on_touch_down(touch)
-    
-    def on_mouse_move(self, window, pos):
-        if self.get_root_window() == None: return
-        inside = self.first_label.collide_point(*self.first_label.to_widget(*pos))
-        if inside:
-            # Ugly UI hack
-            panel = app().analyzer_panel
-            assert panel
-            table: AnalyzerTable = next(iter_all_children_of_type(panel, AnalyzerTable))
-            if not table.is_pos_inside_of_body(pos): return
-
-        if inside and not app().any_hovered:
-            app().set_hover()
-            Window.set_system_cursor("hand")
+    def new_data_cell(self, index) -> Widget:
+        if index == 1: return AnalyzerButtons(index)
+        return super().new_data_cell(index)
     
 class AnalyzerPanel(RelativeLayout):
     def __init__(self, tab: DockTab, **kw):
@@ -143,6 +120,8 @@ class AnalyzerTable(ResizableRecycleTable):
             row = []
             # name
             row.append(fun.name)
+            # Row for buttons, no data
+            row.append(0)
             # address
             row.append(format(fun.ep, "X"))
             # frequency
