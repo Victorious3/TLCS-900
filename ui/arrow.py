@@ -226,7 +226,7 @@ class ArrowRenderer(KWidget, Widget):
 
         with self.canvas.after:
             StencilPush()
-            Rectangle(pos=self.pos, size=self.size)
+            Rectangle(pos=self.parent.to_window(0, 0), size=(self.parent.width - dp(15), self.parent.height)) # Leave space for scrollbar
             StencilUse()
 
             arrows_to_render: list[Arrow] = []
