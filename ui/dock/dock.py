@@ -189,7 +189,7 @@ class DockPanel(KWidget, BoxLayout, Child):
             super().remove_widget(self._current_widget.content)
         self._current_widget = widget
         super().add_widget(self._current_widget.content)
-        self._calculate_tab_size()
+        Clock.schedule_once(lambda dt: self._calculate_tab_size(), 0)
 
     def remove_widget(self, widget: "DockTab"):
         assert widget.dock_panel == self
@@ -205,7 +205,7 @@ class DockPanel(KWidget, BoxLayout, Child):
                 self._current_widget = tab_list[max(0, index - 1)]
                 super().add_widget(self._current_widget.content)
 
-        self._calculate_tab_size()
+        Clock.schedule_once(lambda dt: self._calculate_tab_size(), 0)
     
     def select_widget(self, widget: "DockTab"):
         assert widget.dock_panel == self
@@ -218,6 +218,7 @@ class DockPanel(KWidget, BoxLayout, Child):
         w = 0
         for tab in self.tab_list:
             w += tab.width
+
         self._tab_strip.width = w
 
     @property
@@ -419,28 +420,30 @@ class BaseDock(BoxLayout, Child):
 
         # Flatten heirarchy, if first or second panel contain only one element they should be
         # pulled up into this panel, but only if there is no other child present
-        if self.second_panel and self.second_panel.panel and not self.first_panel:
-            dock_panel = self.second_panel.panel
-            self.second_panel.remove_widget(dock_panel)
-            if self.splitter:
-                super().remove_widget(self.splitter)
-                self.splitter = None
-            
-            super().add_widget(dock_panel)
-            dock_panel.parent_dock = self
-            self.panel = dock_panel
-            self.first_panel = None
-            self.second_panel = None
-        
-        if self.first_panel and self.first_panel.panel and not self.second_panel:
-            dock_panel = self.first_panel.panel
-            self.first_panel.remove_widget(dock_panel)
-            super().remove_widget(self.first_panel)
-            super().add_widget(dock_panel)
-            dock_panel.parent_dock = self
-            self.panel = dock_panel
-            self.first_panel = None
-            self.second_panel = None
+        if self.first_panel and not self.second_panel:
+            if self.first_panel.panel:
+                dock_panel = self.first_panel.panel
+                self.first_panel.remove_widget(dock_panel)
+                super().remove_widget(self.first_panel)
+                super().add_widget(dock_panel)
+                dock_panel.parent_dock = self
+                self.panel = dock_panel
+                self.first_panel = None
+                self.second_panel = None
+            else: # Move up both children
+                super().remove_widget(self.first_panel)
+                first, second = self.first_panel.first_panel, self.first_panel.second_panel
+                self.first_panel.remove_widget(first)
+                self.first_panel.remove_widget(self.first_panel.splitter)
+                self.orientation = self.first_panel.orientation
+                self.add_widget(first)
+                self.add_widget(self.first_panel.splitter)
+
+                self.splitter = self.first_panel.splitter
+                self.first_panel = first
+                self.second_panel = second
+                if first: first.parent_dock = self
+                if second: second.parent_dock = self
                 
 
     def split_quadrant(self, panel: DockTab, quadrant = Quadrant.CENTER):

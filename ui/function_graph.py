@@ -145,7 +145,6 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
         self.current_block: CodeBlockRect | None = None
 
         self.bind(pos=self.update_graphics, size=self.update_graphics)
-        Window.bind(mouse_pos=self.on_mouse_move)
 
     def trigger_context_menu(self, touch):
         if self.collide_point(touch.x, touch.y):
@@ -179,7 +178,8 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
                         ])
                         return True
 
-    def on_mouse_move(self, window, pos):
+    def on_mouse_move(self, pos):
+        super().on_mouse_move(pos) # type: ignore
         if not self.panel.tab.is_visible(): return
             
         x, y = self.to_widget(*pos)

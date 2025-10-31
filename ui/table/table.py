@@ -29,6 +29,7 @@ class SortableHeader(ButtonBehavior, Label):
         
 class ColumnResizer(ButtonBehavior, Widget):
     col_index = NumericProperty(0)
+    _hovered: bool = False
 
     def __init__(self, table: "ResizableRecycleTable", **kwargs):
         super().__init__(**kwargs)
@@ -36,18 +37,12 @@ class ColumnResizer(ButtonBehavior, Widget):
         self.size_hint_x = None
         self.width = dp(5)
         self._start_x = None
-        self._cursor_set = False
 
-        #Window.bind(mouse_pos=self.on_mouse_pos)
-
-    def on_enter(self):
-        if not self._cursor_set and not app().any_hovered:
+    def on_mouse_move(self, pos):
+        super().on_mouse_move(pos) # type: ignore
+        if self._hovered and not app().any_hovered:
+            app().set_hover()
             Window.set_system_cursor("size_we")  # horizontal resize cursor
-            self._cursor_set = True
-
-    def on_leave(self):
-        if self._cursor_set and not self._start_x:
-            self._cursor_set = False
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
@@ -67,11 +62,6 @@ class ColumnResizer(ButtonBehavior, Widget):
         self._start_x = None
         return super().on_touch_up(touch)
     
-    def on_motion(self, etype, me):
-        print("motion", etype, me)
-        return super().on_motion(etype, me)
-
-
 class DataTableRow(RecycleDataViewBehavior, BoxLayout):
     data = ListProperty(None)
     row = NumericProperty(0)

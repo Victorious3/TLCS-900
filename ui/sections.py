@@ -49,13 +49,12 @@ class RV(KWidget, RecycleView):
         super().__init__(**kwargs)
         self.effect_x = ScrollEffect()
         self.bind(size=lambda *_: self.redraw_children())
-        Window.bind(mouse_pos=self.on_mouse_move)
     
     def on_kv_post(self, base_widget):
         self.update_data()
 
     @classmethod 
-    def on_mouse_move(cls, window, pos):
+    def global_mouse_move(cls, window, pos):
         cls.any_hovered = False
         
     @classmethod

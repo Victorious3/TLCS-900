@@ -20,6 +20,23 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
 
+# Patch widget class
+def on_mouse_move(self: Widget, pos):
+    hovered = getattr(self, "_hovered", False)
+    if self.collide_point(*pos):
+        for child in self.children:
+            child.on_mouse_move(self.to_local(*pos))
+
+        if not hovered: self.on_enter() # type: ignore
+        setattr(self, "_hovered", True)
+    else:
+        if hovered: self.on_leave() # type: ignore
+        setattr(self, "_hovered", False)
+
+Widget.on_mouse_move = on_mouse_move # type: ignore
+Widget.on_enter = lambda self: None # type: ignore
+Widget.on_leave = lambda self: None # type: ignore
+
 dirs = PlatformDirs(
     appname="PyDis",
     appauthor=False,
@@ -370,6 +387,9 @@ class DisApp(App):
 
         def serialize(panel: BaseDock) -> dict[str, Any]:
             res = {}
+            # TODO This is a hack to avoid extra nesting
+            if panel.first_panel and not panel.second_panel:
+                panel = panel.first_panel
 
             if panel.first_panel:
                 res["first"] = serialize(panel.first_panel)
@@ -662,6 +682,10 @@ class DisApp(App):
     
     def on_mouse_move(self, window, pos):
         DisApp._any_hovered = False
+
+        on_mouse_move(self.window, pos)
+        RV.global_mouse_move(window, pos)
+
         def post(dt):
             if not DisApp._any_hovered:
                 Window.set_system_cursor("arrow")
