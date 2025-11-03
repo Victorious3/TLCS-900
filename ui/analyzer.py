@@ -36,6 +36,8 @@ class AnalyzerTab(SerializableTab):
         self.content.table.ordered_by = data.get("ordered_by", -1)
         self.content.table.reverse = data.get("reverse", -1)
         self.content.table.sort_data()
+
+        app().analyzer_filter = self.content.ids["analyzer_filter"]
         
     @classmethod
     def deserialize(cls, data: dict) -> "AnalyzerTab":

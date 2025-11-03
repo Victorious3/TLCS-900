@@ -309,6 +309,7 @@ class DisApp(App):
 
         build_menu()
         if not self.load_ui_state():
+            self.main_dock.clear_widgets()
             self.dis_panel = ListingPanel()
             tab = MainDockTab(text=self.project.filename)
             tab.add_widget(self.dis_panel)

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import time
 from ui.dock.dock import SerializableTab
 from ui.function_graph import SCALE_FACTOR, ScatterPlaneNoTouch
 from ui.main import FONT_NAME, app
@@ -7,13 +8,14 @@ from kivy.uix.stencilview import StencilView
 from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
-from kivy.graphics import Color, Rectangle, Line, PushMatrix, PopMatrix, Translate, Scale
+from kivy.graphics import Color, Rectangle, Line, Fbo
 from kivy.graphics.svg import Svg
 from kivy.core.text import Label as CoreLabel
 from kivy.utils import get_color_from_hex
 from kivy.metrics import dp
 
 from .kivytypes import KWidget
+from .arrow import COLORS
 
 FONT_SIZE = 14
 
@@ -43,6 +45,7 @@ class CallGraphTab(SerializableTab):
         data["x"] = self.content.scatter.x
         data["y"] = self.content.scatter.y
         data["zoom"] = self.content.scatter.scale
+        self.content.graph.serialize(data)
         return data
     
     @classmethod
@@ -53,6 +56,7 @@ class CallGraphTab(SerializableTab):
         fun = functions[data["function"]]
         tab = CallGraphTab(fun)
         panel = CallGraphPanel(fun, tab)
+        panel.graph.deserialize(data)
         tab.add_widget(panel)
         return tab
     
@@ -64,11 +68,21 @@ class CallGraphTab(SerializableTab):
 
 @dataclass
 class Block:
+    prev: "Block | None"
     path: list[Function]
     function: list[Function]
     x: float
     y: float
     prev_y: float
+    layer: int
+
+@dataclass
+class Icon:
+    column: int
+    row: int
+    f: int
+    x: float
+    y: float
 
 import cvxpy as cp
 import numpy as np
@@ -111,6 +125,13 @@ def vertical_nonoverlap_qp(ideal_y, heights):
 
     return y_opt.tolist()
 
+def shift_layer(blocks: list[Block]):
+    ys = [block.y for block in blocks]
+    heights = [float(len(block.function) * (BOX_HEIGHT + 10) + 20) for block in blocks]
+    optimized_ys = vertical_nonoverlap_qp(ys, heights)
+    for block, y in zip(blocks, optimized_ys):
+        block.y = y
+
 class CallGraph(KWidget, Widget):
     def __init__(self, fun: Function, panel: "CallGraphPanel", **kwargs):
         super().__init__(**kwargs)
@@ -118,97 +139,254 @@ class CallGraph(KWidget, Widget):
         self.panel = panel
         self.bind(pos=self.update_graphics, size=self.update_graphics)
 
-        self.blocks: list[list[Block]] = []
+        self.blocks = [[Block(None, [], [self.fun], 0, 0, 0, 0)]]
+        self.plus: list[Icon] = []
+        self.minus: list[Icon] = []
 
-    def update_blocks(self):
-        MAX_DEPTH = 5
+        # Render plus and minus icons to texture to speed things up
+        fbo = Fbo(size=(512, 512), with_stencilbuffer=True)
+        with fbo: Svg("ui/resources/plus.svg")
+        fbo.draw()
+        self.plus_texture = fbo.texture
+        fbo = Fbo(size=(512, 512), with_stencilbuffer=True)
+        with fbo: Svg("ui/resources/minus.svg")
+        fbo.draw()
+        self.minus_texture = fbo.texture
+
+        self.open(0, 0, 0) # open the root function
+        self.hovered: int | None = None
+
+
+    def serialize(self, data: dict):
+        layers = []
+        prev_layer = None
+        for layer in self.blocks:
+            layer_data = []
+            for block in layer:
+                block_data = {
+                    "prev_index": prev_layer.index(block.prev) if block.prev and prev_layer else None,
+                    "path": [f.ep for f in block.path],
+                    "functions": [f.ep for f in block.function]
+                }
+                layer_data.append(block_data)
+            layers.append(layer_data)
+            prev_layer = layer
+        data["layers"] = layers
+
+    def deserialize(self, data: dict):
+        self.blocks.clear()
+        prev_layer = []
         functions = app().project.functions
         assert functions
-
-        def shift_layer(blocks: list[Block]):
-            ys = [block.y for block in blocks]
-            heights = [float(len(block.function) * (BOX_HEIGHT + 10) + 20) for block in blocks]
-            optimized_ys = vertical_nonoverlap_qp(ys, heights)
-            for block, y in zip(blocks, optimized_ys):
-                block.y = y
-
-        self.blocks = []
-        depth = 0
-        layer: list[Block] = [Block([], [self.fun], 0, 0, 0)]
-        x_offset = len(self.fun.name) * FONT_WIDTH + 85
-        while depth < MAX_DEPTH:
-            # Add callees to next layer
-            width = 0
-            next_layer = []
-            for block in layer:
-                for i, fun in enumerate(block.function):
-                    # Check if fun has been encountered in this path
-                    if fun in block.path:
-                        continue
-
-                    y_offset = i * (BOX_HEIGHT + 10)
-                    fun_list = []
-                    callees = set(map(lambda c: c[1], fun.callees))
-                    for ep in callees:
-                        callee = functions[ep]
-                        fun_list.append(callee)
-
-                    if len(fun_list) > 0:
-                        next_layer.append(Block(
-                            block.path + [fun],
-                            fun_list, 
-                            x_offset,
-                            block.y - y_offset + len(fun_list) * (BOX_HEIGHT + 10) / 2 - BOX_HEIGHT / 2,
-                            block.y - y_offset))
-                        
-                        width = max(width, max(map(lambda f: len(f.name) * FONT_WIDTH + 10, fun_list)))
-            
-            x_offset += width + 75
-            
-            layer = next_layer
-            shift_layer(layer)
-            depth += 1
+        for i, layer_data in enumerate(data.get("layers", [])):
+            layer = []
+            for block_data in layer_data:
+                prev_index = block_data["prev_index"]
+                block = Block(
+                    prev=prev_layer[prev_index] if prev_index is not None else None,
+                    path=[functions[ep] for ep in block_data["path"]],
+                    function=[functions[ep] for ep in block_data["functions"]],
+                    x=0, y=0, prev_y=0, layer=i
+                )
+                layer.append(block)
             self.blocks.append(layer)
+            prev_layer = layer
+
+        self.rebalance_layers(0)
+        self.update_graphics()
+
+    def close(self, column: int, row: int, f: int):
+        layer = self.blocks[column]
+        removed = [layer.pop(row)]
+
+        if len(layer) == 0:
+            self.blocks.remove(layer)
+
+        for layer in self.blocks[column:]:
+            for block in layer[:]:
+                if block.prev in removed:
+                    layer.remove(block)
+                    removed.append(block)
+            if len(layer) == 0:
+                self.blocks.remove(layer)
+
+        self.rebalance_layers(column - 1)
+
+    def open(self, column: int, row: int, f: int):
+        all_functions = app().project.functions
+        assert all_functions
+
+        layer = self.blocks[column]
+        block = layer[row]
+        fun = block.function[f]
+
+        functions = []
+        for b in layer: functions.extend(b.function)
+
+        block_index = row
+        insert_index = 0
+        x_offset = 0
+        if column + 1 < len(self.blocks):
+            next_layer = self.blocks[column + 1]
+            for b in next_layer:
+                x_offset = b.x
+                assert b.prev
+                if layer.index(b.prev) > block_index:
+                    break
+                elif layer.index(b.prev) == block_index:
+                    if block.function.index(b.path[-1]) > f:
+                        break
+
+                insert_index += 1
+        else:
+            next_layer = []
+            self.blocks.append(next_layer)
+            x_offset = block.x + max(map(lambda f: len(f.name) * FONT_WIDTH + 10, functions)) + 75
+
+        y_offset = f * (BOX_HEIGHT + 10)
+        fun_list = []
+        callees = set(map(lambda c: c[1], fun.callees))
+        for ep in callees:
+            callee = all_functions[ep]
+            fun_list.append(callee)
+
+        if len(fun_list) > 0:
+            next_layer.insert(insert_index, Block(
+                block,
+                block.path + [fun],
+                fun_list, 
+                x_offset,
+                block.y - y_offset + len(fun_list) * (BOX_HEIGHT + 10) / 2 - (BOX_HEIGHT + 10) / 2,
+                block.y - y_offset,
+                column + 1))
+            
+        # Rebalance layers
+        self.rebalance_layers(column)
+        
+    def rebalance_layers(self, column: int):
+        for layer in self.blocks[column + 1:]:
+            functions = []
+            for b in layer: functions.extend(b.function)
+            if len(functions) == 0: continue
+            x_offset = max(map(lambda f: len(f.name) * FONT_WIDTH + 10, functions)) + 75
+            
+            # Reset positions
+            for block in layer:
+                assert block.prev
+                block.x = block.prev.x + x_offset
+                block.prev_y = block.prev.y - block.prev.function.index(block.path[-1]) * (BOX_HEIGHT + 10)
+                block.y = block.prev_y + ((BOX_HEIGHT + 10) * len(block.function)) / 2 - (BOX_HEIGHT + 10) / 2
+
+            shift_layer(layer)
+
+    def on_mouse_move(self, pos: tuple[float, float]):
+        super().on_mouse_move(pos) # type: ignore
+
+        self.hovered = None
+        for column, layer in enumerate(self.blocks):
+            for r, block in enumerate(layer):
+                x, offset_y = block.x, block.y
+                for f, fun in enumerate(block.function):
+                    if (x <= pos[0] <= x + len(fun.name) * FONT_WIDTH + 15) and (offset_y - BOX_HEIGHT <= pos[1] <= offset_y):
+                        self.hovered = fun.ep
+                        break
+                    offset_y -= BOX_HEIGHT + 10
+
+        self.update_hover()
+
+    def update_hover(self):
+        self.canvas.after.clear()
+        if self.hovered is None:
+            return
+
+        with self.canvas.after:
+            for layer in self.blocks:
+                for block in layer:
+                    for f, fun in enumerate(block.function):
+                        if fun.ep == self.hovered:
+                            x, y = block.x, block.y
+                            offset_y = y - f * (BOX_HEIGHT + 10)
+
+                            Color(*get_color_from_hex("#64B5F655"))
+                            Rectangle(pos=(x, offset_y - BOX_HEIGHT), size=(len(fun.name) * FONT_WIDTH + 15, BOX_HEIGHT))
 
     def update_graphics(self):
-        self.update_blocks()
 
-        def draw_box(text: str, x: float, y: float, cycle: bool = False) -> float:
+        def draw_box(text: str, x: float, y: float, cycle: bool = False, color = (1, 1, 1, 1)):
             label = CoreLabel(text=text, font_size=14 * SCALE_FACTOR, font_name=FONT_NAME)
             label.refresh()
             w, h = label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR
-            Color(1, 1, 1, 1)
+            Color(*color)
             Line(width=0.5, rectangle=(x, y - h - 10, w + 10, h + 10))
             if cycle:
                 Color(*get_color_from_hex("#FF5555"))
             else: 
                 Color(*get_color_from_hex("#DCDCAA"))
             Rectangle(pos=(x + 5, y - h - 5), size=(w, h), texture=label.texture)
-            return w + 10
         
-        def draw_layer(blocks: list[Block]):
-            for block in blocks:
+        def draw_layer(index: int):
+            layer = self.blocks[index]
+            next_layer = None
+            if index + 1 < len(self.blocks):
+                next_layer = self.blocks[index + 1]
+
+            for r, block in enumerate(layer):
                 x, y = block.x, block.y
                 Color(1, 1, 1, 1)
                 center = block.prev_y - BOX_HEIGHT / 2
 
-                PushMatrix()
-                Translate(x - 70, center - 5)
-                Scale(10 / 512, 10 / 512, 1)
-                Svg("ui/resources/minus.svg")
-                PopMatrix()
+                x1, y1 = x - 70, center - 5
+                self.minus.append(Icon(index, r, 0, x1, y1))
+                Rectangle(pos=(x1, y1), size=(10, 10), texture=self.minus_texture)
                 Line(width=0.5, points=[x - 60, center, x - 10, y, x, y])
 
                 offset_y = y
-                for fun in block.function:
-                    draw_box(fun.name, x, offset_y, cycle=fun in block.path)
-                    offset_y -= BOX_HEIGHT + 10
-        
-        with self.canvas:
-            w = draw_box(self.fun.name, 0, 0)
+                for f, fun in enumerate(block.function):
+                    if len(fun.callees) > 0 and not any(map(lambda b: b.prev == block and b.path[-1] == fun, next_layer or [])):
+                        # Render plus icon if there are callees and the next layer for the function is not open
+                        x2, y2 = x + len(fun.name) * FONT_WIDTH + 15, offset_y - BOX_HEIGHT / 2 - 5
+                        self.plus.append(Icon(index, r, f, x2, y2))
+                        Color(1, 1, 1, 1)
+                        Rectangle(pos=(x2, y2), size=(10, 10), texture=self.plus_texture)
 
-            for layer in self.blocks:
-                draw_layer(layer)
+                    if fun in duplicate_functions:
+                        color = COLORS[fun.ep % len(COLORS)]
+                    else: color = (1, 1, 1, 1)
+
+                    draw_box(fun.name, x, offset_y, cycle=fun in block.path, color=color)
+                    offset_y -= BOX_HEIGHT + 10
+
+        functions = set()
+        duplicate_functions = set()
+        for layer in self.blocks:
+            for block in layer:
+                for fun in block.function:
+                    if fun in functions:
+                        duplicate_functions.add(fun)
+                    else:
+                        functions.add(fun)
+
+        self.canvas.clear()
+        with self.canvas:
+            self.plus.clear()
+            self.minus.clear()
+
+            for i in range(len(self.blocks)):
+                draw_layer(i)
+
+    def on_touch_down(self, touch):
+        if super().on_touch_down(touch): return True
+        if touch.button != 'left': return False
+        for icon in self.plus:
+            if (icon.x <= touch.x <= icon.x + 10) and (icon.y <= touch.y <= icon.y + 10):
+                self.open(icon.column, icon.row, icon.f)
+                self.update_graphics()
+                return True
+        for icon in self.minus:
+            if (icon.x <= touch.x <= icon.x + 10) and (icon.y <= touch.y <= icon.y + 10):
+                self.close(icon.column, icon.row, icon.f)
+                self.update_graphics()
+                return True
 
 class CallGraphPanel(BoxLayout):
     tab: CallGraphTab

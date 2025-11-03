@@ -529,6 +529,15 @@ class Dock(KWidget, BaseDock):
         self.last_dragged_panel: DockTab | None = None
         Window.bind(mouse_pos=lambda *args: self.draw_dragged_panel())
 
+    def clear_widgets(self):
+        super().clear_widgets(children=None)
+        self._active_panel = None
+        self.dragged_panel = None
+        self.last_dragged_panel = None
+        self.first_panel = None
+        self.second_panel = None
+        self.splitter = None
+
     def draw_dragged_panel(self):
         self.canvas.after.clear()
         if not self.dragged_panel: return
