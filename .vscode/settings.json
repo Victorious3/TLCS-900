@@ -1,4 +1,7 @@
 {
   "python.analysis.typeCheckingMode": "basic",
-  "python.terminal.activateEnvironment": true
+  "python.terminal.activateEnvironment": true,
+  "files.exclude": {
+    "**/.venv": true
+  }
 }

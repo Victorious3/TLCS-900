@@ -20,7 +20,8 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
 
-# Patch widget class
+
+# Patch widget class TODO Handle on_leave when children move out of view
 def on_mouse_move(self: Widget, pos):
     hovered = getattr(self, "_hovered", False)
     if self.collide_point(*pos):
@@ -58,14 +59,14 @@ def graph_tmpfolder() -> str:
 def app() -> "DisApp":
     return cast("DisApp", App.get_running_app())
 
-def find_font_height():
+def find_font_height() -> tuple[int, int]:
     label = Label(
         text = "M",
         font_name = FONT_NAME,
         font_size = FONT_SIZE
     )
     label.texture_update()
-    return label.texture_size
+    return label.texture_size # type: ignore
 
 FONT_WIDTH, FONT_HEIGHT = find_font_height()
 
@@ -111,6 +112,7 @@ from .analyzer import AnalyzerPanel, AnalyzerFilter, AnalyzerTab
 from .context_menu import ContextMenuBehavior
 from .popup import FunctionAnalyzerPopup
 from .dock.dock import BaseDock, Dock, Orientation, SerializableTab, DockSplitter, DockPanel
+from .call_graph import CallGraphPanel, CallGraphTab
 
 class NavigationListing(NavigationAction):
     def __init__(self, panel: "ListingPanel | None", offset: int):
@@ -553,7 +555,7 @@ class DisApp(App):
     
     def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[GraphTab], None] | None = None):
         if not self.project.functions:
-            self.analyze_functions(lambda: self.open_function_graph(fun_name, rescale))
+            self.analyze_functions(lambda: self.open_function_graph(fun_name, rescale, callback))
             return
 
         fun = self.find_function(fun_name)
@@ -564,7 +566,6 @@ class DisApp(App):
                 tab.select()
                 return
         
-        # Otherwise we open a new tab
         tab = GraphTab(fun.name)
         panel = FunctionPanel(fun, tab)
         tab.add_widget(panel)
@@ -577,6 +578,24 @@ class DisApp(App):
 
         Clock.schedule_once(after, 0)
 
+    def open_call_graph(self, fun_name: str):
+        if not self.project.functions:
+            self.analyze_functions(lambda: self.open_call_graph(fun_name))
+            return
+
+        fun = self.find_function(fun_name)
+        if not fun: return
+
+        for tab in self.main_dock.iterate_panels():
+            if isinstance(tab, CallGraphTab) and tab.fun == fun:
+                tab.select()
+                return
+        
+        tab = CallGraphTab(fun)
+        panel = CallGraphPanel(fun, tab)
+        tab.add_widget(panel)
+
+        app().main_dock.add_tab(tab, reverse=True)
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
         if "ctrl" in modifiers:

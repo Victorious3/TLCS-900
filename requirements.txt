@@ -4,3 +4,5 @@ pytreemap
 graphviz
 pyyaml
 platformdirs
+cvxpy
+numpy

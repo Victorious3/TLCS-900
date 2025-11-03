@@ -182,8 +182,7 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
         super().on_mouse_move(pos) # type: ignore
         if not self.panel.tab.is_visible(): return
             
-        x, y = self.to_widget(*pos)
-
+        x, y = pos
         last = self.hovered_label
         self.hovered_label = None
         for label in self.labels:
@@ -343,14 +342,19 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
                         label.text = line
                         label.refresh()
 
-                        Rectangle(texture=label.texture, size=(label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR), pos=(x + 8, y + (len(lines) - i - 1) * SVG_FONT_HEIGHT * 1.05 / SCALE_FACTOR + 8))
+                        Rectangle(
+                            texture=label.texture, 
+                            size=(label.texture.size[0] / SCALE_FACTOR, 
+                                  label.texture.size[1] / SCALE_FACTOR), 
+                            pos=(x + 8, 
+                                 y + (len(lines) - i - 1) * SVG_FONT_HEIGHT * 1.05 / SCALE_FACTOR + 8)
+                        )
                         
                     Line(width=1.1, rectangle=(x, y, w, h))
 
 class ScatterPlaneNoTouch(ScatterPlane):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.svg: FunctionSvg
 
     def on_touch_down(self, touch):
         if "multitouch_sim" in touch.profile: 
@@ -379,7 +383,6 @@ class FunctionPanel(BoxLayout):
         self.svg = FunctionSvg(self.fun, self)
         self.stencil = StencilView(size_hint=(1, 1))
         self.scatter = ScatterPlaneNoTouch(do_rotation=False, do_scale=True, do_translation=True, size_hint=(1, 1))
-        self.scatter.svg = self.svg
         self.scatter.add_widget(self.svg)
         self.stencil.add_widget(self.scatter)
         self.add_widget(self.stencil)

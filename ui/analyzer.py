@@ -77,6 +77,8 @@ class AnalyzerButtons(RelativeLayout):
             app().open_function_graph(data[0])
         elif action == "listing":
             app().open_function_listing(data[0])
+        elif action == "calls":
+            app().open_call_graph(data[0])
 
 class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
     def __init__(self, **kwargs):
