@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-import time
+
 from ui.dock.dock import SerializableTab
 from ui.function_graph import SCALE_FACTOR, ScatterPlaneNoTouch
 from ui.main import FONT_NAME, app
@@ -12,7 +12,9 @@ from kivy.graphics import Color, Rectangle, Line, Fbo
 from kivy.graphics.svg import Svg
 from kivy.core.text import Label as CoreLabel
 from kivy.utils import get_color_from_hex
-from kivy.metrics import dp
+from kivy.metrics import Metrics
+from kivy.graphics.transformation import Matrix
+from kivy.clock import Clock
 
 from .kivytypes import KWidget
 from .arrow import COLORS
@@ -126,7 +128,7 @@ def vertical_nonoverlap_qp(ideal_y, heights):
     return y_opt.tolist()
 
 def shift_layer(blocks: list[Block]):
-    ys = [block.y for block in blocks]
+    ys = [block.y - len(block.function) * (BOX_HEIGHT + 10) / 2 + (BOX_HEIGHT + 10) / 2 for block in blocks]
     heights = [float(len(block.function) * (BOX_HEIGHT + 10) + 20) for block in blocks]
     optimized_ys = vertical_nonoverlap_qp(ys, heights)
     for block, y in zip(blocks, optimized_ys):
@@ -155,7 +157,6 @@ class CallGraph(KWidget, Widget):
 
         self.open(0, 0, 0) # open the root function
         self.hovered: int | None = None
-
 
     def serialize(self, data: dict):
         layers = []
@@ -256,7 +257,7 @@ class CallGraph(KWidget, Widget):
                 block.path + [fun],
                 fun_list, 
                 x_offset,
-                block.y - y_offset + len(fun_list) * (BOX_HEIGHT + 10) / 2 - (BOX_HEIGHT + 10) / 2,
+                block.y - y_offset,
                 block.y - y_offset,
                 column + 1))
             
@@ -283,10 +284,10 @@ class CallGraph(KWidget, Widget):
         super().on_mouse_move(pos) # type: ignore
 
         self.hovered = None
-        for column, layer in enumerate(self.blocks):
-            for r, block in enumerate(layer):
+        for layer in self.blocks:
+            for block in layer:
                 x, offset_y = block.x, block.y
-                for f, fun in enumerate(block.function):
+                for fun in block.function:
                     if (x <= pos[0] <= x + len(fun.name) * FONT_WIDTH + 15) and (offset_y - BOX_HEIGHT <= pos[1] <= offset_y):
                         self.hovered = fun.ep
                         break
@@ -403,3 +404,11 @@ class CallGraphPanel(BoxLayout):
         self.stencil.add_widget(self.scatter)
         self.add_widget(self.stencil)
         self.graph.update_graphics()
+
+        Clock.schedule_once(lambda dt: self.move_to_initial_pos(), 0)
+
+    def move_to_initial_pos(self):
+        self.scatter.apply_transform(Matrix().scale(Metrics.density, Metrics.density, Metrics.density))
+        x = self.stencil.x + self.stencil.width / 2
+        y = self.stencil.y + self.stencil.height / 2
+        self.scatter._set_pos((x, y))
