@@ -141,7 +141,9 @@ class CallGraph(KWidget, Widget):
         self.panel = panel
         self.bind(pos=self.update_graphics, size=self.update_graphics)
 
-        self.blocks = [[Block(None, [], [self.fun], 0, 0, 0, 0)]]
+        # Callees open to the right and callers to the left
+        self.callees = [[Block(None, [], [self.fun], 0, 0, 0, 0)]]
+        self.callers = [[Block(None, [], [self.fun], 0, 0, 0, 0)]]
         self.plus: list[Icon] = []
         self.minus: list[Icon] = []
 
@@ -155,13 +157,14 @@ class CallGraph(KWidget, Widget):
         fbo.draw()
         self.minus_texture = fbo.texture
 
-        self.open(0, 0, 0) # open the root function
+        self.open_center() # open the root function
         self.hovered: int | None = None
 
     def serialize(self, data: dict):
-        layers = []
-        prev_layer = None
-        for layer in self.blocks:
+        callers = []
+        callees = []
+
+        def serialize_layer(prev_layer: list[Block] | None, layer: list[Block]) -> list[dict]:
             layer_data = []
             for block in layer:
                 block_data = {
@@ -170,16 +173,28 @@ class CallGraph(KWidget, Widget):
                     "functions": [f.ep for f in block.function]
                 }
                 layer_data.append(block_data)
-            layers.append(layer_data)
+            return layer_data
+        
+        prev_layer = None
+        for layer in self.callees:
+            callees.append(serialize_layer(prev_layer, layer))
             prev_layer = layer
-        data["layers"] = layers
+        prev_layer = None
+        for layer in self.callers:
+            callers.append(serialize_layer(prev_layer, layer))
+            prev_layer = layer
+
+        data["callees"] = callees
+        data["callers"] = callers
 
     def deserialize(self, data: dict):
-        self.blocks.clear()
-        prev_layer = []
+        self.callees.clear()
+        self.callers.clear()
+
         functions = app().project.functions
         assert functions
-        for i, layer_data in enumerate(data.get("layers", [])):
+
+        def deserialize_layer(prev_layer: list[Block], layer_data: list[dict]) -> list[Block]:
             layer = []
             for block_data in layer_data:
                 prev_index = block_data["prev_index"]
@@ -190,34 +205,62 @@ class CallGraph(KWidget, Widget):
                     x=0, y=0, prev_y=0, layer=i
                 )
                 layer.append(block)
-            self.blocks.append(layer)
-            prev_layer = layer
+            return layer
 
-        self.rebalance_layers(0)
+        prev_layer = []
+        for i, layer_data in enumerate(data.get("callees", [])):
+            prev_layer = deserialize_layer(prev_layer, layer_data)
+            self.callees.append(prev_layer)
+
+        prev_layer = []
+        for i, layer_data in enumerate(data.get("callers", [])):
+            prev_layer = deserialize_layer(prev_layer, layer_data)
+            self.callers.append(prev_layer)
+
+        self.rebalance_layers(0, direction=1)
+        self.rebalance_layers(0, direction=-1)
         self.update_graphics()
 
-    def close(self, column: int, row: int, f: int):
-        layer = self.blocks[column]
+    def open_center(self):
+        all_functions = app().project.functions
+        assert all_functions
+        
+        # Open both callers and callees for the center function
+        center_callees = self.callees[0][0]
+        center_callers = self.callers[0][0]
+
+        callee_functions = list({all_functions[ep] for i, ep in self.fun.callees})
+        self.callees.append([Block(center_callees, [self.fun], callee_functions, len(self.fun.name) * FONT_WIDTH + 85, 0, 0, 1)])
+        
+        caller_functions = list({all_functions[ep] for i, ep in self.fun.callers})
+        self.callers.append([Block(center_callers, [self.fun], caller_functions, max(map(lambda c: len(c.name) * FONT_WIDTH + 85, caller_functions), default=0), 0, 0, -1)])
+
+        self.update_graphics()
+
+    def close(self, column: int, row: int):
+        blocks = self.callees if column >= 0 else self.callers
+        layer = blocks[abs(column)]
         removed = [layer.pop(row)]
 
         if len(layer) == 0:
-            self.blocks.remove(layer)
+            blocks.remove(layer)
 
-        for layer in self.blocks[column:]:
+        for layer in blocks[abs(column):]:
             for block in layer[:]:
                 if block.prev in removed:
                     layer.remove(block)
                     removed.append(block)
             if len(layer) == 0:
-                self.blocks.remove(layer)
+                blocks.remove(layer)
 
-        self.rebalance_layers(column - 1)
+        self.rebalance_layers(abs(column) - 1, column > 0 and 1 or -1)
 
     def open(self, column: int, row: int, f: int):
         all_functions = app().project.functions
         assert all_functions
-
-        layer = self.blocks[column]
+        
+        blocks = self.callees if column >= 0 else self.callers
+        layer = blocks[abs(column)]
         block = layer[row]
         fun = block.function[f]
 
@@ -227,8 +270,8 @@ class CallGraph(KWidget, Widget):
         block_index = row
         insert_index = 0
         x_offset = 0
-        if column + 1 < len(self.blocks):
-            next_layer = self.blocks[column + 1]
+        if abs(column) + 1 < len(blocks):
+            next_layer = blocks[abs(column) + 1]
             for b in next_layer:
                 x_offset = b.x
                 assert b.prev
@@ -241,12 +284,12 @@ class CallGraph(KWidget, Widget):
                 insert_index += 1
         else:
             next_layer = []
-            self.blocks.append(next_layer)
-            x_offset = block.x + max(map(lambda f: len(f.name) * FONT_WIDTH + 10, functions)) + 75
+            blocks.append(next_layer)
+            x_offset = (block.x + max(map(lambda f: len(f.name) * FONT_WIDTH + 10, functions)) + 75) if column > 0 else block.x
 
         y_offset = f * (BOX_HEIGHT + 10)
         fun_list = []
-        callees = set(map(lambda c: c[1], fun.callees))
+        callees = set(map(lambda c: c[1], fun.callees if column >= 0 else fun.callers))
         for ep in callees:
             callee = all_functions[ep]
             fun_list.append(callee)
@@ -259,13 +302,14 @@ class CallGraph(KWidget, Widget):
                 x_offset,
                 block.y - y_offset,
                 block.y - y_offset,
-                column + 1))
+                column + 1 if column >= 0 else column - 1))
             
         # Rebalance layers
-        self.rebalance_layers(column)
+        self.rebalance_layers(abs(column), column > 0 and 1 or -1)
         
-    def rebalance_layers(self, column: int):
-        for layer in self.blocks[column + 1:]:
+    def rebalance_layers(self, column: int, direction: int = 1):
+        blocks = self.callees if direction >= 0 else self.callers
+        for layer in blocks[column + 1:]:
             functions = []
             for b in layer: functions.extend(b.function)
             if len(functions) == 0: continue
@@ -284,7 +328,7 @@ class CallGraph(KWidget, Widget):
         super().on_mouse_move(pos) # type: ignore
 
         self.hovered = None
-        for layer in self.blocks:
+        for layer in (self.callees + self.callers):
             for block in layer:
                 x, offset_y = block.x, block.y
                 for fun in block.function:
@@ -301,7 +345,7 @@ class CallGraph(KWidget, Widget):
             return
 
         with self.canvas.after:
-            for layer in self.blocks:
+            for layer in (self.callees + self.callers):
                 for block in layer:
                     for f, fun in enumerate(block.function):
                         if fun.ep == self.hovered:
@@ -326,26 +370,42 @@ class CallGraph(KWidget, Widget):
             Rectangle(pos=(x + 5, y - h - 5), size=(w, h), texture=label.texture)
         
         def draw_layer(index: int):
-            layer = self.blocks[index]
+            blocks = self.callees if index > 0 else self.callers
+
+            layer = blocks[abs(index)]
             next_layer = None
-            if index + 1 < len(self.blocks):
-                next_layer = self.blocks[index + 1]
+            if abs(index) + 1 < len(blocks):
+                next_layer = blocks[abs(index) + 1]
 
             for r, block in enumerate(layer):
                 x, y = block.x, block.y
+                if index < 0: x = -x
                 Color(1, 1, 1, 1)
                 center = block.prev_y - BOX_HEIGHT / 2
 
-                x1, y1 = x - 70, center - 5
-                self.minus.append(Icon(index, r, 0, x1, y1))
-                Rectangle(pos=(x1, y1), size=(10, 10), texture=self.minus_texture)
-                Line(width=0.5, points=[x - 60, center, x - 10, y, x, y])
+                offset_x = (len(block.path[-1].name) * FONT_WIDTH + 15) if len(block.path) > 0 else 0
+                x1, y1 = x - 70 if index > 0 else x + offset_x + 60, center - 5
+
+                if abs(index) > 1:
+                    self.minus.append(Icon(index, r, 0, x1, y1))
+                    Rectangle(pos=(x1, y1), size=(10, 10), texture=self.minus_texture)
+                else:
+                    if index > 0:
+                        Line(width=0.5, points=[x - 70, center, x - 60, center])
+                    else:
+                        Line(width=0.5, points=[x + offset_x + 70, center, x + offset_x + 60, center])
+
+                if index > 0:
+                    Line(width=0.5, points=[x - 60, center, x - 10, y, x, y])
+                else:
+                    Line(width=0.5, points=[x + offset_x + 60, center, x + offset_x + 10, y, x, y])
 
                 offset_y = y
                 for f, fun in enumerate(block.function):
-                    if len(fun.callees) > 0 and not any(map(lambda b: b.prev == block and b.path[-1] == fun, next_layer or [])):
+                    render_plus = len(fun.callees) > 0 if index > 0 else len(fun.callers) > 0
+                    if render_plus and not any(map(lambda b: b.prev == block and b.path[-1] == fun, next_layer or [])):
                         # Render plus icon if there are callees and the next layer for the function is not open
-                        x2, y2 = x + len(fun.name) * FONT_WIDTH + 15, offset_y - BOX_HEIGHT / 2 - 5
+                        x2, y2 = (x + len(fun.name) * FONT_WIDTH + 15) if index > 0 else x - 10, offset_y - BOX_HEIGHT / 2 - 5
                         self.plus.append(Icon(index, r, f, x2, y2))
                         Color(1, 1, 1, 1)
                         Rectangle(pos=(x2, y2), size=(10, 10), texture=self.plus_texture)
@@ -359,7 +419,7 @@ class CallGraph(KWidget, Widget):
 
         functions = set()
         duplicate_functions = set()
-        for layer in self.blocks:
+        for layer in (self.callees + self.callers):
             for block in layer:
                 for fun in block.function:
                     if fun in functions:
@@ -372,8 +432,13 @@ class CallGraph(KWidget, Widget):
             self.plus.clear()
             self.minus.clear()
 
-            for i in range(len(self.blocks)):
+            draw_box(self.fun.name, 0, 0)
+
+            for i in range(1, len(self.callees)):
                 draw_layer(i)
+
+            for i in range(1, len(self.callers)):
+                draw_layer(-i)
 
     def on_touch_down(self, touch):
         if super().on_touch_down(touch): return True
@@ -385,7 +450,7 @@ class CallGraph(KWidget, Widget):
                 return True
         for icon in self.minus:
             if (icon.x <= touch.x <= icon.x + 10) and (icon.y <= touch.y <= icon.y + 10):
-                self.close(icon.column, icon.row, icon.f)
+                self.close(icon.column, icon.row)
                 self.update_graphics()
                 return True
 
@@ -404,8 +469,6 @@ class CallGraphPanel(BoxLayout):
         self.stencil.add_widget(self.scatter)
         self.add_widget(self.stencil)
         self.graph.update_graphics()
-
-        Clock.schedule_once(lambda dt: self.move_to_initial_pos(), 0)
 
     def move_to_initial_pos(self):
         self.scatter.apply_transform(Matrix().scale(Metrics.density, Metrics.density, Metrics.density))

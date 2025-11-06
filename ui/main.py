@@ -595,6 +595,7 @@ class DisApp(App):
         tab = CallGraphTab(fun)
         panel = CallGraphPanel(fun, tab)
         tab.add_widget(panel)
+        Clock.schedule_once(lambda dt: panel.move_to_initial_pos(), 0)
 
         app().main_dock.add_tab(tab, reverse=True)
 
