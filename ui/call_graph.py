@@ -194,7 +194,7 @@ class CallGraph(KWidget, Widget):
         functions = app().project.functions
         assert functions
 
-        def deserialize_layer(prev_layer: list[Block], layer_data: list[dict]) -> list[Block]:
+        def deserialize_layer(prev_layer: list[Block], layer_data: list[dict], index: int) -> list[Block]:
             layer = []
             for block_data in layer_data:
                 prev_index = block_data["prev_index"]
@@ -202,19 +202,19 @@ class CallGraph(KWidget, Widget):
                     prev=prev_layer[prev_index] if prev_index is not None else None,
                     path=[functions[ep] for ep in block_data["path"]],
                     function=[functions[ep] for ep in block_data["functions"]],
-                    x=0, y=0, prev_y=0, layer=i
+                    x=0, y=0, prev_y=0, layer=index
                 )
                 layer.append(block)
             return layer
 
         prev_layer = []
         for i, layer_data in enumerate(data.get("callees", [])):
-            prev_layer = deserialize_layer(prev_layer, layer_data)
+            prev_layer = deserialize_layer(prev_layer, layer_data, i)
             self.callees.append(prev_layer)
 
         prev_layer = []
         for i, layer_data in enumerate(data.get("callers", [])):
-            prev_layer = deserialize_layer(prev_layer, layer_data)
+            prev_layer = deserialize_layer(prev_layer, layer_data, -i)
             self.callers.append(prev_layer)
 
         self.rebalance_layers(0, direction=1)
@@ -331,6 +331,7 @@ class CallGraph(KWidget, Widget):
         for layer in (self.callees + self.callers):
             for block in layer:
                 x, offset_y = block.x, block.y
+                if block.layer < 0: x = -x
                 for fun in block.function:
                     if (x <= pos[0] <= x + len(fun.name) * FONT_WIDTH + 15) and (offset_y - BOX_HEIGHT <= pos[1] <= offset_y):
                         self.hovered = fun.ep
@@ -350,6 +351,7 @@ class CallGraph(KWidget, Widget):
                     for f, fun in enumerate(block.function):
                         if fun.ep == self.hovered:
                             x, y = block.x, block.y
+                            if block.layer < 0: x = -x
                             offset_y = y - f * (BOX_HEIGHT + 10)
 
                             Color(*get_color_from_hex("#64B5F655"))
