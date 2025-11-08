@@ -384,16 +384,28 @@ class FunctionState:
 
 class Underflow(Exception): pass
 
+from ui.main import app 
+
 class Function:
-    def __init__(self, ep: int, name: str, start: CodeBlock, blocks: dict[int, CodeBlock]):
+    def __init__(self, ep: int, start: CodeBlock, blocks: dict[int, CodeBlock]):
         self.ep = ep
-        self.name = name
         self.start = start
         self.blocks = blocks
         self.state: FunctionState | None = None
         self.underflow = False
         self.callers: list[tuple[int, int]]
         self.callees: list[tuple[int, int]]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def name(self) -> str:
+        return str(app().project.ob.label(self.ep))
+    
+    @name.setter
+    def name(self, name: str):
+        app().project.rename_label(self.ep, name)
 
     def serialize(self) -> dict:
         res = {}
@@ -425,7 +437,7 @@ class Function:
 
         ep: int = data["start"]
         start = blocks[ep]
-        fun = Function(ep, str(proj.ob.labels[ep]), start, blocks)
+        fun = Function(ep, start, blocks)
         fun.underflow = data["underflow"]
 
         fun.callers = [(c["loc"], c["fun"]) for c in data["callers"]]
@@ -571,6 +583,12 @@ class Project:
         self.pool: InsnPool
         self.file_len = 0
         self.functions: dict[int, Function] | None = None
+
+    def rename_label(self, ep: int, name: str):
+        label = self.ob.label(ep)
+        if label:
+            label.name = name
+            app().main_dock.refresh(ep = ep)
 
     def get_project_id(self) -> str:
         return md5(str(self.path).encode()).hexdigest()
@@ -992,7 +1010,6 @@ class Project:
     def extract_function(self, ep: int):
         section = self.sections.get(ep)
         if not section: return None
-        name = str(section.labels[0])
 
         blocks: dict[int, CodeBlock] = {}    
         def next_block(ep: int, pred: CodeBlock | None = None, branch = False) -> CodeBlock | None:
@@ -1066,7 +1083,7 @@ class Project:
 
         start = next_block(ep)
         assert start is not None
-        fun = Function(ep, name, start, blocks)
+        fun = Function(ep, start, blocks)
         return fun
     
     def get_data_slice(self, start: int, end: int) -> bytes:

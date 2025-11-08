@@ -68,6 +68,12 @@ class CallGraphTab(SerializableTab):
         if "x" in data and "y" in data:
             self.content.scatter._set_pos((data["x"], data["y"]))
 
+    def refresh(self, **kwargs):
+        self.text = self.content.fun.name
+        self.content.graph.rebalance_layers(0, direction=1)
+        self.content.graph.rebalance_layers(0, direction=-1)
+        self.content.graph.update_graphics()
+
 @dataclass
 class Block:
     prev: "Block | None"
@@ -269,7 +275,6 @@ class CallGraph(KWidget, Widget):
 
         block_index = row
         insert_index = 0
-        x_offset = 0
         if abs(column) + 1 < len(blocks):
             next_layer = blocks[abs(column) + 1]
             for b in next_layer:
@@ -285,7 +290,6 @@ class CallGraph(KWidget, Widget):
         else:
             next_layer = []
             blocks.append(next_layer)
-            x_offset = (block.x + max(map(lambda f: len(f.name) * FONT_WIDTH + 10, functions)) + 75) if column > 0 else block.x
 
         y_offset = f * (BOX_HEIGHT + 10)
         fun_list = []
@@ -299,9 +303,7 @@ class CallGraph(KWidget, Widget):
                 block,
                 block.path + [fun],
                 fun_list, 
-                x_offset,
-                block.y - y_offset,
-                block.y - y_offset,
+                0, 0, 0, # Don't set these, rebalancing will do it
                 column + 1 if column >= 0 else column - 1))
             
         # Rebalance layers
@@ -309,9 +311,15 @@ class CallGraph(KWidget, Widget):
         
     def rebalance_layers(self, column: int, direction: int = 1):
         blocks = self.callees if direction >= 0 else self.callers
+        prev_layer = blocks[column]
         for layer in blocks[column + 1:]:
             functions = []
-            for b in layer: functions.extend(b.function)
+            if direction > 0:
+                for b in prev_layer: functions.extend(b.function)
+            else:
+                for b in layer: functions.extend(b.function)
+
+
             if len(functions) == 0: continue
             x_offset = max(map(lambda f: len(f.name) * FONT_WIDTH + 10, functions)) + 75
             
@@ -323,6 +331,7 @@ class CallGraph(KWidget, Widget):
                 block.y = block.prev_y + ((BOX_HEIGHT + 10) * len(block.function)) / 2 - (BOX_HEIGHT + 10) / 2
 
             shift_layer(layer)
+            prev_layer = layer
 
     def on_mouse_move(self, pos: tuple[float, float]):
         super().on_mouse_move(pos) # type: ignore
@@ -333,7 +342,7 @@ class CallGraph(KWidget, Widget):
                 x, offset_y = block.x, block.y
                 if block.layer < 0: x = -x
                 for fun in block.function:
-                    if (x <= pos[0] <= x + len(fun.name) * FONT_WIDTH + 15) and (offset_y - BOX_HEIGHT <= pos[1] <= offset_y):
+                    if (x <= pos[0] <= x + len(fun.name) * FONT_WIDTH + 10) and (offset_y - BOX_HEIGHT <= pos[1] <= offset_y):
                         self.hovered = fun.ep
                         break
                     offset_y -= BOX_HEIGHT + 10
@@ -355,14 +364,14 @@ class CallGraph(KWidget, Widget):
                             offset_y = y - f * (BOX_HEIGHT + 10)
 
                             Color(*get_color_from_hex("#64B5F655"))
-                            Rectangle(pos=(x, offset_y - BOX_HEIGHT), size=(len(fun.name) * FONT_WIDTH + 15, BOX_HEIGHT))
+                            Rectangle(pos=(x, offset_y - BOX_HEIGHT), size=(len(fun.name) * FONT_WIDTH + 10, BOX_HEIGHT))
 
     def update_graphics(self):
 
         def draw_box(text: str, x: float, y: float, cycle: bool = False, color = (1, 1, 1, 1)):
             label = CoreLabel(text=text, font_size=14 * SCALE_FACTOR, font_name=FONT_NAME)
             label.refresh()
-            w, h = label.texture.size[0] / SCALE_FACTOR, label.texture.size[1] / SCALE_FACTOR
+            w, h = FONT_WIDTH * len(text), FONT_HEIGHT
             Color(*color)
             Line(width=0.5, rectangle=(x, y - h - 10, w + 10, h + 10))
             if cycle:
@@ -385,29 +394,38 @@ class CallGraph(KWidget, Widget):
                 Color(1, 1, 1, 1)
                 center = block.prev_y - BOX_HEIGHT / 2
 
-                offset_x = (len(block.path[-1].name) * FONT_WIDTH + 15) if len(block.path) > 0 else 0
-                x1, y1 = x - 70 if index > 0 else x + offset_x + 60, center - 5
+                assert block.prev
+                if index > 0:
+                    mx = (max(map(lambda f: len(f.name) * FONT_WIDTH + 10, (item for block in blocks[abs(index) - 1] for item in block.function))))
+                    mn = (len(block.path[-1].name) * FONT_WIDTH + 10)
+                    offset_x = -65 - (mx - mn)
+                else:
+                    mx = (max(map(lambda f: len(f.name) * FONT_WIDTH + 10, (item for block in layer for item in block.function))))
+                    mn = (len(block.function[0].name) * FONT_WIDTH + 10)
+                    offset_x = 65 + mn
+
+                x1, y1 = x + offset_x - 10 if index > 0 else x + mx + 65, center - 5
 
                 if abs(index) > 1:
                     self.minus.append(Icon(index, r, 0, x1, y1))
                     Rectangle(pos=(x1, y1), size=(10, 10), texture=self.minus_texture)
                 else:
                     if index > 0:
-                        Line(width=0.5, points=[x - 70, center, x - 60, center])
+                        Line(width=0.5, points=[x + offset_x - 10, center, x + offset_x, center])
                     else:
-                        Line(width=0.5, points=[x + offset_x + 70, center, x + offset_x + 60, center])
+                        Line(width=0.5, points=[x + offset_x + 10, center, x + offset_x, center])
 
                 if index > 0:
-                    Line(width=0.5, points=[x - 60, center, x - 10, y, x, y])
+                    Line(width=0.5, points=[x + offset_x, center, x - 65, center, x - 10, y, x, y])
                 else:
-                    Line(width=0.5, points=[x + offset_x + 60, center, x + offset_x + 10, y, x, y])
+                    Line(width=0.5, points=[x + mn, y, x + 10 + mn, y, x + mx + 10, y, x + mx + 65, center])
 
                 offset_y = y
                 for f, fun in enumerate(block.function):
                     render_plus = len(fun.callees) > 0 if index > 0 else len(fun.callers) > 0
                     if render_plus and not any(map(lambda b: b.prev == block and b.path[-1] == fun, next_layer or [])):
                         # Render plus icon if there are callees and the next layer for the function is not open
-                        x2, y2 = (x + len(fun.name) * FONT_WIDTH + 15) if index > 0 else x - 10, offset_y - BOX_HEIGHT / 2 - 5
+                        x2, y2 = (x + len(fun.name) * FONT_WIDTH + 10) if index > 0 else x - 10, offset_y - BOX_HEIGHT / 2 - 5
                         self.plus.append(Icon(index, r, f, x2, y2))
                         Color(1, 1, 1, 1)
                         Rectangle(pos=(x2, y2), size=(10, 10), texture=self.plus_texture)

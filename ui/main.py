@@ -196,6 +196,10 @@ class ListingTab(SerializableTab):
         self.content.serialize(res)
         return res
     
+    def refresh(self, **kwargs):
+        self.content.rv.redraw_children()
+        self.text = self.content.fun.name
+    
     @classmethod
     def deserialize(cls, data: dict) -> "ListingTab":
         ep = data["function"]
@@ -245,6 +249,9 @@ class GlobalEventBus(EventDispatcher):
 
 class MainDockTab(SerializableTab):
     content: ListingPanel
+
+    def refresh(self, **kwargs):
+        self.content.rv.redraw_children()
 
     def serialize(self) -> dict:
         res = super().serialize()
@@ -432,13 +439,15 @@ class DisApp(App):
     def get_project_ui_file(self) -> Path:
         return dirs.user_config_path / self.project.get_project_id() / "ui_state.json"
     
-    def scroll_to_label(self, label: str, main_panel: ListingPanel | None = None):
+    def scroll_to_label(self, label: int | str, main_panel: ListingPanel | None = None):
         sections = self.project.sections.values()
+        section: Section
         for section in sections:
-            if section.labels and section.labels[0].name == label:
-                logging.info("Goto label: %s at %s", label, format(section.offset, "X"))
-                self.scroll_to_offset(section.offset, main_panel)
-                return
+            if section.labels:
+                if (type(label) is int and section.offset == label) or (type(label) is str and section.labels[0].name == label):
+                    logging.info("Goto label: %s at %s", label, format(section.offset, "X"))
+                    self.scroll_to_offset(section.offset, main_panel)
+                    return
         raise ValueError("Invalid label")
     
     def update_position_history(self, action: NavigationAction):
@@ -523,19 +532,22 @@ class DisApp(App):
             return
         for fun in self.project.functions.values():
             if ep in fun.blocks:
-                self.open_function_graph(fun.name, callback=lambda panel: panel.content.move_to_location(ep))
+                self.open_function_graph(fun.ep, callback=lambda panel: panel.content.move_to_location(ep))
                 return
 
-    def find_function(self, fun_name: str):
+    def find_function(self, fun_name: str | int):
         if not self.project.functions: return None
-        return next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
+        if type(fun_name) is int:
+            return self.project.functions.get(fun_name, None)
+        else:
+            return next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
 
-    def open_function_listing(self, fun_name: str):
+    def open_function_listing(self, ep: int):
         if not self.project.functions:
-            self.analyze_functions(lambda: self.open_function_listing(fun_name))
+            self.analyze_functions(lambda: self.open_function_listing(ep))
             return
         
-        fun = self.find_function(fun_name)
+        fun = self.find_function(ep)
         if not fun: return
 
         panel: FunctionListing | None = None
@@ -554,12 +566,12 @@ class DisApp(App):
 
         app().update_position_history(NavigationListing(panel, fun.ep))
     
-    def open_function_graph(self, fun_name: str, rescale=True, callback: Callable[[GraphTab], None] | None = None):
+    def open_function_graph(self, ep: int, rescale=True, callback: Callable[[GraphTab], None] | None = None):
         if not self.project.functions:
-            self.analyze_functions(lambda: self.open_function_graph(fun_name, rescale, callback))
+            self.analyze_functions(lambda: self.open_function_graph(ep, rescale, callback))
             return
 
-        fun = self.find_function(fun_name)
+        fun = self.find_function(ep)
         if not fun: return
 
         for tab in self.main_dock.iterate_panels():
@@ -579,12 +591,12 @@ class DisApp(App):
 
         Clock.schedule_once(after, 0)
 
-    def open_call_graph(self, fun_name: str):
+    def open_call_graph(self, ep: int):
         if not self.project.functions:
-            self.analyze_functions(lambda: self.open_call_graph(fun_name))
+            self.analyze_functions(lambda: self.open_call_graph(ep))
             return
 
-        fun = self.find_function(fun_name)
+        fun = self.find_function(ep)
         if not fun: return
 
         for tab in self.main_dock.iterate_panels():

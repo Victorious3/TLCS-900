@@ -1,3 +1,4 @@
+from disapi import Insn
 from . import microc
 
 # Constants
@@ -65,8 +66,10 @@ class RReg(Reg):
 class Mem:
     def __init__(self, address, name = None, plain_addr = False):
         location = microc.check_address(address)
-        
-        if name is None and location: 
+
+        self.special = False
+        if name is None and location:
+            self.special = True
             name = location.name
         
         self.name = name
@@ -74,15 +77,13 @@ class Mem:
         self.plain_addr = plain_addr
 
     def datalabel(self, insn):
-        if insn.ibuffer.min <= self.address < insn.ibuffer.max:
-            self.name = insn.obuffer.datalabel(self.address)
-        else:
-            self.name = format(self.address, "X") + "h"
-            insn.obuffer.datalabel(self.address)
+        insn.obuffer.datalabel(self.address)
         
-    def __str__(self):
-        return f"{self.name}" if self.plain_addr else f"({self.name})"
-    
+    def to_str(self, ob):
+        if self.name: name = self.name
+        else: name = ob.label(self.address)
+        return f"{name}" if self.plain_addr else f"({name})"
+
     def __hash__(self):
         return self.address
     

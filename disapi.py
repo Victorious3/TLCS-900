@@ -12,11 +12,8 @@ def insnentry_to_str(entry, ob):
     return entry.opcode + " " + ", ".join(map(lambda v: insn_to_str(v, ob), entry.instructions))
 
 def insn_to_str(insn, ob):
-    if isinstance(insn, Loc):
-        label = ob.label(insn.loc)
-        if label is not None:
-            return str(label)
-        return str(insn.loc)
+    if hasattr(insn, "to_str"):
+        return insn.to_str(ob)
     else:
         return str(insn)
 
@@ -34,6 +31,12 @@ class Loc:
         return self.loc
 
     def __str__(self):
+        return str(self.loc)
+    
+    def to_str(self, ob):
+        label = ob.label(self.loc)
+        if label is not None:
+            return str(label)
         return str(self.loc)
 
 class Branch:

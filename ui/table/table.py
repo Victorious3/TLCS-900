@@ -159,11 +159,11 @@ class ResizableRecycleTable(StencilView, BoxLayout):
                 i += 1
 
     def sort_data(self):
-        self.data.sort(key=lambda row: row[self.ordered_by], reverse=self.reverse == -1)
+        self.data.sort(key=lambda row: str(row[self.ordered_by]), reverse=self.reverse == -1)
         self._update_ui()
 
     def sort_by_column(self, col_index):
-        self.data.sort(key=lambda row: row[col_index], reverse=self.reverse == col_index)
+        self.data.sort(key=lambda row: str(row[col_index]), reverse=self.reverse == col_index)
         self.reverse = -1 if self.reverse == col_index else col_index
         self.ordered_by = col_index
         self._update_ui()

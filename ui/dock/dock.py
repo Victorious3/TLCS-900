@@ -315,6 +315,9 @@ class DockTab(KWidget, RelativeLayout):
     def is_visible(self) -> bool:
         if not self.dock_panel: return False
         return self.dock_panel._current_widget == self
+    
+    # This is for being able to have a callback when the content changes
+    def refresh(self, **kwargs): pass
 
 serializable_panels = {}
 class SerializableTab(DockTab):
@@ -528,6 +531,10 @@ class Dock(KWidget, BaseDock):
         self.dragged_panel: DockTab | None = None
         self.last_dragged_panel: DockTab | None = None
         Window.bind(mouse_pos=lambda *args: self.draw_dragged_panel())
+
+    def refresh(self, **kwargs):
+        for panel in self.iterate_panels():
+            panel.refresh(**kwargs)
 
     def clear_widgets(self):
         super().clear_widgets(children=None)

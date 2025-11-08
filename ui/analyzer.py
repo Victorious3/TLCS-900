@@ -1,13 +1,17 @@
 
+from typing import Any
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.scrollview import ScrollView
 from kivy.metrics import dp
 from kivy.clock import Clock
+from kivy.properties import ObjectProperty
 
 from tcls_900.tlcs_900 import Reg
 
+from .sections import EditableLabel
+from .project import Function
 from .main import HideableTextInput, EscapeTrigger, app, iter_all_children_of_type
 from .main_menu import MenuHandler, MenuItem
 from .context_menu import show_context_menu, ContextMenuBehavior
@@ -47,6 +51,9 @@ class AnalyzerTab(SerializableTab):
         tab.add_widget(analyzer)
         return tab
 
+    def refresh(self, **kwargs):
+        self.content.table.refresh()
+
 class AnalyzerFilter(HideableTextInput, EscapeTrigger):
     def on_escape(self, obj):
         if app().analyzer_panel and app().main_dock.active_content == app().analyzer_panel:
@@ -63,7 +70,7 @@ class AnalyzerFilter(HideableTextInput, EscapeTrigger):
 
 
 HEADER_NAMES = ["name", "navigation", "address", "frequency", "complexity", "input", "clobber", "output", "stack"]
-COLUMN_WIDTHS = [dp(100), dp(100), dp(100), dp(100), dp(100), dp(200), dp(200), dp(200), dp(100)]
+COLUMN_WIDTHS = [dp(200), dp(100), dp(100), dp(100), dp(100), dp(200), dp(200), dp(200), dp(100)]
 
 class AnalyzerButtons(RelativeLayout):
     parent: "AnalyzerTableRow"
@@ -74,23 +81,52 @@ class AnalyzerButtons(RelativeLayout):
     def on_press(self, action: str):
         data = self.parent.data
         if action == "goto":
-            app().scroll_to_label(data[0])
+            app().scroll_to_label(data[0].ep)
         elif action == "graph":
-            app().open_function_graph(data[0])
+            app().open_function_graph(data[0].ep)
         elif action == "listing":
-            app().open_function_listing(data[0])
+            app().open_function_listing(data[0].ep)
         elif action == "calls":
-            app().open_call_graph(data[0])
+            app().open_call_graph(data[0].ep)
+
+class AnalyzerLabel(EditableLabel):
+    function: Function = ObjectProperty(None)
+
+    def __init__(self, fun: Function, **kwargs):
+        super().__init__(**kwargs)
+        self.function = fun
+
+    def refresh(self, **kwargs):
+        self.text = self.function.name
+
+    def on_function(self, instance, value: Function):
+        self.refresh()
+
+    def _on_focus(self, instance, value: bool, *largs):
+        super()._on_focus(instance, value, *largs)
+        if not value:
+            self.function.name = self.text
+
+    def _key_down(self, key, repeat=False):
+        if key[2] == "enter" and self.is_active:
+            self.function.name = self.text
+        return super()._key_down(key, repeat)
 
 class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
     
     @property
-    def first_label(self) -> Widget:
+    def first_label(self) -> AnalyzerLabel:
         return self.children[-1]
+    
+    def refresh_view_attrs(self, rv, index, data):
+        super().refresh_view_attrs(rv, index, data)
+        self.first_label.function = data["data"][0]
+        self.first_label.focus = False
 
     def new_data_cell(self, index) -> Widget:
+        if index == 0: return AnalyzerLabel(self.data[0], height=dp(40))
         if index == 1: return AnalyzerButtons(index)
         return super().new_data_cell(index)
     
@@ -115,6 +151,10 @@ class AnalyzerTable(ResizableRecycleTable):
         super().on_kv_post(base_widget)
         self.update_data()
 
+    def refresh(self, **kwargs):
+        for label in iter_all_children_of_type(self.body, AnalyzerLabel):
+            label.refresh(**kwargs)
+
     def update_data(self):
         project = app().project
         assert project.functions is not None
@@ -123,7 +163,7 @@ class AnalyzerTable(ResizableRecycleTable):
             if not fun.state: continue
             row = []
             # name
-            row.append(fun.name)
+            row.append(fun)
             # Row for buttons, no data
             row.append(0)
             # address

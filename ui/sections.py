@@ -25,6 +25,8 @@ from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, a
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
+from tcls_900.tlcs_900 import Mem, MemReg
+
 class ScrollBar(BoxLayout):
     parent: "main.ListingPanel"
     base_width: float = NumericProperty(0)
@@ -113,9 +115,15 @@ class RV(KWidget, RecycleView):
         self.selection_end = 0
         self.redraw_children()
 
+    def redraw_data(self):
+        for panel in iter_all_children_of_type(self.children[0], SectionData):
+            panel.redraw()
+
     def redraw_children(self):
         for panel in iter_all_children_of_type(self.children[0], SectionColumn):
             panel.redraw()
+        for panel in iter_all_children_of_type(self.children[0], LabelRow):
+            panel.refresh()
 
         max_width = 0
         for data in iter_all_children_of_type(self.children[0], SectionMnemonic):
@@ -175,25 +183,68 @@ class RV(KWidget, RecycleView):
                 if selection_end < end: self.selection_start = selection_start
                 else: self.selection_end = selection_end
 
-        self.redraw_children()
+        self.redraw_data()
 
-class LabelRow(ContextMenuBehavior, TextInput):
-    section = ObjectProperty(None)
-    rv: RV = ObjectProperty(None, allownone=True)
-    
+class EditableLabel(TextInput):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.size_hint = 1, None
-        self.font_size = FONT_SIZE
-        self.font_name = FONT_NAME
-        self.height = LABEL_HEIGHT
         self.background_color = 0, 0, 0, 0
         self.foreground_color = 1, 1, 1, 1
         self.multiline = False
         self.cursor_color = 0, 0, 0, 0
         self.is_active = False
-        self.is_function = False
 
+    def on_double_tap(self):
+        self.cursor_color = (1, 1, 1, 1)
+        if self.is_active:
+            super().on_double_tap()
+        self.is_active = True
+    
+    def _on_focus(self, instance, value: bool, *largs):
+        super()._on_focus(instance, value, *largs)
+        if not value:
+            self.cursor_color = (0, 0, 0, 0)
+            self.is_active = False
+
+    def _key_down(self, key, repeat=False):
+        if (key[2].startswith("cursor") or key[2] in ("del", "backspace")) and not self.is_active:
+            return
+        super()._key_down(key, repeat)
+
+    def delete_selection(self, from_undo=False):
+        if not self.is_active: return
+        return super().delete_selection(from_undo)
+
+    def keyboard_on_textinput(self, window, text):
+        if not self.is_active: return
+        super().keyboard_on_textinput(window, text)
+
+class LabelRow(ContextMenuBehavior, EditableLabel):
+    section = ObjectProperty(None)
+    rv: RV = ObjectProperty(None, allownone=True)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.is_function = False
+        self.font_size = FONT_SIZE
+        self.font_name = FONT_NAME
+        self.height = LABEL_HEIGHT
+
+    def refresh(self, **kwargs):
+        if len(self.section.labels) == 0:
+            self.disabled = True
+            self.opacity = 0
+            self.height = 0
+            self.is_function = False
+        else:
+            self.text = self.section.labels[0].name
+            self.disabled = False
+            self.opacity = 1
+            self.height = LABEL_HEIGHT
+            self.is_function = app().project.is_function(self.section.offset)
+    
     def trigger_context_menu(self, touch) -> bool:
         if self.collide_point(touch.x, touch.y):
             text = self.text
@@ -215,45 +266,19 @@ class LabelRow(ContextMenuBehavior, TextInput):
             ] + [MenuItem("listing", "Open function listing")] if is_function else [])
             return True
         return False
-
-    def on_section(self, instance, value: Section):
-        if len(value.labels) == 0:
-            self.disabled = True
-            self.opacity = 0
-            self.height = 0
-            self.is_function = False
-        else:
-            self.text = value.labels[0].name
-            self.disabled = False
-            self.opacity = 1
-            self.height = LABEL_HEIGHT
-            self.is_function = app().project.is_function(self.section.offset)
-
-    def on_double_tap(self):
-        self.cursor_color = (1, 1, 1, 1)
-        if self.is_active:
-            super().on_double_tap()
-        self.is_active = True
     
-    def _on_focus(self, instance, value, *largs):
+    def on_section(self, instance, value: Section):
+        self.refresh()
+    
+    def _on_focus(self, instance, value: bool, *largs):
         super()._on_focus(instance, value, *largs)
         if value: self.rv.reset_selection()
-        else:
-            self.cursor_color = (0, 0, 0, 0)
-            self.is_active = False
+        else: app().project.rename_label(self.section.offset, self.text)
 
     def _key_down(self, key, repeat=False):
-        if key[2].startswith("cursor") or key[2] in ("del", "backspace") and not self.is_active:
-            return
-        super()._key_down(key, repeat)
-
-    def delete_selection(self, from_undo=False):
-        if not self.is_active: return
-        return super().delete_selection(from_undo)
-
-    def keyboard_on_textinput(self, window, text):
-        if not self.is_active: return
-        super().keyboard_on_textinput(window, text)
+        if key[2] == "enter" and self.is_active:
+            app().project.rename_label(self.section.offset, self.text)
+        return super()._key_down(key, repeat)
     
 
 class SectionColumn(Label):
@@ -264,6 +289,7 @@ class SectionColumn(Label):
         self.size_hint = None, None
         self.font_size = FONT_SIZE
         self.font_name = FONT_NAME
+        self.height = LABEL_HEIGHT
     
     def redraw(self): pass    
 
@@ -436,6 +462,25 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
                     LocationLabel(int(param), label_text, row_width, len(text), len(label_text), 1, is_fun))
                 row += t
                 row_width += len(label_text)
+            elif isinstance(param, MemReg):
+                insn_text = param.to_str(app().project.ob)
+                row += insn_text
+                row_width += len(insn_text)
+            elif isinstance(param, Mem):
+                label_text = param.to_str(app().project.ob)
+                if not param.plain_addr:
+                    label_text = label_text[1:-1]
+                if param.special:
+                    r = f"[color=#C586C0]{label_text}[/color]"
+                else: r = f"[color=#83DCFE]{label_text}[/color]"
+
+                if not param.special and (app().project.ib.min <= param.address <= app().project.ib.max):
+                    labels.append(
+                        LocationLabel(param.address, label_text, row_width + 1 if not param.plain_addr else row_width, len(text), len(label_text), 1, False))
+                if not param.plain_addr:
+                    r = f"({r})"
+                row += r
+                row_width += len(label_text) + (2 if not param.plain_addr else 0)
             elif isinstance(param, bytearray):
                 res = param.decode("ascii", "replace")
                 res = "".join(x if 0x7E >= ord(x) >= 0x20 else "." for x in res)
@@ -463,11 +508,11 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
         Window.bind(on_key_down=self._keydown)
         Window.bind(on_key_up=self._keyup)
         Window.bind(mouse_pos=self._on_mouse_move)
-        
-    def on_section(self, instance, section: Section):
+
+    def redraw(self):
         self.labels = []
         text = []
-        self.width = section_to_markup(section.instructions, text, self.labels) * FONT_WIDTH
+        self.width = section_to_markup(self.section.instructions, text, self.labels) * FONT_WIDTH
         for label in self.labels:
             label.x = label.x * FONT_WIDTH
             label.y = label.y * FONT_HEIGHT
@@ -475,8 +520,12 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
             label.height *= FONT_HEIGHT
 
         self.text = "\n".join(text)
+        
+    def on_section(self, instance, section: Section):
+        self.redraw()
 
     def _on_mouse_move(self, window, pos):
+        RV.any_hovered = False
         x, y = pos
         sx, sy = self.to_window(self.x, self.y)
         for label in self.labels:
@@ -496,13 +545,13 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
                 main_panel = self.rv.parent
                 class Handler(MenuHandler):
                     def on_select(self, item):
-                        if item == "goto": app().scroll_to_label(label.text, main_panel)
+                        if item == "goto": app().scroll_to_offset(label.ep, main_panel)
                         elif item == "graph": 
                             if label.is_fun:
-                                app().open_function_graph(label.text)
+                                app().open_function_graph(label.ep)
                             else:
                                 app().open_function_graph_from_label(label.ep)
-                        elif item == "listing": app().open_function_listing(label.text)
+                        elif item == "listing": app().open_function_listing(label.ep)
                 
                 show_context_menu(Handler(), [
                     MenuItem("goto", f"Go to {'function' if label.is_fun else 'label'}"),
@@ -518,7 +567,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
             if label.hovered and app().ctrl_down and touch.button == 'left':
                 try:
                     self.rv.reset_selection()
-                    app().scroll_to_label(label.text, self.rv.parent)
+                    app().scroll_to_label(label.ep, self.rv.parent)
                     return True
                 except ValueError: pass
 

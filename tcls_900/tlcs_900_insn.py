@@ -8,7 +8,7 @@ WA = Reg(False, WORD, 0)
 # If a displacement looks like an address, insert a memory location here
 def check_address(insn, address):
     if insn.ibuffer.min <= address < insn.ibuffer.max:
-        return Mem(insn, address, plain_addr=True)
+        return Mem(address, plain_addr=True)
     return address
 
 # 1) Load Instructions
@@ -39,13 +39,13 @@ def LD_R_mem(insn):
 
 def LD_n_n(insn):
     if (insn.pop() & 0x2) == 0: #BYTE
-        return "LD", Mem(insn, insn.pop()), insn.pop()
+        return "LD", Mem(insn.pop()), insn.pop()
     else: #WORD
-        return "LDW", Mem(insn, insn.pop()), insn.popw()
+        return "LDW", Mem(insn.pop()), insn.popw()
         
 def LD_nn_m(insn):
     insn.pop()
-    return ("LDW" if insn.lastsize == WORD else "LD"), Mem(insn, insn.popw()), insn.lastmem
+    return ("LDW" if insn.lastsize == WORD else "LD"), Mem(insn.popw()), insn.lastmem
 def LDB_mem_R(insn): 
     return "LD", insn.lastmem, popR(insn, '?', BYTE)
 def LDW_mem_R(insn): 
@@ -62,12 +62,12 @@ def LDW_m_X(insn):
 
 def LDW_n_nn(insn):
     insn.pop()
-    return "LDW", Mem(insn, insn.pop()), insn.popw()
+    return "LDW", Mem(insn.pop()), insn.popw()
 
 def LDB_m_nn(insn):
-    return "LD", insn.lastmem, Mem(insn, insn.popw())
+    return "LD", insn.lastmem, Mem(insn.popw())
 def LDW_m_nn(insn):
-    return "LDW", insn.lastmem, Mem(insn, insn.popw())
+    return "LDW", insn.lastmem, Mem(insn.popw())
     
 #PUSH
 def PUSH_F(insn):
@@ -154,11 +154,11 @@ def LD(insn):
     if (insn.lastinsn & 0xF) == 0b0011:
         r1 = Reg(False, LWORD, 2)
         r2 = Reg(False, LWORD, 3)
-        return MemReg(insn, 0, "XDE+", r1), MemReg(insn, 0, "XHL+", r2)
+        return MemReg(0, "XDE+", r1), MemReg(0, "XHL+", r2)
     elif (insn.lastinsn & 0xF) == 0b0101:
         r1 = Reg(False, LWORD, 4)
         r2 = Reg(False, LWORD, 5)
-        return MemReg(insn, 0, "XIX+", r1), MemReg(insn, 0, "XIY+", r2)
+        return MemReg(0, "XIX+", r1), MemReg(0, "XIY+", r2)
     else:
         return "INVALID", "INVALID"
 
@@ -184,12 +184,12 @@ def LDDR(insn):
 def CPI(insn):
     insn.pop()
     regr = insn.lastinsn & 0x7
-    return "CPI", (A if insn.lastsize == WORD else WA), MemReg(insn, 0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
+    return "CPI", (A if insn.lastsize == WORD else WA), MemReg(0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
     
 def CPIR(insn):
     insn.pop()
     regr = insn.lastinsn & 0x7
-    return "CPIR", (A if insn.lastsize == WORD else WA), MemReg(insn, 0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
+    return "CPIR", (A if insn.lastsize == WORD else WA), MemReg(0, Rregtable[LWORD][regr] + "+", Reg(False, LWORD, regr))
 
 def CPD(insn): 
     insn.pop()
@@ -659,7 +659,7 @@ def LDX(insn):
     insn.pop()
     r2 = insn.pop()
     insn.pop()
-    return "LDX", Mem(insn, r1), r2
+    return "LDX", Mem(r1), r2
 
 #LINK
 def LINK(insn): 

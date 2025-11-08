@@ -36,7 +36,7 @@ class NavigationGraph(NavigationAction):
         assert functions is not None
         fun = functions.get(self.function)
         if not fun: return
-        app().open_function_graph(fun.name, rescale=False)
+        app().open_function_graph(fun.ep, rescale=False)
         dock = app().main_dock
         if not dock: return
         for tab in dock.iterate_panels():
@@ -76,7 +76,14 @@ class GraphTab(SerializableTab):
             self.content.scatter._set_scale(data["zoom"])
         if "x" in data and "y" in data:
             self.content.scatter._set_pos((data["x"], data["y"]))
-        
+
+    def refresh(self, **kwargs):
+        self.text = self.content.fun.name
+        ep = kwargs.get("ep")
+
+        if not ep or any(map(lambda l: l.ep == ep, self.content.svg.labels)): # Check if any label matches the updated function ep, only update if so
+            self.content.svg.update_graph()
+            self.content.svg.update_graphics()
 
 def parse_pos(pos_str):
     parts = pos_str.split()
@@ -136,7 +143,6 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
         super().__init__(**kwargs)
         self.fun = fun
         self.size_hint = (None, None)
-        self.graphfile = fun.graph_json(graph_tmpfolder(), app().project.ob)
         self.labels: list[LocationLabel] = []
         self.hovered_label: LocationLabel | None = None
         self.panel = panel
@@ -145,6 +151,10 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
         self.current_block: CodeBlockRect | None = None
 
         self.bind(pos=self.update_graphics, size=self.update_graphics)
+        self.update_graph()
+
+    def update_graph(self):
+        self.graphfile = self.fun.graph_json(graph_tmpfolder(), app().project.ob)
 
     def trigger_context_menu(self, touch):
         if self.collide_point(touch.x, touch.y):
@@ -152,13 +162,13 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
                 hovered_label = self.hovered_label
                 class Handler1(MenuHandler):
                     def on_select(self, item):
-                        if item == "goto": app().scroll_to_label(hovered_label.text)
+                        if item == "goto": app().scroll_to_label(hovered_label.ep)
                         elif item == "graph": 
                             if hovered_label.is_fun:
-                                app().open_function_graph(hovered_label.text)
+                                app().open_function_graph(hovered_label.ep)
                             else:
                                 app().open_function_graph_from_label(hovered_label.ep)
-                        elif item == "listing": app().open_function_listing(hovered_label.text)
+                        elif item == "listing": app().open_function_listing(hovered_label.ep)
                 
                 show_context_menu(Handler1(), [
                     MenuItem("goto", f"Go to {'function' if hovered_label.is_fun else 'label'}"),
@@ -199,8 +209,8 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
     def on_touch_down(self, touch):
         if touch.button == "left" and self.hovered_label is not None:
             try: 
-                if self.hovered_label.is_fun: app().open_function_graph(self.hovered_label.text)
-                else: self.panel.move_to_label(self.hovered_label.text)
+                if self.hovered_label.is_fun: app().open_function_graph(self.hovered_label.ep)
+                else: self.panel.move_to_label(self.hovered_label.ep)
                 return True
             except ValueError: pass
 
@@ -416,11 +426,11 @@ class FunctionPanel(BoxLayout):
         self.svg.render_hover()
         self.scatter._set_pos(self.block_pos(block))
 
-    def move_to_label(self, label: str):
+    def move_to_label(self, label: int):
         ep = 0
         section: Section
         for section in app().project.sections.values():
-            if section.labels and section.labels[0].name == label:
+            if section.labels and section.offset == label:
                 ep = section.offset
                 break
         else: return
