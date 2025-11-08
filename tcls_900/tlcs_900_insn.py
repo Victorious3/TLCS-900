@@ -689,7 +689,8 @@ def RLC_X_r(insn):
 def RLC_A_r(insn): 
     insn.pop()
     return "RLC", A, insn.lastr
-def RLC_mem(insn): 
+def RLC_mem(insn):
+    insn.pop()
     return ("RLCW" if insn.lastsize == WORD else "RLC"), insn.lastmem
 
 #RRC
@@ -700,6 +701,7 @@ def RRC_A_r(insn):
     insn.pop()
     return "RRC", A, insn.lastr
 def RRC_mem(insn):
+    insn.pop()
     return ("RRCW" if insn.lastsize == WORD else "RRC"), insn.lastmem
 
 #RL
@@ -710,6 +712,7 @@ def RL_A_r(insn):
     insn.pop()
     return "RL", A, insn.lastr
 def RL_mem(insn):
+    insn.pop()
     return ("RLW" if insn.lastsize == WORD else "RL"), insn.lastmem
 
 #RR
@@ -720,6 +723,7 @@ def RR_A_r(insn):
     insn.pop()
     return "RR", A, insn.lastr
 def RR_mem(insn):
+    insn.pop()
     return ("RRW" if insn.lastsize == WORD else "RR"), insn.lastmem
 
 #SLA
@@ -730,6 +734,7 @@ def SLA_A_r(insn):
     insn.pop()
     return "RR", A, insn.lastr
 def SLA_mem(insn):
+    insn.pop()
     return ("SLAW" if insn.lastsize == WORD else "SLA"), insn.lastmem
 
 #SRA
@@ -740,6 +745,7 @@ def SRA_A_r(insn):
     insn.pop()
     return "SRA", A, insn.lastr
 def SRA_mem(insn):
+    insn.pop()
     return ("SRAW" if insn.lastsize == WORD else "SRA"), insn.lastmem
 
 #SLL
@@ -750,6 +756,7 @@ def SLL_A_r(insn):
     insn.pop()
     return "SLL", A, insn.lastr
 def SLL_mem(insn):
+    insn.pop()
     return ("SLLW" if insn.lastsize == WORD else "SLL"), insn.lastmem
 
 #SRL
@@ -760,6 +767,7 @@ def SRL_A_r(insn):
     insn.pop()
     return "SRL", A, insn.lastr
 def SRL_mem(insn):
+    insn.pop()
     return ("SRLW" if insn.lastsize == WORD else "SRL"), insn.lastmem
 
 #RLD / RRD

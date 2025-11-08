@@ -122,14 +122,16 @@ def get_jump_location(insn: Instruction) -> Loc | None:
 
     return None
 
-def is_unconditional_jump(insn: Instruction):
+def is_unconditional_jump(insn: Instruction) -> int:
     if insn.entry.opcode in ("JR", "JRL"):
-        return insn.entry.instructions[0] == "T"
+        v = insn.entry.instructions[0]
+        return 1 if v == "T" else -1 if v == "F" else 0
     elif insn.entry.opcode == "JP":
         if len(insn.entry.instructions) == 2:
-            return insn.entry.instructions[0] == "T"
-        else: return True
-    return False
+            v = insn.entry.instructions[0]
+            return 1 if v == "T" else -1 if v == "F" else 0
+        else: return 1
+    return 0
 
 def get_loc(value: Reg | Mem) -> list[Reg | int]:
     if isinstance(value, Reg): return [value.normalize()]
@@ -1013,7 +1015,7 @@ class Project:
 
         blocks: dict[int, CodeBlock] = {}    
         def next_block(ep: int, pred: CodeBlock | None = None, branch = False) -> CodeBlock | None:
-            insn = []
+            insn: list[Instruction] = []
             entry = self.sections.get_floor_entry(ep)
             if not entry: return None
             next_section: Section = entry.get_value()
@@ -1067,8 +1069,9 @@ class Project:
                         block.pred.append(pred.ep)
                         pred.succ.append((block.ep, branch))
 
+                    cond = is_unconditional_jump(last_insn)
                     loc = get_jump_location(last_insn)
-                    if loc:
+                    if loc and cond != -1:
                         ep = int(loc)
                         if ep in blocks:
                             target = blocks[ep]
@@ -1077,7 +1080,7 @@ class Project:
                         else:
                             next_block(ep, block, True)
 
-                    if not is_unconditional_jump(last_insn):
+                    if cond != 1:
                         next_block(last_insn.entry.pc + last_insn.entry.length, block)
                     return block
 

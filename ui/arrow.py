@@ -109,8 +109,8 @@ class ArrowRenderer(KWidget, Widget):
                 if (insn.entry.opcode == "JR" or insn.entry.opcode == "JRL" or 
                     (insn.entry.opcode == "JP" and len(insn.entry.instructions) == 2)):
                     cc = insn.entry.instructions[0]
-                    if cc != "T": cond = True
-                    elif cc == "F": continue
+                    if cc == "F": continue
+                    elif cc != "T": cond = True
                 elif insn.entry.opcode == "DJNZ": 
                     cond = True
 

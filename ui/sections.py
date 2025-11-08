@@ -189,7 +189,6 @@ class EditableLabel(TextInput):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.size_hint = 1, None
         self.background_color = 0, 0, 0, 0
         self.foreground_color = 1, 1, 1, 1
         self.multiline = False
@@ -222,11 +221,12 @@ class EditableLabel(TextInput):
         super().keyboard_on_textinput(window, text)
 
 class LabelRow(ContextMenuBehavior, EditableLabel):
-    section = ObjectProperty(None)
+    section: Section = ObjectProperty(None)
     rv: RV = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.size_hint = 1, None
         self.is_function = False
         self.font_size = FONT_SIZE
         self.font_name = FONT_NAME
@@ -247,7 +247,6 @@ class LabelRow(ContextMenuBehavior, EditableLabel):
     
     def trigger_context_menu(self, touch) -> bool:
         if self.collide_point(touch.x, touch.y):
-            text = self.text
             is_function = self.is_function
             section = self.section
 
@@ -255,15 +254,19 @@ class LabelRow(ContextMenuBehavior, EditableLabel):
                 def on_select(self, item):
                     if item == "graph":
                         if is_function:
-                            app().open_function_graph(text)
+                            app().open_function_graph(section.offset)
                         else:
                             app().open_function_graph_from_label(section.offset)
                     elif item == "listing":
-                        app().open_function_listing(text)
-            
+                        if is_function:
+                            app().open_function_listing(section.offset)
+                        else:
+                            app().open_function_listing_from_label(section.offset)
+
             show_context_menu(Handler(), [
-                MenuItem("graph", "Open function graph")
-            ] + [MenuItem("listing", "Open function listing")] if is_function else [])
+                MenuItem("graph", "Open function graph"),
+                MenuItem("listing", "Open function listing")
+            ])
             return True
         return False
     

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from ui.dock.dock import SerializableTab
 from ui.function_graph import SCALE_FACTOR, ScatterPlaneNoTouch
-from ui.main import FONT_NAME, app
+from ui.main import FONT_NAME, NavigationAction, app
 from ui.project import Function
 from kivy.uix.stencilview import StencilView
 from kivy.uix.widget import Widget
@@ -33,6 +33,13 @@ def find_font_height() -> tuple[int, int]:
 FONT_WIDTH, FONT_HEIGHT = find_font_height()
 BOX_HEIGHT = FONT_HEIGHT + 10
 
+class NavigationCallGraph(NavigationAction):
+    def __init__(self, function: int):
+        super().__init__()
+        self.function = function
+
+    def navigate(self):
+        app().open_call_graph(self.function)
 
 class CallGraphTab(SerializableTab):
     content: "CallGraphPanel"
@@ -394,6 +401,8 @@ class CallGraph(KWidget, Widget):
                 Color(1, 1, 1, 1)
                 center = block.prev_y - BOX_HEIGHT / 2
 
+                if len(block.function) == 0: continue
+
                 assert block.prev
                 if index > 0:
                     mx = (max(map(lambda f: len(f.name) * FONT_WIDTH + 10, (item for block in blocks[abs(index) - 1] for item in block.function))))
@@ -495,3 +504,5 @@ class CallGraphPanel(BoxLayout):
         x = self.stencil.x + self.stencil.width / 2
         y = self.stencil.y + self.stencil.height / 2
         self.scatter._set_pos((x, y))
+
+        app().update_position_history(NavigationCallGraph(self.fun.ep))

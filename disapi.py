@@ -37,7 +37,7 @@ class Loc:
         label = ob.label(self.loc)
         if label is not None:
             return str(label)
-        return str(self.loc)
+        return format(self.loc, "X") + "h"
 
 class Branch:
     def __init__(self, ep, to, conditional, call = False):

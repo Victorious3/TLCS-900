@@ -534,6 +534,15 @@ class DisApp(App):
             if ep in fun.blocks:
                 self.open_function_graph(fun.ep, callback=lambda panel: panel.content.move_to_location(ep))
                 return
+            
+    def open_function_listing_from_label(self, ep: int):
+        if not self.project.functions:
+            self.analyze_functions(lambda: self.open_function_listing_from_label(ep))
+            return
+        for fun in self.project.functions.values():
+            if ep in fun.blocks:
+                self.open_function_listing(fun.ep)
+                return
 
     def find_function(self, fun_name: str | int):
         if not self.project.functions: return None

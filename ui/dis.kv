@@ -176,6 +176,10 @@
         height: self.minimum_height
         orientation: 'vertical'
 
+<AnalyzerLabel>:
+    size_hint: None, 1
+    width: self.parent.column_widths[0] + dp(5) if self.parent else dp(100)
+
 <SectionPanel>:
     orientation: 'vertical'
     width: self.parent.width - dp(15) if self.parent else 0

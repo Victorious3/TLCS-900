@@ -5,7 +5,7 @@ from kivy.config import Config
 Config.set('input', 'mouse', 'mouse,multitouch_on_demand')
 
 from ui import main
-from ui.project import Project
+from ui.project import Project, new_project
 
 if __name__ == "__main__":
     microc.load_microcontroller("TMP91C016")
@@ -15,4 +15,6 @@ if __name__ == "__main__":
         0xFFF10E, 0xFFBF9C, 0xFFBFA8
     ]
     org = 0xF00000
+    #proj = new_project(Path("el9900.disproj/el9900.rom"), eps, org)
+    #main.main(proj)
     main.main(Project.read_from_file(Path("el9900.disproj")))
