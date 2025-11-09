@@ -451,11 +451,16 @@ class Function:
     def _graph(self, block: CodeBlock, visited: set[CodeBlock], dig: Digraph, ob: OutputBuffer):
         if block in visited: return
         visited.add(block)
-        text = "".join(map(lambda insn: insnentry_to_str(insn.entry, ob) + "\\l", block.insn))
-        dig.node(str(block.ep), text)
+        #text = "".join(map(lambda insn: insnentry_to_str(insn.entry, ob) + "\\l", block.insn))
+        #dig.node(str(block.ep), text)
+        FONT_HEIGHT = 14
+        LINE_HEIGHT = 1.05
+        SCALE = 96 / (72**2)
+        width = max(map(lambda insn: (len(insnentry_to_str(insn.entry, ob)) * FONT_HEIGHT * 17 / 37 + 8) * SCALE, block.insn))
+        dig.node(str(block.ep), None, width=str(width), height=str((len(block.insn) * FONT_HEIGHT * LINE_HEIGHT + 8) * SCALE), fixedsize="true")
         for succ, branch in block.succ:
             dig.edge(str(block.ep), str(succ), color="red" if branch else "black")
-            self._graph(self .blocks[succ], visited, dig, ob)
+            self._graph(self.blocks[succ], visited, dig, ob)
 
     def graph(self, ob: OutputBuffer) -> Digraph:
         visited: set[CodeBlock] = set()
@@ -566,7 +571,7 @@ class Function:
         
         if tick: tick(self.name)
 
-def label_list(label):
+def label_list(label): 
     if label is None: return []
     return [label]
 
