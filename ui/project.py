@@ -457,7 +457,7 @@ class Function:
         LINE_HEIGHT = 1.05
         SCALE = 96 / (72**2)
         width = max(map(lambda insn: (len(insnentry_to_str(insn.entry, ob)) * FONT_HEIGHT * 17 / 37 + 8) * SCALE, block.insn))
-        dig.node(str(block.ep), None, width=str(width), height=str((len(block.insn) * FONT_HEIGHT * LINE_HEIGHT + 8) * SCALE), fixedsize="true")
+        dig.node(str(block.ep), "", width=str(width), height=str((len(block.insn) * FONT_HEIGHT * LINE_HEIGHT + 8) * SCALE), fixedsize="true")
         for succ, branch in block.succ:
             dig.edge(str(block.ep), str(succ), color="red" if branch else "black")
             self._graph(self.blocks[succ], visited, dig, ob)
@@ -594,6 +594,7 @@ class Project:
     def rename_label(self, ep: int, name: str):
         label = self.ob.label(ep)
         if label:
+            if label.name == name: return # No change
             label.name = name
             app().main_dock.refresh(ep = ep)
 

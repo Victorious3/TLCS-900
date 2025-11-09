@@ -174,7 +174,7 @@ class CallGraph(KWidget, ContextMenuBehavior, Widget):
         self.minus_texture = fbo.texture
 
         self.open_center() # open the root function
-        self.hovered: int | None = None
+        self.hovered: tuple[Block, Function] | None = None
 
     def serialize(self, data: dict):
         callers = []
@@ -353,7 +353,7 @@ class CallGraph(KWidget, ContextMenuBehavior, Widget):
                 if block.layer < 0: x = -x
                 for fun in block.function:
                     if (x <= pos[0] <= x + len(fun.name) * FONT_WIDTH + 10) and (offset_y - BOX_HEIGHT <= pos[1] <= offset_y):
-                        self.hovered = fun.ep
+                        self.hovered = (block, fun)
                         break
                     offset_y -= BOX_HEIGHT + 10
 
@@ -361,16 +361,26 @@ class CallGraph(KWidget, ContextMenuBehavior, Widget):
 
     def trigger_context_menu(self, touch) -> bool:
         if self.hovered is not None:
-            fun_ep = self.hovered
+            fun_ep = self.hovered[1].ep
             open_context_menu(fun_ep, True, touch, None)
             return True
         return False
     
     def on_touch_up(self, touch):
         if super().on_touch_up(touch): return True
+        if touch.button != 'left': return False
 
         if self.hovered is not None:
-            app().open_call_graph(self.hovered)
+            block = self.hovered[0]
+            column = block.layer
+            if column > 0:
+                if len(block.path) == 0: return False
+                ep = block.path[-1].ep
+                to_highlight = self.hovered[1].ep
+                app().open_function_listing(ep, highlight_callee=to_highlight)
+            else:
+                ep = self.hovered[1].ep
+                app().open_function_listing(ep, highlight_caller=ep)
             self.hovered = None
 
     def update_hover(self):
@@ -382,7 +392,7 @@ class CallGraph(KWidget, ContextMenuBehavior, Widget):
             for layer in (self.callees + self.callers):
                 for block in layer:
                     for f, fun in enumerate(block.function):
-                        if fun.ep == self.hovered:
+                        if fun.ep == self.hovered[1].ep:
                             x, y = block.x, block.y
                             if block.layer < 0: x = -x
                             offset_y = y - f * (BOX_HEIGHT + 10)

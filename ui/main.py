@@ -2,7 +2,7 @@ from pathlib import Path
 import json, math, shutil, tempfile, sys, traceback, logging
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, TypeVar, Type, Generator, cast
+from typing import Any, Callable, Iterable, TypeVar, Type, Generator, cast
 from platformdirs import PlatformDirs
 from configparser import ConfigParser
 
@@ -101,6 +101,18 @@ class EscapeTrigger:
     def on_escape(self, obj):
         pass
 
+class NavigationListing(NavigationAction):
+    def __init__(self, panel: "ListingPanel | None", offset: int):
+        self.offset = offset
+        self.panel = panel
+
+    def navigate(self):
+        try:
+            app().switch_to_listing(self.panel)
+            app().scroll_to_offset(self.offset, self.panel, history=False)
+        except ValueError as e:
+            pass # Invalid location
+
 from .project import Section, DATA_PER_ROW, Project, Function
 from .arrow import ArrowRenderer
 from .minimap import Minimap
@@ -143,25 +155,72 @@ class RenameInput(BoxLayout, EscapeTrigger):
         self.input.text = label.name
         self.input.focus = True
 
-class NavigationListing(NavigationAction):
-    def __init__(self, panel: "ListingPanel | None", offset: int):
-        self.offset = offset
-        self.panel = panel
-
-    def navigate(self):
-        try:
-            app().switch_to_listing(self.panel)
-            app().scroll_to_offset(self.offset, self.panel, history=False)
-        except ValueError as e:
-            pass # Invalid location
-
 class ListingPanel(RelativeLayout):
     def __init__(self, **kw):
         self.rv: RV = cast(RV, None)
         self.minimap: Minimap = cast(Minimap, None)
         self.arrows: ArrowRenderer = cast(ArrowRenderer, None)
         self.scrollbar: ScrollBar = cast(ScrollBar, None)
+        self.highlighted: int | None = None
+        self.highlighted_list = []
+        self.highlight_index = -1
+
+        Window.bind(on_key_down=self._keydown)
         super().__init__(**kw)
+
+    def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
+        if self.get_root_window() is None:
+            return
+
+        if not self.highlighted: return
+        if keycode == 82: # Up
+            self.select_next_highlight(-1)
+        elif keycode == 81: # Down
+            self.select_next_highlight(1)
+        elif keycode == 41: # Escape
+            self.end_highlight()
+
+    def _set_selection_end(self):
+        sections = self.get_sections()
+        for s in sections: 
+            for insn in s.instructions:
+                if insn.entry.pc == self.rv.selection_start:
+                    self.rv.selection_end = insn.entry.pc + insn.entry.length - 1
+                    break
+
+    def highlight(self, fun: Function, callee: int | None = None, caller: int | None = None):
+        self.highlighted = callee if callee is not None else caller
+        self.highlight_index = 0
+
+        if callee:
+            self.highlighted_list = list(set([index for index, callee in fun.callees if callee == self.highlighted]))
+        elif caller:
+            self.highlighted_list = list(set([index for index, _ in fun.callers]))
+        
+        self.highlighted_list.sort()
+        self.rv.selection_start = self.rv.selection_end = self.highlighted_list[self.highlight_index]
+        self._set_selection_end()
+        
+        self.rv.scroll_to_offset(self.rv.selection_start)
+        self.minimap.redraw()
+        self.rv.redraw_children()
+
+    def end_highlight(self):
+        self.highlighted = None
+        self.highlight_index = -1
+        self.highlighted_list = []
+        self.minimap.redraw()
+        self.rv.reset_selection()
+        self.rv.redraw_children()
+
+    def select_next_highlight(self, offset: int = 1):
+        if self.highlighted is None: return
+        self.highlight_index += offset
+        self.highlight_index = min(max(self.highlight_index, 0), len(self.highlighted_list) - 1)
+        self.rv.selection_start = self.rv.selection_end = self.highlighted_list[self.highlight_index]
+        self._set_selection_end()
+        self.rv.scroll_to_offset(self.rv.selection_start)
+        self.rv.redraw_children()
 
     def on_kv_post(self, base_widget):
         self.rv = self.ids["rv"]
@@ -177,7 +236,7 @@ class ListingPanel(RelativeLayout):
         if super().on_touch_move(touch): return True
         return self.rv.on_touch_move_section(touch)
     
-    def get_sections(self):
+    def get_sections(self) -> Iterable[Section]:
         return app().project.sections.values()
     
     def serialize(self, data: dict):
@@ -514,31 +573,21 @@ class DisApp(App):
         rv = main_panel.rv if main_panel else self.dis_panel.rv
 
         self.switch_to_listing(main_panel)
-        scroll_pos = 0
-        found_pos = False
-        for i in range(len(rv.data)):
-            total_height = rv.children[0].height - rv.height
-            data = rv.data[i]
-            section: Section = data["section"]
-            if section.offset <= offset < section.offset + section.length:
-                if section.labels: scroll_pos += LABEL_HEIGHT
-                scroll_pos += math.ceil((offset - section.offset) / DATA_PER_ROW) * FONT_HEIGHT
-                rv.scroll_y = 1 - (scroll_pos / total_height)                
-                rv.reset_selection()
-                if history: self.update_position_history(NavigationListing(main_panel, offset))
-                self.last_position = offset
-                found_pos = True
-                
-                break
-
-            scroll_pos += data["height"]
+        found_pos = rv.scroll_to_offset(offset, history=history)
+        rv.reset_selection()
         
         # Try again with main panel if we can't find the symbol in the current panel
         if not found_pos:
             if main_panel: 
-                self.scroll_to_offset(offset)
+                self.scroll_to_offset(offset, None, history=history)
             else:
                 raise ValueError("Invalid location")
+            
+    def find_main_panel(self) -> MainDockTab:
+        for tab in self.main_dock.iterate_panels():
+            if isinstance(tab, MainDockTab):
+                return tab
+        assert False, "No main panel found"
         
     def switch_to_listing(self, main_panel: ListingPanel | None = None):
         if main_panel:
@@ -552,10 +601,7 @@ class DisApp(App):
                     tab.add_widget(main_panel)
                     self.main_dock.add_tab(tab, reverse=True)
         else:
-            for tab in self.main_dock.iterate_panels():
-                if isinstance(tab, MainDockTab):
-                    tab.select()
-                    break
+            self.find_main_panel().select()
     
     def open_function_graph_from_label(self, ep: int):
         if not self.project.functions:
@@ -582,9 +628,18 @@ class DisApp(App):
         else:
             return next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
 
-    def open_function_listing(self, ep: int):
+    def open_function_listing(self, ep: int, highlight_callee: int | None = None, highlight_caller: int | None = None):
         if not self.project.functions:
-            self.analyze_functions(lambda: self.open_function_listing(ep))
+            self.analyze_functions(lambda: self.open_function_listing(ep, highlight_callee, highlight_caller))
+            return
+        
+        if highlight_caller is not None:
+            # Callers require going over multiple functions so we can't open them in a function listing
+            main_panel = self.find_main_panel()
+            main_panel.select()
+            fun = self.find_function(ep)
+            if not fun: return
+            main_panel.content.highlight(fun, highlight_callee, highlight_caller)
             return
         
         fun = self.find_function(ep)
@@ -593,6 +648,7 @@ class DisApp(App):
         panel: FunctionListing | None = None
         for tab in self.main_dock.iterate_panels():
             if isinstance(tab, ListingTab) and tab.content.fun == fun:
+                tab.content.highlight(fun, highlight_callee, highlight_caller)
                 tab.select()
                 panel = tab.content
                 break
@@ -600,6 +656,8 @@ class DisApp(App):
         if not panel:
             tab = ListingTab(text=fun.name)
             panel = FunctionListing(fun)
+            if highlight_callee is not None or highlight_caller is not None:
+                Clock.schedule_once(lambda dt: panel.highlight(fun, highlight_callee, highlight_caller), 0)
             tab.add_widget(panel)
 
             app().main_dock.add_tab(tab, reverse=True)

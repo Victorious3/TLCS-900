@@ -5,6 +5,7 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.utils import get_color_from_hex
 from kivy.clock import Clock
+from kivy.metrics import dp
 
 from . import main
 from .kivytypes import KWidget
@@ -23,9 +24,6 @@ class Minimap(KWidget, Widget):
         Clock.schedule_once(lambda dt: self.redraw(), 0)
 
     def redraw(self, *args):
-        if isinstance(self.parent, main.FunctionListing):
-            return # We don't draw this for normal function listings because they are all code anyway
-
         sections = self.parent.get_sections()
         if not self.parent.rv: return
         total_height = self.parent.rv.children[0].height
@@ -43,7 +41,17 @@ class Minimap(KWidget, Widget):
             for key, group in groupby(sections, key=type):
                 group = list(group)
                 height = sum(map(section_height, group))
-                if key == CodeSection:
+                if key == CodeSection and not isinstance(self.parent, main.FunctionListing):
+                    Color(*get_color_from_hex("#66BB6A")) 
                     Rectangle(pos=(self.x, self.y + (1 - ((offset + height) / total_height)) * self.height), size=(self.width, height / total_height * self.height))
+
+                if self.parent.highlighted is not None:
+                    offset_in_group = 0
+                    for section in group:
+                        for insn in section.instructions:
+                            if insn.entry.pc in self.parent.highlighted_list:
+                                Color(*get_color_from_hex("#EF5350"))
+                                Rectangle(pos=(self.x, self.y + (1 - ((offset + offset_in_group) / total_height)) * self.height), size=(self.width, max(dp(1), FONT_HEIGHT / total_height * self.height)))
+                            offset_in_group += FONT_HEIGHT
 
                 offset += height

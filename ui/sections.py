@@ -21,7 +21,7 @@ from kivy.core.clipboard import Clipboard
 from . import main
 from .kivytypes import KWidget
 from .project import Section, DATA_PER_ROW, Instruction, MAX_SECTION_LENGTH
-from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, app, iter_all_children_of_type
+from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, NavigationListing, app, iter_all_children_of_type
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
@@ -81,6 +81,30 @@ class RV(KWidget, RecycleView):
 
         self.data = data
 
+    def scroll_to_offset(self, offset: int, history: bool = False) -> bool:
+        scroll_pos = 0
+        for i in range(len(self.data)):
+            total_height = self.children[0].height - self.height
+            data = self.data[i]
+            section: Section = data["section"]
+            if section.offset <= offset < section.offset + section.length:
+                if section.labels: scroll_pos += LABEL_HEIGHT
+                last_insn = 0
+                for insn in section.instructions:
+                    if insn.entry.pc + insn.entry.length > offset:
+                        break
+                    last_insn += 1
+                
+                scroll_pos += last_insn * FONT_HEIGHT
+                self.scroll_y = 1 - (scroll_pos / total_height) + (self.height / total_height / 2)             
+                if history: app().update_position_history(NavigationListing(self.parent, offset))
+                app().last_position = offset
+                return True
+
+            scroll_pos += data["height"]
+
+        return False
+
     def update_from_scroll(self, *largs):
         super().update_from_scroll(*largs)
         Clock.schedule_once(lambda dt: self.redraw_children(), 0)
@@ -97,7 +121,7 @@ class RV(KWidget, RecycleView):
             x, y = panel.to_window(panel.x, panel.y)
             if pos[0] > x + panel.width: x1 = 0
             else: x1 = math.floor((pos[0] - x) / (FONT_WIDTH * 3))
-            if y <= pos[1] < y + panel.height:
+            if y <= pos[1] <= y + panel.height:
                 section = panel.section
                 y1 = y - pos[1]
                 rows = len(section.instructions)
@@ -109,7 +133,7 @@ class RV(KWidget, RecycleView):
                 return offset
                 
         return -1
-    
+        
     def reset_selection(self):
         self.selection_start = 0
         self.selection_end = 0
@@ -280,7 +304,7 @@ class LabelRow(ContextMenuBehavior, EditableLabel):
 
 
 class SectionColumn(Label):
-    section = ObjectProperty(None)
+    section: Section = ObjectProperty(None)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -505,8 +529,11 @@ def open_context_menu(ep: int, is_fun: bool, touch, main_panel) -> bool:
                     app().open_function_graph(ep)
                 else:
                     app().open_function_graph_from_label(ep)
-            elif item == "listing": 
-                app().open_function_listing(ep)
+            elif item == "listing":
+                if is_fun:
+                    app().open_function_listing(ep)
+                else:
+                    app().open_function_listing_from_label(ep)
             elif item == "rename":
                 app().open_rename(ep, touch.x, touch.y)
             elif item == "calls":
@@ -515,9 +542,9 @@ def open_context_menu(ep: int, is_fun: bool, touch, main_panel) -> bool:
     show_context_menu(Handler(), [
         MenuItem("goto", f"Go to {'function' if is_fun else 'label'}"),
         MenuItem("graph", "Open function graph"),
-        MenuItem("rename", f"Rename {'function' if is_fun else 'label'}")
-    ] + ([
+        MenuItem("rename", f"Rename {'function' if is_fun else 'label'}"),
         MenuItem("listing", "Open function listing"),
+    ] + ([
         MenuItem("calls", "Open call graph")
     ] if is_fun else []))
     return True
