@@ -50,6 +50,32 @@
         height: self.minimum_height
         pos_hint: { "center_x": 0.5, "top": 1 }
 
+    RenameInput:
+        id: rename_input
+        width: dp(180)
+        height: dp(30)
+
+<RenameInput>:
+    size_hint: None, None
+    opacity: 0
+    disabled: True
+
+    canvas.before:
+        Color:
+            rgba: 0.18, 0.18, 0.18, 1.0
+        RoundedRectangle:
+            pos: self.x - dp(5), self.y - dp(5)
+            size: self.width + dp(10), self.height + dp(10)
+            radius: [dp(5)]
+
+    TextInput:
+        multiline: False
+        id: input
+        opacity: root.opacity
+        disabled: root.disabled
+        size_hint: 1, None
+        height: self.minimum_height
+
 <ScrollBar>:
     size_hint: 1, None
     do_scroll_x: True
@@ -80,6 +106,10 @@
     ScrollBar:
         id: scrollbar
         pos_hint: { "left": 1, "bottom": 1 }
+
+<AnalyzerLabel>:
+    size_hint: None, 1
+    width: self.parent.column_widths[0] + dp(5) if self.parent else dp(100)
 
 <AnalyzerButtons>:
     size_hint: None, 1
@@ -175,10 +205,6 @@
         size_hint: 1, None
         height: self.minimum_height
         orientation: 'vertical'
-
-<AnalyzerLabel>:
-    size_hint: None, 1
-    width: self.parent.column_widths[0] + dp(5) if self.parent else dp(100)
 
 <SectionPanel>:
     orientation: 'vertical'

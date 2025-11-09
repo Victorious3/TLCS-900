@@ -16,8 +16,11 @@ from kivy.metrics import Metrics
 from kivy.graphics.transformation import Matrix
 from kivy.clock import Clock
 
+from ui.sections import open_context_menu
+
 from .kivytypes import KWidget
 from .arrow import COLORS
+from .context_menu import ContextMenuBehavior
 
 FONT_SIZE = 14
 
@@ -147,7 +150,7 @@ def shift_layer(blocks: list[Block]):
     for block, y in zip(blocks, optimized_ys):
         block.y = y
 
-class CallGraph(KWidget, Widget):
+class CallGraph(KWidget, ContextMenuBehavior, Widget):
     def __init__(self, fun: Function, panel: "CallGraphPanel", **kwargs):
         super().__init__(**kwargs)
         self.fun = fun
@@ -356,6 +359,20 @@ class CallGraph(KWidget, Widget):
 
         self.update_hover()
 
+    def trigger_context_menu(self, touch) -> bool:
+        if self.hovered is not None:
+            fun_ep = self.hovered
+            open_context_menu(fun_ep, True, touch, None)
+            return True
+        return False
+    
+    def on_touch_up(self, touch):
+        if super().on_touch_up(touch): return True
+
+        if self.hovered is not None:
+            app().open_call_graph(self.hovered)
+            self.hovered = None
+
     def update_hover(self):
         self.canvas.after.clear()
         if self.hovered is None:
@@ -422,7 +439,7 @@ class CallGraph(KWidget, Widget):
                     if index > 0:
                         Line(width=0.5, points=[x + offset_x - 10, center, x + offset_x, center])
                     else:
-                        Line(width=0.5, points=[x + offset_x + 10, center, x + offset_x, center])
+                        Line(width=0.5, points=[x + mx + 75, center, x + mx + 65, center])
 
                 if index > 0:
                     Line(width=0.5, points=[x + offset_x, center, x - 65, center, x - 10, y, x, y])

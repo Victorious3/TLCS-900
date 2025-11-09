@@ -114,6 +114,35 @@ from .popup import FunctionAnalyzerPopup
 from .dock.dock import BaseDock, Dock, Orientation, SerializableTab, DockSplitter, DockPanel
 from .call_graph import CallGraphPanel, CallGraphTab
 
+class RenameInput(BoxLayout, EscapeTrigger):
+    input: TextInput
+    ep: int
+
+    def on_kv_post(self, base_widget):
+        self.input = self.children[0]
+        self.input.bind(focus=self._on_focus) # type: ignore
+
+    def _on_focus(self, instance, value):
+        if not value:
+            app().project.rename_label(self.ep, self.input.text)
+            self.hide()
+
+    def hide(self):
+        self.opacity = 0
+        self.disabled = True
+        self.pos = (-1000, -1000)
+
+    def show(self, ep: int, x: int, y: int):
+        label = app().project.ob.label(ep)
+        if not label: return
+        app().main_dock.unfocus_all()
+        self.ep = ep
+        self.pos = (x, y)
+        self.disabled = False
+        self.opacity = 1
+        self.input.text = label.name
+        self.input.focus = True
+
 class NavigationListing(NavigationAction):
     def __init__(self, panel: "ListingPanel | None", offset: int):
         self.offset = offset
@@ -285,6 +314,7 @@ class DisApp(App):
         self.dis_panel: ListingPanel
         self.analyzer_filter: AnalyzerFilter
         self.main_dock: Dock
+        self.rename_input: RenameInput
 
         self.last_position = -1
         self.position_history: list[NavigationAction] = []
@@ -310,6 +340,7 @@ class DisApp(App):
         self.forward_button = self.window.ids["forward_button"]
         self.goto_position = self.window.ids["goto_position"]
         self.main_dock = self.window.ids["main_dock"]
+        self.rename_input = self.window.ids["rename_input"]
     
         self.back_button.bind(on_press=lambda w: self.go_back())
         self.forward_button.bind(on_press=lambda w: self.go_forward())
@@ -619,6 +650,11 @@ class DisApp(App):
         Clock.schedule_once(lambda dt: panel.move_to_initial_pos(), 0)
 
         app().main_dock.add_tab(tab, reverse=True)
+
+    def open_rename(self, ep: int, x: int, y: int):
+        label = self.project.ob.label(ep)
+        if not label: return
+        self.rename_input.show(ep, x, y)
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
         if "ctrl" in modifiers:

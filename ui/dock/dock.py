@@ -536,9 +536,12 @@ class Dock(KWidget, BaseDock):
         for panel in self.iterate_panels():
             panel.refresh(**kwargs)
 
+    def unfocus_all(self):
+        self.active_panel = None
+
     def clear_widgets(self):
         super().clear_widgets(children=None)
-        self._active_panel = None
+        self.active_panel = None
         self.dragged_panel = None
         self.last_dragged_panel = None
         self.first_panel = None
@@ -582,5 +585,5 @@ class Dock(KWidget, BaseDock):
         return None
 
     @active_panel.setter
-    def active_panel(self, value: DockTab):
+    def active_panel(self, value: DockTab | None):
         self._active_panel = value

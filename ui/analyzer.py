@@ -107,11 +107,6 @@ class AnalyzerLabel(EditableLabel):
         if not value:
             self.function.name = self.text
 
-    def _key_down(self, key, repeat=False):
-        if key[2] == "enter" and self.is_active:
-            self.function.name = self.text
-        return super()._key_down(key, repeat)
-
 class AnalyzerTableRow(ContextMenuBehavior, DataTableRow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -134,7 +134,7 @@ class RV(KWidget, RecycleView):
         scrollbar.on_scroll_move()
 
     def on_touch_move_section(self, touch):
-        if self.outside_bounds: return
+        if self.outside_bounds or app().main_dock.active_content != self.parent: return
         if touch.button != "left": return
         tx, ty = touch.x, touch.y
 
@@ -157,7 +157,7 @@ class RV(KWidget, RecycleView):
         mx, my = self.parent.minimap.to_window(*self.parent.minimap.pos)
         sx, sy = self.to_window(*self.pos)
         self.outside_bounds = not (sx < tx < mx and sy < ty < sy + self.height)
-        if self.outside_bounds: 
+        if self.outside_bounds or app().main_dock.active_content != self.parent: 
             self.reset_selection()
             return
 
@@ -278,11 +278,6 @@ class LabelRow(ContextMenuBehavior, EditableLabel):
         if value: self.rv.reset_selection()
         else: app().project.rename_label(self.section.offset, self.text)
 
-    def _key_down(self, key, repeat=False):
-        if key[2] == "enter" and self.is_active:
-            app().project.rename_label(self.section.offset, self.text)
-        return super()._key_down(key, repeat)
-    
 
 class SectionColumn(Label):
     section = ObjectProperty(None)
@@ -501,6 +496,32 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
         text.append(row)
     return max_width
 
+def open_context_menu(ep: int, is_fun: bool, touch, main_panel) -> bool:
+    class Handler(MenuHandler):
+        def on_select(self, item):
+            if item == "goto": app().scroll_to_offset(ep, main_panel)
+            elif item == "graph": 
+                if is_fun:
+                    app().open_function_graph(ep)
+                else:
+                    app().open_function_graph_from_label(ep)
+            elif item == "listing": 
+                app().open_function_listing(ep)
+            elif item == "rename":
+                app().open_rename(ep, touch.x, touch.y)
+            elif item == "calls":
+                app().open_call_graph(ep)
+    
+    show_context_menu(Handler(), [
+        MenuItem("goto", f"Go to {'function' if is_fun else 'label'}"),
+        MenuItem("graph", "Open function graph"),
+        MenuItem("rename", f"Rename {'function' if is_fun else 'label'}")
+    ] + ([
+        MenuItem("listing", "Open function listing"),
+        MenuItem("calls", "Open call graph")
+    ] if is_fun else []))
+    return True
+
 class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     rv: RV = ObjectProperty(None, allownone=True)
 
@@ -545,34 +566,21 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     def trigger_context_menu(self, touch):
         for label in self.labels:
             if label.hovered and app().ctrl_down:
-                main_panel = self.rv.parent
-                class Handler(MenuHandler):
-                    def on_select(self, item):
-                        if item == "goto": app().scroll_to_offset(label.ep, main_panel)
-                        elif item == "graph": 
-                            if label.is_fun:
-                                app().open_function_graph(label.ep)
-                            else:
-                                app().open_function_graph_from_label(label.ep)
-                        elif item == "listing": app().open_function_listing(label.ep)
-                
-                show_context_menu(Handler(), [
-                    MenuItem("goto", f"Go to {'function' if label.is_fun else 'label'}"),
-                    MenuItem("graph", "Open function graph")
-                ] + [MenuItem("listing", "Open function listing")] if label.is_fun else [])
+                open_context_menu(label.ep, label.is_fun, touch, self.rv.parent)
                 return True
-
+            
         return False
 
     def on_touch_up(self, touch):
         if super().on_touch_up(touch): return True
-        for label in self.labels:
-            if label.hovered and app().ctrl_down and touch.button == 'left':
-                try:
-                    self.rv.reset_selection()
-                    app().scroll_to_label(label.ep, self.rv.parent)
-                    return True
-                except ValueError: pass
+        if app().ctrl_down and touch.button == 'left':
+            for label in self.labels:
+                if label.hovered:
+                    try:
+                        self.rv.reset_selection()
+                        app().scroll_to_label(label.ep, self.rv.parent)
+                        return True
+                    except ValueError: pass
 
     def _on_update(self):
         self.canvas.after.clear()

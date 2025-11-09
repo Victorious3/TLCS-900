@@ -19,7 +19,7 @@ from kivy.metrics import Metrics
 from .kivytypes import KWidget
 from .project import Function, Section
 from .main import graph_tmpfolder, app, FONT_NAME, NavigationAction
-from .sections import section_to_markup, LocationLabel
+from .sections import section_to_markup, LocationLabel, open_context_menu
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuItem, MenuHandler
 
 from .dock.dock import SerializableTab
@@ -159,21 +159,7 @@ class FunctionSvg(KWidget, ContextMenuBehavior, Widget):
     def trigger_context_menu(self, touch):
         if self.collide_point(touch.x, touch.y):
             if self.hovered_label:
-                hovered_label = self.hovered_label
-                class Handler1(MenuHandler):
-                    def on_select(self, item):
-                        if item == "goto": app().scroll_to_label(hovered_label.ep)
-                        elif item == "graph": 
-                            if hovered_label.is_fun:
-                                app().open_function_graph(hovered_label.ep)
-                            else:
-                                app().open_function_graph_from_label(hovered_label.ep)
-                        elif item == "listing": app().open_function_listing(hovered_label.ep)
-                
-                show_context_menu(Handler1(), [
-                    MenuItem("goto", f"Go to {'function' if hovered_label.is_fun else 'label'}"),
-                    MenuItem("graph", "Open function graph")
-                ] + [MenuItem("listing", "Open function listing")] if hovered_label.is_fun else [])
+                open_context_menu(self.hovered_label.ep, self.hovered_label.is_fun, touch, None)
                 return True
             else:
                 for block in self.code_blocks.values():
