@@ -164,7 +164,7 @@ class AnalyzerTable(ResizableRecycleTable):
             # address
             row.append(format(fun.ep, "X"))
             # frequency
-            row.append(len(fun.callers))
+            row.append(len(set(map(lambda c: c[0], fun.callers))))
             # complexity
             row.append(len(fun.blocks))
             # callers

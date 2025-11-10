@@ -398,6 +398,9 @@ class Function:
         self.callers: list[tuple[int, int]]
         self.callees: list[tuple[int, int]]
 
+    def __gt__(self, other: "Function") -> bool:
+        return self.ep > other.ep
+
     def __str__(self) -> str:
         return self.name
 

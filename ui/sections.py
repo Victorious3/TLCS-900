@@ -469,7 +469,7 @@ class LocationLabel:
         self.height = height
         self.is_fun = is_fun
 
-def section_to_markup(instructions: list[Instruction], text: list[str], labels: list[LocationLabel]) -> int:
+def section_to_markup(instructions: list[Instruction], text: list[str], labels: list[LocationLabel], widths: list[int] | None = None) -> int:
     max_width = 0
     for insn in instructions:
         row_width = len(insn.entry.opcode) + 1
@@ -516,6 +516,7 @@ def section_to_markup(instructions: list[Instruction], text: list[str], labels: 
                 row += ", "
                 row_width += 2
         max_width = max(max_width, row_width)
+        if widths is not None: widths.append(row_width)
 
         text.append(row)
     return max_width
@@ -563,7 +564,8 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     def redraw(self):
         self.labels = []
         text = []
-        self.width = section_to_markup(self.section.instructions, text, self.labels) * FONT_WIDTH
+        widths = []
+        self.width = section_to_markup(self.section.instructions, text, self.labels, widths) * FONT_WIDTH
         for label in self.labels:
             label.x = label.x * FONT_WIDTH
             label.y = label.y * FONT_HEIGHT
@@ -571,7 +573,14 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
             label.height *= FONT_HEIGHT
 
         self.text = "\n".join(text)
-        
+
+        self.canvas.before.clear()
+        with self.canvas.before:
+            for i, insn in enumerate(self.section.instructions):
+                if insn.entry.pc in self.rv.parent.highlighted_list:
+                    Color(*get_color_from_hex("#E695337A"))
+                    Rectangle(pos=(self.x, self.y + self.height - ((i + 1) * FONT_HEIGHT)), size=(widths[i] * FONT_WIDTH, FONT_HEIGHT))
+
     def on_section(self, instance, section: Section):
         self.redraw()
 

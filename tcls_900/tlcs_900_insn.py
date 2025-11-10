@@ -847,7 +847,7 @@ def CALL_cc_mem(insn):
     lastmem.plain_addr = True
     if not isinstance(lastmem, MemReg):
         loc = Loc(lastmem.address)
-        if cc != "F": insn.branch(loc, True)
+        if cc != "F": insn.branch(loc, True, call = True)
         return "CALL", cc, loc
 
     return "CALL", cc, lastmem

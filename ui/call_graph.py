@@ -248,7 +248,7 @@ class CallGraph(KWidget, ContextMenuBehavior, Widget):
         callee_functions = list({all_functions[ep] for i, ep in self.fun.callees})
         self.callees.append([Block(center_callees, [self.fun], callee_functions, len(self.fun.name) * FONT_WIDTH + 85, 0, 0, 1)])
         
-        caller_functions = list({all_functions[ep] for i, ep in self.fun.callers})
+        caller_functions = list({all_functions[ep] for i, ep in self.fun.callers if i == self.fun.ep})
         self.callers.append([Block(center_callers, [self.fun], caller_functions, max(map(lambda c: len(c.name) * FONT_WIDTH + 85, caller_functions), default=0), 0, 0, -1)])
 
         self.update_graphics()

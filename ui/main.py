@@ -190,14 +190,19 @@ class ListingPanel(RelativeLayout):
 
     def highlight(self, fun: Function, callee: int | None = None, caller: int | None = None):
         self.highlighted = callee if callee is not None else caller
-        self.highlight_index = 0
-
         if callee:
             self.highlighted_list = list(set([index for index, callee in fun.callees if callee == self.highlighted]))
         elif caller:
             self.highlighted_list = list(set([index for index, _ in fun.callers]))
         
+        logging.info("Highlighting %d occurrences of %s of function %s", len(self.highlighted_list), 
+                     "callee" if callee is not None else "caller", fun.name)
         self.highlighted_list.sort()
+        if len(self.highlighted_list) == 0:
+            self.highlighted = None
+            return
+
+        self.highlight_index = 0
         self.rv.selection_start = self.rv.selection_end = self.highlighted_list[self.highlight_index]
         self._set_selection_end()
         

@@ -9,19 +9,6 @@ import time
 from typing import TextIO
 from tcls_900 import microc
 
-# Command line arguments
-INPUTFILE   = None      # Input file, required
-OUTPUTFILE  = None      # Output file, optional if not silent
-SILENT      = False     # Disables _stdout
-BOUNDS      = []        # Section to disassemble, defaults to entire file
-ENTRY_POINT = 0         # Equivalent to the .org directive, for alignment
-START_POINT = None      # Starting point for the disassembly 
-ENCODING    = "ascii"   # Encoding for .db directive
-LABELS      = True      # Tries to group branching statements to labels
-BRANCHES    = True      # Outputs branching information
-RAW         = False     # Outputs the instructions only
-TIMER       = True      # Records timing
-
 def print_help():
     print("""\
 Usage: py -3 dis.py -i <inputfile> [options]
@@ -98,222 +85,245 @@ The following options are enabled by default:
     """, file=sys.stderr)
     sys.exit(1)
 
-try:
-    opts, args = getopt.gnu_getopt(
-        args = sys.argv,
-        shortopts = "hsr:i:o:e:",
-        longopts = ["ifile=","ofile=", "help", "encoding", "range", "start=", 
-                    "silent", "entry", "org", "no-labels", "no-branches", "no-timer", "raw"])
+from disapi import InputBuffer, OutputBuffer, InsnPool, Insn, Label, insnentry_to_str
 
-except getopt.GetoptError:
-    print_help()
+def main():
+    # Command line arguments
+    INPUTFILE   = None      # Input file, required
+    OUTPUTFILE  = None      # Output file, optional if not silent
+    SILENT      = False     # Disables _stdout
+    BOUNDS      = []        # Section to disassemble, defaults to entire file
+    ENTRY_POINT = 0         # Equivalent to the .org directive, for alignment
+    START_POINT = None      # Starting point for the disassembly 
+    ENCODING    = "ascii"   # Encoding for .db directive
+    LABELS      = True      # Tries to group branching statements to labels
+    BRANCHES    = True      # Outputs branching information
+    RAW         = False     # Outputs the instructions only
+    TIMER       = True      # Records timing
 
-for opt, arg in opts:
-    if opt in ("-h", "--help"):
-        print_help()
-    elif opt in ("-s", "--silent"):
-        SILENT = True
-    elif opt in ("-e", "--entry", "--org"):
-        ENTRY_POINT = int(arg, 0)
-    elif opt == "--start":
-        START_POINT = int(arg, 0)
-    elif opt in ("-r", "--range"):
-        try:
-            BOUNDS = list(map(lambda n: int(n, 0), arg.split(":")))
-        except:
-            print("Invalid range specified.")
-            sys.exit(1)
-        if len(BOUNDS) > 2:
-            print("Invalid range specified.")
-            sys.exit(1)
-    elif opt in ("-i", "--ifile"):
-        INPUTFILE = arg
-    elif opt in ("-o", "--ofile"):
-        OUTPUTFILE = arg
-    elif opt == "--encoding":
-        try:
-            codecs.lookup(arg)
-        except LookupError:
-            print("Codec '" + arg + "' either doesn't exist or isn't supported on this machine.")
-            sys.exit(1)
-        ENCODING = arg
-    elif opt == "--no-labels":
-        LABELS = False
-    elif opt == "--no-branches":
-        BRANCHES = False
-    elif opt == "--no-timer":
-        TIMER = False
-    elif opt == "--raw":
-        RAW = True
-    else:
+    try:
+        opts, args = getopt.gnu_getopt(
+            args = sys.argv,
+            shortopts = "hsr:i:o:e:",
+            longopts = ["ifile=","ofile=", "help", "encoding", "range", "start=", 
+                        "silent", "entry", "org=", "no-labels", "no-branches", "no-timer", "raw"])
+
+    except getopt.GetoptError as err:
         print_help()
 
-if INPUTFILE is None:
-    print("You must provide an input file with [-i <inputfile>]", file=sys.stderr)
-    sys.exit(1)
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            print_help()
+        elif opt in ("-s", "--silent"):
+            SILENT = True
+        elif opt in ("-e", "--entry", "--org"):
+            ENTRY_POINT = int(arg, 0)
+        elif opt == "--start":
+            if "," in arg:
+                START_POINT = list(map(lambda v: int(v, 0), arg.split(",")))
+            else:
+                START_POINT = int(arg, 0)
+        elif opt in ("-r", "--range"):
+            try:
+                BOUNDS = list(map(lambda n: int(n, 0), arg.split(":")))
+            except:
+                print("Invalid range specified.")
+                sys.exit(1)
+            if len(BOUNDS) > 2:
+                print("Invalid range specified.")
+                sys.exit(1)
+        elif opt in ("-i", "--ifile"):
+            INPUTFILE = arg
+        elif opt in ("-o", "--ofile"):
+            OUTPUTFILE = arg
+        elif opt == "--encoding":
+            try:
+                codecs.lookup(arg)
+            except LookupError:
+                print("Codec '" + arg + "' either doesn't exist or isn't supported on this machine.")
+                sys.exit(1)
+            ENCODING = arg
+        elif opt == "--no-labels":
+            LABELS = False
+        elif opt == "--no-branches":
+            BRANCHES = False
+        elif opt == "--no-timer":
+            TIMER = False
+        elif opt == "--raw":
+            RAW = True
+        else:
+            print_help()
 
-if OUTPUTFILE is None and SILENT:
-    print("You must provide an output file with [-o <outputfile>] when in silent mode", file=sys.stderr)
-    sys.exit(1)
+    if INPUTFILE is None:
+        print("You must provide an input file with [-i <inputfile>]", file=sys.stderr)
+        sys.exit(1)
 
-if not os.path.isfile(INPUTFILE):
-    print("Input file \"" + INPUTFILE + "\" does not exist.", file=sys.stderr)
-    sys.exit(1)
+    if OUTPUTFILE is None and SILENT:
+        print("You must provide an output file with [-o <outputfile>] when in silent mode", file=sys.stderr)
+        sys.exit(1)
 
-if START_POINT is None:
-    START_POINT = ENTRY_POINT
+    if not os.path.isfile(INPUTFILE):
+        print("Input file \"" + INPUTFILE + "\" does not exist.", file=sys.stderr)
+        sys.exit(1)
 
-if START_POINT < ENTRY_POINT:
-    print("Start address must be greater or equal to the entry point.", file=sys.stderr)
-    sys.exit(1)
+    if START_POINT is None:
+        START_POINT = ENTRY_POINT
 
-if SILENT:
-    # Silent flag overrides print to do nothing
-    sys.stdout = open(os.devnull, 'a')
+    if isinstance(START_POINT, int):
+        START_POINT = [START_POINT]
 
-# Now import everything from the api
-from disapi import *
+    if any(sp < ENTRY_POINT for sp in START_POINT):
+        print("Start address must be greater or equal to the entry point.", file=sys.stderr)
+        sys.exit(1)
 
-# Helper function to decode db statements
-def decode_db(buffer):
+    if SILENT:
+        # Silent flag overrides print to do nothing
+        sys.stdout = open(os.devnull, 'a')
 
-    # Replace unprintable ascii characters with dots
-    if ENCODING == "ascii":
-        for i, v in enumerate(buffer):
-            if v < 0x20 or v > 0x7E:
-                buffer[i] = 0x2E
-        return buffer.decode("ascii")
+    # Helper function to decode db statements
+    def decode_db(buffer):
 
-    # Else we go with a more general escape sequence
-    # This might not align perfectly, more codecs aren't
-    # supported as of now.
-    # TODO: Support more codecs, do ascii replace for derived encodings as well
+        # Replace unprintable ascii characters with dots
+        if ENCODING == "ascii":
+            for i, v in enumerate(buffer):
+                if v < 0x20 or v > 0x7E:
+                    buffer[i] = 0x2E
+            return buffer.decode("ascii")
 
-    buffer = buffer.decode(ENCODING, "replace") \
-        .replace("\0", ".") \
-        .replace("\n", ".") \
-        .replace("\r", ".") \
-        .replace("\a", ".") \
-        .replace("\t", ".") \
-        .replace("\uFFFD", ".")
+        # Else we go with a more general escape sequence
+        # This might not align perfectly, more codecs aren't
+        # supported as of now.
+        # TODO: Support more codecs, do ascii replace for derived encodings as well
 
-    return buffer
+        buffer = buffer.decode(ENCODING, "replace") \
+            .replace("\0", ".") \
+            .replace("\n", ".") \
+            .replace("\r", ".") \
+            .replace("\a", ".") \
+            .replace("\t", ".") \
+            .replace("\uFFFD", ".")
 
-try:
-    file_len = os.path.getsize(INPUTFILE)
+        return buffer
 
-    if TIMER:
-        start = time.time()
+    try:
+        file_len = os.path.getsize(INPUTFILE)
 
-    microc.load_microcontroller("TMP91C016")
+        if TIMER:
+            start = time.time()
 
-    with io.open(INPUTFILE, 'rb') as f:
-        ib = InputBuffer(f, file_len, BOUNDS, ENTRY_POINT)
-        ob = OutputBuffer(OUTPUTFILE)
+        microc.load_microcontroller("TMP91C016")
 
-        from tcls_900 import tlcs_900 as proc
+        with io.open(INPUTFILE, 'rb') as f:
+            ib = InputBuffer(f, file_len, BOUNDS, ENTRY_POINT)
+            ob = OutputBuffer(OUTPUTFILE)
 
-        pool = InsnPool(proc)
-        insn = Insn(pool, ib, ob, START_POINT)
+            from tcls_900 import tlcs_900 as proc
 
-    pool.query(insn)
-    pool.poll_all()
+            pool = InsnPool(proc)
+            for sp in START_POINT:
+                insn = Insn(pool, ib, ob, sp)
+                pool.query(insn)
 
-    if OUTPUTFILE is not None:
-        f2: TextIO = io.open(OUTPUTFILE, 'w')
+        pool.poll_all()
 
-        def output(*args):
-            print(*args)
-            f2.write(" ".join(args) + "\n")
-    else:
-        output = print
+        if OUTPUTFILE is not None:
+            f2: TextIO = io.open(OUTPUTFILE, 'w')
 
-    if LABELS:
-        ob.compute_labels(ENTRY_POINT, file_len + ENTRY_POINT)  # Labels aren't computed by default
+            def output(*args):
+                print(*args)
+                f2.write(" ".join(args) + "\n")
+        else:
+            output = print
 
-    if not RAW:
-        output("Result: ")
-        output("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
-
-        # Labels
         if LABELS:
-            output("\nLabels:\n")
-            output(", ".join(sorted(map(Label.to_str, ob.labels.values()))))
+            ob.compute_labels(ENTRY_POINT, file_len + ENTRY_POINT)  # Labels aren't computed by default
 
-        # Branches
-        if BRANCHES:
-            output("\nBranches:\n")
-            output(", ".join(map(str, ob.branchlist)))
+        if not RAW:
+            output("Result: ")
+            output("=" * (shutil.get_terminal_size((30, 0))[0] - 1))
 
-        # Instructions
-        output("\nInstructions:\n")
+            # Labels
+            if LABELS:
+                output("\nLabels:\n")
+                output(", ".join(sorted(map(Label.to_str, ob.labels.values()))))
 
-    if ENTRY_POINT != 0:
-        output("\t.org " + format(ENTRY_POINT, "x") + "h")
+            # Branches
+            if BRANCHES:
+                output("\nBranches:\n")
+                output(", ".join(map(str, ob.branchlist)))
 
-    # Padding for byte numbers
-    padding = len(str(file_len))
+            # Instructions
+            output("\nInstructions:\n")
 
-    def output_db(nxt, last):
-        diff = nxt - last
-        if diff < 1: return
+        if ENTRY_POINT != 0:
+            output("\t.org " + format(ENTRY_POINT, "x") + "h")
 
-        output("; Data Section at " + format(last, "X") + ": ")
-        while diff > 0:
-            i = nxt - diff
-            i2 = min(i + 7, nxt)
-            b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
+        # Padding for byte numbers
+        padding = len(str(file_len))
 
-            if not RAW:
-                dstr = " ".join([format(i, "0>2X") for i in b])
-                # Decode and replace garbage sequences with dots
-                decoded = decode_db(b)
-                output("\t\t" + format(i, "X").ljust(padding) + ": " + dstr.ljust(20) + " | .db \"" + decoded + "\"")
-            else:
-                # In raw mode output actual hex codes
-                dstr = ", ".join([format(i, "0>2x") + "h" for i in b])
-                output("\t.db " + dstr)
+        def output_db(nxt, last):
+            diff = nxt - last
+            if diff < 1: return
 
-            diff -= 7
+            output("; Data Section at " + format(last, "X") + ": ")
+            while diff > 0:
+                i = nxt - diff
+                i2 = min(i + 7, nxt)
+                b = ib.buffer[i - ENTRY_POINT:i2 - ENTRY_POINT]
 
-    last = ENTRY_POINT
-    for k, v in sorted(ob.insnmap.items()):
-        # Fill with db statements
-        output_db(v[0].pc, last)
-
-        output("; Section at " + format(k, "X") + ": ")
-
-        for i in range(0, len(v)):
-            v2 = v[i]
-            #Label if present
-            label = ob.label(v2.pc)
-
-            if not RAW:
-                if label is not None:
-                    output("\t" + str(label) + ":")
-
-                output("\t\t" + format(v2.pc, "X").ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(20) + " | " + insnentry_to_str(v2, ob))
-            else:
-                if label is not None:
-                    output((str(label) + ": ").ljust(12) + insnentry_to_str(v2, ob))
+                if not RAW:
+                    dstr = " ".join([format(i, "0>2X") for i in b])
+                    # Decode and replace garbage sequences with dots
+                    decoded = decode_db(b)
+                    output("\t\t" + format(i, "X").ljust(padding) + ": " + dstr.ljust(20) + " | .db \"" + decoded + "\"")
                 else:
-                    output("".ljust(12) + insnentry_to_str(v2, ob))
+                    # In raw mode output actual hex codes
+                    dstr = ", ".join([format(i, "0>2x") + "h" for i in b])
+                    output("\t.db " + dstr)
 
-        last = v2.pc + v2.length
+                diff -= 7
 
-    if len(BOUNDS) == 2:
-        end = BOUNDS[1] - BOUNDS[0]
-    elif len(BOUNDS) == 1:
-        end = file_len - BOUNDS[0]
-    else: end = file_len
-    output_db(min(file_len, end) + ENTRY_POINT, last)
+        last = ENTRY_POINT
+        for k, v in sorted(ob.insnmap.items()):
+            # Fill with db statements
+            output_db(v[0].pc, last)
 
-    if TIMER:
-        end = round(time.time() - start, 3)
-        output("; Done in " + str(end) + " seconds.")
+            output("; Section at " + format(k, "X") + ": ")
 
-    if OUTPUTFILE is not None:
-        f2.close()
+            for i in range(0, len(v)):
+                v2 = v[i]
+                #Label if present
+                label = ob.label(v2.pc)
 
-except KeyboardInterrupt:
-    print("\n! Received keyboard interrupt, quitting threads.\n")
+                if not RAW:
+                    if label is not None:
+                        output("\t" + str(label) + ":")
+
+                    output("\t\t" + format(v2.pc, "X").ljust(padding) + ": " + " ".join([format(i, "0>2X") for i in v2.bytes(ib)]).ljust(20) + " | " + insnentry_to_str(v2, ob))
+                else:
+                    if label is not None:
+                        output((str(label) + ": ").ljust(12) + insnentry_to_str(v2, ob))
+                    else:
+                        output("".ljust(12) + insnentry_to_str(v2, ob))
+
+            last = v2.pc + v2.length
+
+        if len(BOUNDS) == 2:
+            end = BOUNDS[1] - BOUNDS[0]
+        elif len(BOUNDS) == 1:
+            end = file_len - BOUNDS[0]
+        else: end = file_len
+        output_db(min(file_len, end) + ENTRY_POINT, last)
+
+        if TIMER:
+            end = round(time.time() - start, 3)
+            output("; Done in " + str(end) + " seconds.")
+
+        if OUTPUTFILE is not None:
+            f2.close()
+
+    except KeyboardInterrupt:
+        print("\n! Received keyboard interrupt, quitting threads.\n")
+
+if __name__ == "__main__":
+    main()
