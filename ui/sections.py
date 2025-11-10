@@ -137,7 +137,7 @@ class RV(KWidget, RecycleView):
     def reset_selection(self):
         self.selection_start = 0
         self.selection_end = 0
-        self.redraw_children()
+        self.redraw_data()
 
     def redraw_data(self):
         for panel in iter_all_children_of_type(self.children[0], SectionData):

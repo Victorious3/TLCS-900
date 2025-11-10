@@ -239,7 +239,7 @@ def deserialize_reg_mem(data: dict) -> Reg | int:
 class FunctionState:
     def __init__(
             self, proj: "Project",
-            clobbers: set[tuple[int, Reg | int]] | None = None, 
+            clobbers: set[tuple[int, Reg | int, int]] | None = None, 
             input: set[Reg | int] | None = None, 
             output: set[Reg | int] | None = None, 
             stack: list[tuple[int, Reg | int]] | None = None, 
@@ -257,7 +257,7 @@ class FunctionState:
 
     def serialize(self) -> dict:
         res = {}
-        res["clobbers"] = [{"ep": c[0], "value": serialize_reg_mem(c[1]) } for c in self.clobbers]
+        res["clobbers"] = [{"pc": c[0], "value": serialize_reg_mem(c[1]), "ep": c[2]} for c in self.clobbers]
         res["input"] = [serialize_reg_mem(i) for i in self.input]
         res["output"] = [serialize_reg_mem(o) for o in self.output]
         fun_stack = []
@@ -276,7 +276,7 @@ class FunctionState:
     def deserialize(data: dict, proj: "Project") -> "FunctionState":
         state = FunctionState(proj)
         for c in data["clobbers"]:
-            state.clobbers.add((c["ep"], deserialize_reg_mem(c["value"])))
+            state.clobbers.add((c["pc"], deserialize_reg_mem(c["value"]), c["ep"]))
         for i in data["input"]:
             state.input.add(deserialize_reg_mem(i))
         for o in data["output"]:
@@ -300,7 +300,7 @@ class FunctionState:
         return f"{{\n\t{clobbers=}\n\t{input=}\n\t{output=}\n\t{stack=}\n}}"
     
     def is_clobbered(self, pc: int, reg: Reg | int) -> bool:
-        for c, r in self.clobbers:
+        for c, r, _ in self.clobbers:
             if c < pc and overlaps(r, reg): return True
         return False
     
@@ -317,7 +317,7 @@ class FunctionState:
         self.input = set(filter(lambda r2: not overlaps_and_covers(r2, reg), self.input))
         self.input.add(reg)
 
-    def add_clobber(self, pc: int, reg: Reg | int):
+    def add_clobber(self, pc: int, reg: Reg | int, ep: int):
         for fun, in_in, in_out in reversed(self.fun_stack):
             for r in in_in.copy():
                 if overlaps(r, reg): in_in.remove(r)
@@ -325,15 +325,15 @@ class FunctionState:
 
         if any(map(lambda ir: overlaps_and_covers(reg, ir[1]), self.clobbers)): return
         self.clobbers = set(filter(lambda c: not overlaps_and_covers(c[1], reg), self.clobbers))
-        self.clobbers.add((pc, reg))
+        self.clobbers.add((pc, reg, ep))
 
-    def push_function(self, pc: int, fun: "Function"):
+    def push_function(self, pc: int, fun: "Function", ep: int):
         assert fun.state is not None
         input = set(map(lambda c: c[1], fun.state.clobbers))
         for c in fun.state.input:
             self.add_input(pc, c)
         for c in input:
-            self.add_clobber(pc, c)
+            self.add_clobber(pc, c, ep=ep)
         self.fun_stack.append((fun.ep, input, set()))
 
     def clear_functions(self):
@@ -345,7 +345,7 @@ class FunctionState:
         self.fun_stack.clear()
 
     @staticmethod
-    def merge(a: "FunctionState | None", b: "FunctionState | None",) -> "FunctionState":
+    def merge(a: "FunctionState | None", b: "FunctionState | None") -> "FunctionState":
         if a is None:
             assert b is not None
             b.clear_functions()
@@ -364,7 +364,7 @@ class FunctionState:
             stack = a.stack if len(a.stack) >= len(b.stack) else b.stack,
             pc = max(a.pc, b.pc)
         )
-        for pc, cl in b.clobbers: state.add_clobber(pc, cl)
+        for pc, cl, ep in b.clobbers: state.add_clobber(pc, cl, ep=ep)
         for i in b.input: state.add_input(a.pc, i)
         return state
     
@@ -403,6 +403,10 @@ class Function:
 
     def __str__(self) -> str:
         return self.name
+    
+    @property
+    def frequency(self) -> int:
+        return len(set(map(lambda c: c[0], self.callers)))
 
     @property
     def name(self) -> str:
@@ -550,7 +554,7 @@ class Function:
                             if not fun.state: fun.analyze(proj, tick)
                             fun.callers.append((insn.entry.pc, self.ep))
                             self.callees.append((insn.entry.pc, fun.ep))
-                            state.push_function(pc, fun)
+                            state.push_function(pc, fun, insn.entry.pc)
 
                     else:
                         load = get_load(insn)
@@ -561,7 +565,7 @@ class Function:
                         store = get_store(insn)
                         for r in store:
                             #print(self.ep, "clobber", pc, r)
-                            state.add_clobber(pc, r)
+                            state.add_clobber(pc, r, ep=insn.entry.pc)
                     pc += 1
 
                 state.pc = pc

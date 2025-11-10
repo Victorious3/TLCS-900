@@ -53,6 +53,11 @@ class DockSplitter(Splitter, Child):
     
     def iterate_panels(self) -> "Generator[DockTab, None, None]":
         return self.dock.iterate_panels()
+    
+    def on_touch_down(self, touch):
+        if touch.is_double_tap:
+            return False
+        return super().on_touch_down(touch)
 
 class DockScrollView(ScrollView):
     SCROLL_STEP = 0.1
@@ -146,8 +151,8 @@ class DockPanel(KWidget, BoxLayout, Child):
         if touch.button == "left":
             self.drop_quadrant = None
             self.drop_tab = None
-            if self._current_widget and self._current_widget.content:
-                if self._current_widget.content.collide_point(touch.x, touch.y):
+            if self._current_widget and self._current_widget._content:
+                if self._current_widget._content.collide_point(touch.x, touch.y):
                     self._current_widget.select()
         return super().on_touch_down(touch)
 
@@ -186,9 +191,9 @@ class DockPanel(KWidget, BoxLayout, Child):
         widget.dock_panel = self
         self._tab_strip.add_widget(widget, index)
         if self._current_widget:
-            super().remove_widget(self._current_widget.content)
+            super().remove_widget(self._current_widget._content)
         self._current_widget = widget
-        super().add_widget(self._current_widget.content)
+        super().add_widget(self._current_widget._content)
         Clock.schedule_once(lambda dt: self._calculate_tab_size(), 0)
 
     def remove_widget(self, widget: "DockTab"):
@@ -199,20 +204,20 @@ class DockPanel(KWidget, BoxLayout, Child):
 
         # If we currently select said widget we need to switch to the previous one if possible
         if self._current_widget == widget:
-            super().remove_widget(widget.content)
+            super().remove_widget(widget._content)
             tab_list = self.tab_list
             if len(tab_list) > 0:
                 self._current_widget = tab_list[max(0, index - 1)]
-                super().add_widget(self._current_widget.content)
+                super().add_widget(self._current_widget._content)
 
         Clock.schedule_once(lambda dt: self._calculate_tab_size(), 0)
     
     def select_widget(self, widget: "DockTab"):
         assert widget.dock_panel == self
         if self._current_widget:
-            super().remove_widget(self._current_widget.content)
+            super().remove_widget(self._current_widget._content)
         self._current_widget = widget
-        super().add_widget(self._current_widget.content)
+        super().add_widget(self._current_widget._content)
 
     def _calculate_tab_size(self):
         w = 0
@@ -296,11 +301,15 @@ class DockTab(KWidget, RelativeLayout):
         super().add_widget(self.xbutton)
         super().add_widget(DockTabIcon())
 
+    @property
+    def content(self) -> Widget | None:
+        return self._content
+
     def add_widget(self, widget: Widget, *args, **kwargs):
-        self.content = widget
+        self._content = widget
 
     def remove_widget(self, *args, **kwargs):
-        self.content = None
+        self._content = None
 
     def index(self) -> int:
         if not self.dock_panel: return -1
@@ -581,7 +590,7 @@ class Dock(KWidget, BaseDock):
     
     @property
     def active_content(self) -> Widget | None:
-        if self._active_panel: return self._active_panel.content
+        if self._active_panel: return self._active_panel._content
         return None
 
     @active_panel.setter

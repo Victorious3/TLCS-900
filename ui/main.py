@@ -1,8 +1,9 @@
+from itertools import groupby
 from pathlib import Path
 import json, math, shutil, tempfile, sys, traceback, logging
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Iterable, TypeVar, Type, Generator, cast
+from typing import Any, Callable, Iterable, TypeVar, Type, Generator, Union, cast
 from platformdirs import PlatformDirs
 from configparser import ConfigParser
 
@@ -17,8 +18,14 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.treeview import TreeView, TreeViewLabel
+from kivy.uix.scrollview import ScrollView
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
+
+from disapi import insnentry_to_str
+from tcls_900.tlcs_900 import Mem, Reg
+from ui.kivytypes import KWidget
 
 
 # Patch widget class TODO Handle on_leave when children move out of view
@@ -113,7 +120,7 @@ class NavigationListing(NavigationAction):
         except ValueError as e:
             pass # Invalid location
 
-from .project import Section, DATA_PER_ROW, Project, Function
+from .project import Instruction, Section, DATA_PER_ROW, Project, Function
 from .arrow import ArrowRenderer
 from .minimap import Minimap
 from .main_menu import build_menu
@@ -154,6 +161,9 @@ class RenameInput(BoxLayout, EscapeTrigger):
         self.opacity = 1
         self.input.text = label.name
         self.input.focus = True
+
+    def on_escape(self, obj):
+        self.hide()
 
 class ListingPanel(RelativeLayout):
     def __init__(self, **kw):
@@ -264,6 +274,203 @@ class ListingPanel(RelativeLayout):
 
 class MainWindow(FloatLayout): pass
 
+class ListingViewLabel(TreeViewLabel):
+    parent: "FunctionListingDetails"
+
+    def refresh(self): pass
+
+class InOutViewLabelMem(ListingViewLabel):
+    def __init__(self, mem_list: list[int], **kwargs):
+        self.mem_list = mem_list
+        super().__init__(**kwargs)
+        self.refresh()
+
+    def refresh(self):
+        label = app().project.ob.label(self.mem_list[0])
+        if len(self.mem_list) > 1:
+            text = f"{self.mem_list[0]:X}-{self.mem_list[-1]:X}"
+        else:
+            text = f"{self.mem_list[0]:X}"
+
+        if label: text = f"{label.name} ({text})"
+
+        self.text = text
+
+class ClobberViewLabel(ListingViewLabel):
+    def __init__(self, ep: int, do_group: bool, **kwargs):
+        self.ep = ep
+        self.do_group = do_group
+        super().__init__(**kwargs)
+        self.refresh()
+
+    def on_touch_down(self, touch):
+        if super().on_touch_down(touch): return True
+        app().scroll_to_offset(self.ep, main_panel=self.parent.container.listing, history=False)
+        return True
+
+class ClobberViewLabelCall(ClobberViewLabel):
+    def __init__(self, ep: int, do_group: bool, call: Instruction, **kwargs):
+        self.call = call
+        super().__init__(ep, do_group, **kwargs)
+
+    def refresh(self):
+        self.text=f"{self.ep:X}: {insnentry_to_str(self.call.entry, app().project.ob)}"
+
+class ClobberViewLabelMem(ClobberViewLabel):
+
+    def __init__(self, ep: int, do_group: bool, mem_list: list[int], **kwargs):
+        self.mem_list = mem_list
+        super().__init__(ep, do_group, **kwargs)
+
+    def refresh(self):
+        label = app().project.ob.label(self.mem_list[0])
+        if len(self.mem_list) > 1:
+            text = f"{self.mem_list[0]:X}-{self.mem_list[-1]:X}"
+        else:
+            text = f"{self.mem_list[0]:X}"
+
+        if label: text = f"{label.name} ({text})"
+        if not self.do_group: text = f"{self.ep:X}: {text}"
+        self.text = text
+
+class FunctionListingDetails(KWidget, TreeView):
+    parent: ScrollView
+
+    def __init__(self, function: Function, container: "FunctionListingContainer", **kwargs):
+        self.fun = function
+        self.container = container
+
+        super().__init__(hide_root=True, size_hint=(1, None), **kwargs)
+
+        node = TreeViewLabel(text="Name", is_open=True)
+        self.add_node(node)
+        self.name_node = TreeViewLabel(text=function.name)
+        self.add_node(self.name_node, node)
+
+        node = TreeViewLabel(text="Address", is_open=True)
+        self.add_node(node)
+        self.add_node(TreeViewLabel(text=format(function.ep, "X")), node)
+
+        node = TreeViewLabel(text="Frequency", is_open=True)
+        self.add_node(node)
+        self.add_node(TreeViewLabel(text=str(function.frequency)), node)
+
+        node = TreeViewLabel(text="Complexity", is_open=True)
+        self.add_node(node)
+        self.add_node(TreeViewLabel(text=str(len(function.blocks))), node)
+
+        def group_mems(mems: list[int]) -> list[list[int]]:
+            return [
+                [num for _, num in g]  # extract only the value
+                for _, g in groupby(enumerate(sorted(mems)), lambda x: x[1] - x[0])
+            ]
+        
+        def is_call(ep: int) -> Instruction | None:
+            for block in function.blocks.values():
+                for inst in block.insn:
+                    if inst.entry.pc == ep and inst.entry.opcode in ("CALL", "CALR"):
+                        return inst
+            return None
+
+        assert function.state is not None
+
+        def add_registers(name: str, registers: set[Union[Reg, int]]):
+            node = TreeViewLabel(text=f"{name} Registers")
+            self.add_node(node)
+            for reg in sorted([reg for reg in registers if isinstance(reg, Reg)], key=lambda r: r.addr):
+                self.add_node(TreeViewLabel(text=str(reg), font_name=FONT_NAME), node)
+
+            node = TreeViewLabel(text=f"{name} Memory")
+            self.add_node(node)
+
+            mems = [mem for mem in registers if isinstance(mem, int)]
+            for mem_list in group_mems(mems):
+                self.add_node(InOutViewLabelMem(mem_list=mem_list, font_name=FONT_NAME), node)
+
+        add_registers("Input", function.state.input)
+        add_registers("Output", function.state.output)
+        
+        node = TreeViewLabel(text=f"Clobbers")
+        self.add_node(node)
+        for ep, group in groupby(sorted(function.state.clobbers, key=lambda e: e[2]), key=lambda e: e[2]):
+            group = list(group)
+            node2 = node
+            do_group = False
+            call = is_call(ep)
+            if call:
+                node2 = ClobberViewLabelCall(ep, do_group, call, font_name=FONT_NAME)
+                self.add_node(node2, node)
+                do_group = True
+            
+            regs: list[Reg] = []
+            mems: list[int] = []
+            for _, value, _ in group:
+                if isinstance(value, Reg):
+                    regs.append(value)
+                else:
+                    mems.append(value)
+
+            for reg in regs:
+                text = str(reg) 
+                if not do_group: text = f"{ep:X}: {text}"
+                self.add_node(ClobberViewLabel(ep, do_group, text=text, font_name=FONT_NAME), node2)
+
+            for mem_list in group_mems(mems):
+                self.add_node(ClobberViewLabelMem(ep, do_group, mem_list=mem_list, font_name=FONT_NAME), node2)
+
+            self.bind(minimum_size=lambda _, value: setattr(self, 'height', value[1]))
+
+    def toggle_node(self, node):
+        super().toggle_node(node)
+        self.refresh()
+
+    def refresh(self):
+        for label in iter_all_children_of_type(self, ListingViewLabel):
+            label.refresh()
+
+        self.name_node.text = self.fun.name
+
+    def serialize(self, data: dict):
+        open_state = []
+        node: TreeViewLabel
+        for node in self.iterate_all_nodes():
+            open_state.append({
+                "is_open": node.is_open
+            })
+        data["tree"] = {
+            "open_state": open_state,
+            "scroll_y": self.parent.scroll_y,
+            "splitter_width": self.container.splitter.width
+        }
+
+    def deserialize_post(self, data: dict):
+        if "tree" in data:
+            tree = data["tree"]
+            if "open_state" in tree:
+                for node, node_data in zip(self.iterate_all_nodes(), tree["open_state"]):
+                    node.is_open = node_data.get("is_open", node.is_open)
+            if "scroll_y" in tree:
+                self.parent.scroll_y = tree["scroll_y"]
+            if "splitter_width" in tree:
+                self.container.splitter.width = tree["splitter_width"]
+
+class FunctionListingContainer(BoxLayout):
+    listing: "FunctionListing"
+
+    def __init__(self, function: Function, **kwargs):
+        self.fun = function
+        super().__init__(**kwargs)
+
+        self.details = FunctionListingDetails(function, self)
+        self.splitter = Splitter(size_hint=(None, 1), width=dp(400), sizable_from='right')
+        scrollview = ScrollView(size_hint=(1, 1))
+        scrollview.add_widget(self.details)
+        self.splitter.add_widget(scrollview)
+        self.add_widget(self.splitter)
+
+        self.listing = FunctionListing(function)
+        self.add_widget(self.listing)
+
 class FunctionListing(ListingPanel):
     def __init__(self, function: Function, **kwargs):
         self.fun = function
@@ -278,19 +485,25 @@ class FunctionListing(ListingPanel):
         return self.sections
 
 class ListingTab(SerializableTab):
-    content: FunctionListing
+    _content: FunctionListingContainer
 
     def __init__(self, text: str, **kwargs):
         super().__init__(text=text, closeable=True, source="ui/resources/code-listing.png", **kwargs)
+
+    @property
+    def content(self) -> FunctionListing:
+        return self._content.listing
 
     def serialize(self) -> dict:
         res = super().serialize()
         res["function"] = self.content.fun.ep
         self.content.serialize(res)
+        self._content.details.serialize(res)
         return res
     
     def refresh(self, **kwargs):
         self.content.rv.redraw_children()
+        self._content.details.refresh()
         self.text = self.content.fun.name
     
     @classmethod
@@ -300,12 +513,13 @@ class ListingTab(SerializableTab):
         assert functions
         fun = functions[ep]
         tab = ListingTab(fun.name)
-        listing = FunctionListing(fun)
+        listing = FunctionListingContainer(fun)
         tab.add_widget(listing)
         return tab
 
     def deserialize_post(self, data: dict):
         self.content.deserialize_post(data)
+        self._content.details.deserialize_post(data)
 
 class GotoPosition(HideableTextInput, EscapeTrigger):
     def _on_focus(self, instance, value, *largs):
@@ -603,7 +817,7 @@ class DisApp(App):
             else: 
                 if isinstance(main_panel, FunctionListing):
                     tab = ListingTab(text=main_panel.fun.name)
-                    tab.add_widget(main_panel)
+                    tab.add_widget(main_panel.parent)
                     self.main_dock.add_tab(tab, reverse=True)
         else:
             self.find_main_panel().select()
@@ -650,24 +864,24 @@ class DisApp(App):
         fun = self.find_function(ep)
         if not fun: return
 
-        panel: FunctionListing | None = None
+        panel: FunctionListingContainer | None = None
         for tab in self.main_dock.iterate_panels():
             if isinstance(tab, ListingTab) and tab.content.fun == fun:
                 tab.content.highlight(fun, highlight_callee, highlight_caller)
                 tab.select()
-                panel = tab.content
+                panel = tab.content.parent
                 break
         
         if not panel:
             tab = ListingTab(text=fun.name)
-            panel = FunctionListing(fun)
+            panel = FunctionListingContainer(fun)
             if highlight_callee is not None or highlight_caller is not None:
-                Clock.schedule_once(lambda dt: panel.highlight(fun, highlight_callee, highlight_caller), 0)
+                Clock.schedule_once(lambda dt: panel.listing.highlight(fun, highlight_callee, highlight_caller), 0)
             tab.add_widget(panel)
 
             app().main_dock.add_tab(tab, reverse=True)
 
-        app().update_position_history(NavigationListing(panel, fun.ep))
+        app().update_position_history(NavigationListing(panel.listing, fun.ep))
     
     def open_function_graph(self, ep: int, rescale=True, callback: Callable[[GraphTab], None] | None = None):
         if not self.project.functions:

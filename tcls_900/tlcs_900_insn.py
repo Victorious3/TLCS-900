@@ -8,7 +8,9 @@ WA = Reg(False, WORD, 0)
 # If a displacement looks like an address, insert a memory location here
 def check_address(insn, address):
     if insn.ibuffer.min <= address < insn.ibuffer.max:
-        return Mem(address, plain_addr=True)
+        mem = Mem(address, plain_addr=True)
+        mem.datalabel(insn)
+        return mem
     return address
 
 # 1) Load Instructions
