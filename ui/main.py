@@ -22,6 +22,7 @@ from kivy.uix.treeview import TreeView, TreeViewLabel
 from kivy.uix.scrollview import ScrollView
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
+from kivy.properties import BooleanProperty
 
 from disapi import insnentry_to_str
 from tcls_900.tlcs_900 import Mem, Reg
@@ -166,6 +167,8 @@ class RenameInput(BoxLayout, EscapeTrigger):
         self.hide()
 
 class ListingPanel(RelativeLayout):
+    is_root: bool = BooleanProperty(False)
+
     def __init__(self, **kw):
         self.rv: RV = cast(RV, None)
         self.minimap: Minimap = cast(Minimap, None)
@@ -177,6 +180,8 @@ class ListingPanel(RelativeLayout):
 
         Window.bind(on_key_down=self._keydown)
         super().__init__(**kw)
+
+    def toggle(self): pass
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
         if self.get_root_window() is None:
@@ -440,7 +445,8 @@ class FunctionListingDetails(KWidget, TreeView):
         data["tree"] = {
             "open_state": open_state,
             "scroll_y": self.parent.scroll_y,
-            "splitter_width": self.container.splitter.width
+            "splitter_width": self.container.splitter.width,
+            "toggled": self.container.listing.toggled
         }
 
     def deserialize_post(self, data: dict):
@@ -453,6 +459,12 @@ class FunctionListingDetails(KWidget, TreeView):
                 self.parent.scroll_y = tree["scroll_y"]
             if "splitter_width" in tree:
                 self.container.splitter.width = tree["splitter_width"]
+            if "toggled" in tree:
+                toggled = tree["toggled"]
+                self.container.listing.toggled = toggled
+                if toggled:
+                    self.container.expand(True)
+                
 
 class FunctionListingContainer(BoxLayout):
     listing: "FunctionListing"
@@ -471,7 +483,15 @@ class FunctionListingContainer(BoxLayout):
         self.listing = FunctionListing(function)
         self.add_widget(self.listing)
 
+    def expand(self, toggled: bool):
+        if toggled:
+            self.remove_widget(self.splitter)
+        else:
+            self.add_widget(self.splitter, index=1)
+
 class FunctionListing(ListingPanel):
+    parent: FunctionListingContainer
+
     def __init__(self, function: Function, **kwargs):
         self.fun = function
         self.sections: list[Section] | None = None
@@ -483,6 +503,11 @@ class FunctionListing(ListingPanel):
             sorted(map(lambda b: b.to_section(), self.fun.blocks.values()), 
                    key=lambda s: s.offset))
         return self.sections
+    
+    def toggle(self):
+        self.toggled = not self.toggled
+        self.parent.expand(self.toggled)
+
 
 class ListingTab(SerializableTab):
     _content: FunctionListingContainer
@@ -568,7 +593,7 @@ class MainDockTab(SerializableTab):
     @classmethod
     def deserialize(cls, dict) -> "MainDockTab":
         tab = MainDockTab(text=app().project.filename)
-        panel = ListingPanel()
+        panel = ListingPanel(is_root=True)
         tab.add_widget(panel)
         app().dis_panel = panel
         return tab
@@ -626,7 +651,7 @@ class DisApp(App):
         build_menu()
         if not self.load_ui_state():
             self.main_dock.clear_widgets()
-            self.dis_panel = ListingPanel()
+            self.dis_panel = ListingPanel(is_root=True)
             tab = MainDockTab(text=self.project.filename)
             tab.add_widget(self.dis_panel)
             self.main_dock.add_tab(tab)

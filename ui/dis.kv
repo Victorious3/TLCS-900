@@ -96,6 +96,7 @@
 
 <ListingPanel>:
     size_hint: 1, 1
+    toggled: False
 
     Minimap:
         id: minimap
@@ -106,6 +107,17 @@
     ScrollBar:
         id: scrollbar
         pos_hint: { "left": 1, "bottom": 1 }
+
+    IconButton:
+        id: toggle_menu
+        size_hint: None, None
+        source: "ui/resources/expand.png" if root.toggled else "ui/resources/contract.png"
+        opacity: 0 if root.is_root else 1
+        disabled: root.is_root
+        size: dp(20), dp(20)
+        icon_height: dp(15)
+        pos_hint: {"left": 1, "top": 1}
+        on_press: root.toggle()
 
 <AnalyzerLabel>:
     size_hint: None, 1

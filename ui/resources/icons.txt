@@ -17,3 +17,7 @@ Url icons created by Muhamad Ulum - Flaticon
 calls.png
 https://www.flaticon.com/free-icons/data
 Data icons created by Nixxdsgn - Flaticon
+
+expand.png, contract.png
+https://www.flaticon.com/free-icons/next
+Next icons created by meaicon - Flaticon
