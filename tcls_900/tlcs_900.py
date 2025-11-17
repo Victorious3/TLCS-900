@@ -77,7 +77,8 @@ class Mem:
         self.plain_addr = plain_addr
 
     def datalabel(self, insn):
-        insn.obuffer.datalabel(self.address)
+        if not self.special:
+            insn.obuffer.datalabel(self.address)
         
     def to_str(self, ob):
         if self.name: name = self.name
@@ -97,6 +98,9 @@ class MemReg(Mem):
         super().__init__(address, name)
         self.reg1 = reg1
         self.reg2 = reg2
+
+    def datalabel(self, insn):
+        pass # Do nothing for MemReg
 
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   

@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+import dataclasses
 from hashlib import md5
 import os, json
 from threading import Thread
@@ -582,6 +584,12 @@ def label_list(label):
     if label is None: return []
     return [label]
 
+@dataclass
+class MemoryRegion:
+    start: int
+    size: int
+    name: str
+
 class ProjectLoadException(Exception): pass
 
 class Project:
@@ -597,6 +605,7 @@ class Project:
         self.pool: InsnPool
         self.file_len = 0
         self.functions: dict[int, Function] | None = None
+        self.addresses: list[MemoryRegion] = []
 
     def rename_label(self, ep: int, name: str):
         label = self.ob.label(ep)
@@ -625,7 +634,8 @@ class Project:
         proj = {
             "rom": self.path.relative_to(project_folder).as_posix(),
             "ep": self.ep,
-            "org": self.org
+            "org": self.org,
+            "address_map": [dataclasses.asdict(addr) for addr in self.addresses]
         }
         with open(project_folder / "proj.json", "w") as fp:
             json.dump(proj, fp, indent=2, sort_keys=True)
@@ -661,6 +671,10 @@ class Project:
 
         project = Project(project_folder, path, proj_json["org"], proj_json["ep"])
         project.file_len = file_len
+
+        if "address_map" in proj_json:
+            for addr in proj_json["address_map"]:
+                project.addresses.append(MemoryRegion(**addr))
 
         with open(path, "rb") as fp:
             project.ib = InputBuffer(fp, file_len, entry_point=project.org, exit_on_invalid=True)
