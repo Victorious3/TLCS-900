@@ -67,8 +67,11 @@ class RV(KWidget, RecycleView):
 
     def on_xoffset(self, instance, value: int):
         self.parent.arrows.redraw()
-        for data in iter_all_children_of_type(self.children[0], SectionColumn):
-            data.redraw()
+        def post(dt):
+            for data in iter_all_children_of_type(self.children[0], SectionColumn):
+                data.redraw()
+        # TODO This does fix the issue of the address marker being out of sync after scrolling, but it's a bit hacky, they don't keep up during scrolling
+        Clock.schedule_once(post, 0)
 
     def update_data(self):
         data = []

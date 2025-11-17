@@ -684,7 +684,9 @@ class Project:
             if kind == LabelKind.FUNCTION: project.ob.calls.add(ep)
             project.ob.labels[ep] = Label(ep, count, name, kind)
 
-        for ep in label_eps:
+        project_eps = project.ep if isinstance(project.ep, list) else [project.ep]
+        
+        for ep in label_eps + project_eps:
             project.pool.query(Insn(project.pool, project.ib, project.ob, ep, do_branch=False))
         project.pool.poll_all(threaded=False)
         project._load_sections()
