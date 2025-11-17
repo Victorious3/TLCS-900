@@ -49,17 +49,21 @@ INTVLD0       : FFBFA8
 INTVLD1       : FFEC18 (disabled)
 INTVLD2       : FFEC18 (disabled)
 
+## Stack:
+Staring out at: 400D0B, growing downwards
+effectively giving it 3339 bytes to work with
+
 ## Memory map:
 
 LCD controller?
-Memory size 0: 32768 == 32kib
+Memory size 0: 65536 == 64kib
 Memory offset 0: 0x010000
 Data bus size: 8
 Enabled: yes
 Waits: 2
 
 RAM
-Memory size 1: 65536 == 64kib
+Memory size 1: 131071 == 128kib
 Memory offset 1: 0x400000
 Data bus size: 8
 Enabled: yes
@@ -73,8 +77,8 @@ Enabled: yes
 Waits: 0
 
 ???
-Memory size 3: 32768 == 32kib
-Memory offset 3: 0x100000
+Memory size 3: 65536 == 64kib
+Memory offset 3: 0x200000
 Data bus size: 8
 Enabled: yes
 Waits: 2
