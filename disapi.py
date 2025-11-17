@@ -69,6 +69,7 @@ class Label:
            else: assert False
         self.name = name
         self.kind = kind
+        self.callers = set()
 
     def __str__(self):
         return self.name
@@ -92,9 +93,17 @@ class OutputBuffer:
         if len(lst) > 0:
             self.insnmap[ep] = lst
 
-    def datalabel(self, ep):
-        label = Label(ep, kind=LabelKind.DATA)
-        self.labels[ep] = label
+    def datalabel(self, ep, caller = None):
+        if ep in self.labels:
+            label = self.labels[ep]
+        else: 
+            label = Label(ep, kind=LabelKind.DATA)
+            self.labels[ep] = label
+        
+        if caller is not None:
+            label.callers.add(caller)
+        label.count = len(label.callers)
+
         return label
 
     def branch(self, ep, to, conditional = False, call = False):
@@ -280,6 +289,7 @@ class Insn(threading.Thread):
         self.ibuffer = ibuffer
         self.obuffer = obuffer
 
+        self.start_pc = pc # Starting PC for this instruction
         self.lastinsn = 0 # Last instruction, this is only set if necessary
         self.lastsize = 0
         self.lastr = "INVALID"

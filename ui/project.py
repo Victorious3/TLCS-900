@@ -626,6 +626,8 @@ class Project:
             label["name"] = l.name
             label["count"] = l.count
             label["kind"] = l.kind.value
+            if l.callers:
+                label["callers"] = list(l.callers)
             labels[ep] = label
 
         with open(project_folder / "labels.json", "w") as fp:
@@ -696,7 +698,9 @@ class Project:
             kind = LabelKind(label["kind"])
             if kind != LabelKind.DATA: label_eps.append(ep)
             if kind == LabelKind.FUNCTION: project.ob.calls.add(ep)
-            project.ob.labels[ep] = Label(ep, count, name, kind)
+            l = Label(ep, count, name, kind)
+            l.callers = set(label.get("callers", []))
+            project.ob.labels[ep] = l
 
         project_eps = project.ep if isinstance(project.ep, list) else [project.ep]
         
