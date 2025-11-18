@@ -161,7 +161,11 @@ class RV(KWidget, RecycleView):
         scrollbar.on_scroll_move()
 
     def on_touch_move_section(self, touch):
-        if self.outside_bounds or app().main_dock.active_content != self.parent: return
+        if isinstance(self.parent, main.FunctionListing): # TODO Hack here, find a better way
+            parent = self.parent.parent
+        else: parent = self.parent
+        
+        if self.outside_bounds or app().main_dock.active_content != parent: return
         if touch.button != "left": return
         tx, ty = touch.x, touch.y
 
@@ -184,7 +188,12 @@ class RV(KWidget, RecycleView):
         mx, my = self.parent.minimap.to_window(*self.parent.minimap.pos)
         sx, sy = self.to_window(*self.pos)
         self.outside_bounds = not (sx < tx < mx and sy < ty < sy + self.height)
-        if self.outside_bounds or app().main_dock.active_content != self.parent: 
+
+        if isinstance(self.parent, main.FunctionListing): # TODO Hack here, find a better way
+            parent = self.parent.parent
+        else: parent = self.parent
+
+        if self.outside_bounds or app().main_dock.active_content != parent: 
             self.reset_selection()
             return
 
