@@ -76,8 +76,9 @@ class Mem:
         self.address = address
         self.plain_addr = plain_addr
 
-    def datalabel(self, insn):
-        insn.obuffer.datalabel(self.address)
+    def datalabel(self, insn, pc = None):
+        if not self.special:
+            insn.obuffer.datalabel(self.address, pc)
         
     def to_str(self, ob):
         if self.name: name = self.name
@@ -97,6 +98,9 @@ class MemReg(Mem):
         super().__init__(address, name)
         self.reg1 = reg1
         self.reg2 = reg2
+
+    def datalabel(self, *args, **kwargs):
+        pass # Do nothing for MemReg
 
 def call_opc(insn, x, y, optable):
     opc = optable[x][y]   
@@ -126,7 +130,7 @@ def src(insn):
         insn.lastsize = x - 0x8
     insn.lastinsn = insn.peek()
     insn.lastmem = popmem(insn)
-    insn.lastmem.datalabel(insn)
+    insn.lastmem.datalabel(insn, insn.start_pc)
     
     x, y = peekopc(insn)
     return call_opc(insn, x, y, optable_src)
@@ -137,7 +141,7 @@ def dst(insn):
     x, y = peekopc(insn)
     # Only create a data label if its not a CALL mem or JP mem instruction
     # TODO Move this into the actual insns somehow this is quite hard coded
-    if x != 0xE and x != 0xD: insn.lastmem.datalabel(insn) 
+    if x != 0xE and x != 0xD: insn.lastmem.datalabel(insn, insn.start_pc) 
     return call_opc(insn, x, y, optable_dst)
     
 def reg(insn):
@@ -155,6 +159,7 @@ def reg(insn):
     return call_opc(insn, x, y, optable_reg)
     
 def next_insn(insn):
+    insn.start_pc = insn.pc
     x, y = peekopc(insn)
     return call_opc(insn, x, y, optable)
     
