@@ -258,17 +258,23 @@ class FunctionState:
         self.proj = proj
 
     def serialize(self) -> dict:
+        def sort_key(r: Reg | int):
+            if isinstance(r, int):
+                return (0, r)
+            else:
+                return (1, r.addr)
+
         res = {}
-        res["clobbers"] = [{"pc": c[0], "value": serialize_reg_mem(c[1]), "ep": c[2]} for c in self.clobbers]
-        res["input"] = [serialize_reg_mem(i) for i in self.input]
-        res["output"] = [serialize_reg_mem(o) for o in self.output]
+        res["clobbers"] = [{"pc": c[0], "value": serialize_reg_mem(c[1]), "ep": c[2]} for c in sorted(self.clobbers, key=lambda c: c[2])]
+        res["input"] = [serialize_reg_mem(i) for i in sorted(self.input, key=sort_key)]
+        res["output"] = [serialize_reg_mem(o) for o in sorted(self.output, key=sort_key)]
         fun_stack = []
         for fun, in_in, in_out in self.fun_stack:
-            c_in_in = [serialize_reg_mem(i) for i in in_in]
-            c_in_out = [serialize_reg_mem(i) for i in in_out]
+            c_in_in = [serialize_reg_mem(i) for i in sorted(in_in, key=sort_key)]
+            c_in_out = [serialize_reg_mem(i) for i in sorted(in_out, key=sort_key)]
             fun_stack.append({"function": fun, "in": c_in_in, "out": c_in_out})
 
-        res["stack"] = [{"ep": s[0], "value": serialize_reg_mem(s[1])} for s in self.stack]
+        res["stack"] = [{"ep": s[0], "value": serialize_reg_mem(s[1])} for s in sorted(self.stack, key=lambda s: s[0])]
         res["fun_stack"] = fun_stack
         res["pc"] = self.pc
 
@@ -628,6 +634,9 @@ class Project:
             label["kind"] = l.kind.value
             if l.callers:
                 label["callers"] = list(l.callers)
+            if l.kind == LabelKind.DATA:
+                label["size"] = l.size
+
             labels[ep] = label
 
         with open(project_folder / "labels.json", "w") as fp:
@@ -700,6 +709,7 @@ class Project:
             if kind == LabelKind.FUNCTION: project.ob.calls.add(ep)
             l = Label(ep, count, name, kind)
             l.callers = set(label.get("callers", []))
+            l.size = label.get("size", None)
             project.ob.labels[ep] = l
 
         project_eps = project.ep if isinstance(project.ep, list) else [project.ep]

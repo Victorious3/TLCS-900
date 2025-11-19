@@ -55,20 +55,25 @@ def LDW_mem_R(insn):
 def LDL_mem_R(insn):
     return "LD", insn.lastmem, popR(insn, '?', LWORD)
 
-def LDB_m_X(insn): 
+def LDB_m_X(insn):
+    insn.lastsize = BYTE
     insn.pop()
     return "LD", insn.lastmem, insn.pop()
 def LDW_m_X(insn): 
+    insn.lastsize = WORD
     insn.pop()
     return "LDW", insn.lastmem, insn.popw()
 
 def LDW_n_nn(insn):
+    insn.lastsize = WORD
     insn.pop()
     return "LDW", Mem(insn.pop()), insn.popw()
 
 def LDB_m_nn(insn):
+    insn.lastsize = BYTE
     return "LD", insn.lastmem, Mem(insn.popw())
 def LDW_m_nn(insn):
+    insn.lastsize = WORD
     return "LDW", insn.lastmem, Mem(insn.popw())
     
 #PUSH
@@ -107,18 +112,22 @@ def POP_r(insn):
     insn.pop() 
     return "POP", insn.lastr
 def POPB_mem(insn):
+    insn.lastsize = BYTE
     insn.pop() 
     return "POP", insn.lastmem 
 def POPW_mem(insn): 
+    insn.lastsize = WORD
     insn.pop()
     return "POPW", insn.lastmem
 
 #LDA
 def LDAW_R_mem(insn): 
+    insn.lastsize = WORD
     lastmem = insn.lastmem
     lastmem.plain_addr = True
     return "LDA", popR(insn, '?', WORD), lastmem
 def LDAL_R_mem(insn):
+    insn.lastsize = LWORD
     lastmem = insn.lastmem
     lastmem.plain_addr = True
     return "LDA", popR(insn, '?', LWORD), lastmem
@@ -130,7 +139,9 @@ def LDAR(insn):
     offset = insn.popw()
     if offset > 32767:
         offset -= 65536
-    return "LDAR", popR(insn, 's'), Loc(insn.pc + offset + 5) # TODO: Maybe 4? Test this!
+    r = popR(insn, 's')
+    insn.lastsize = r.size if isinstance(r, Reg) else BYTE
+    return "LDAR", r, Loc(insn.pc + offset + 5) # TODO: Maybe 4? Test this!
 
 
 # 2) Exchange
@@ -462,6 +473,7 @@ def LDCF_A_r(insn):
     return "LDCF", A, insn.lastr
 def LDCF_X3_mem(n):
     def LDCF_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "LDCF", n, insn.lastmem
     return LDCF_N_mem
@@ -478,6 +490,7 @@ def STCF_A_r(insn):
     return "STCF", A, insn.lastr
 def STCF_X3_mem(n):
     def STCF_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "STCF", n, insn.lastmem
     return STCF_N_mem
@@ -494,6 +507,7 @@ def ANDCF_A_r(insn):
     return "ANDCF", A, insn.lastr
 def ANDCF_X3_mem(n):
     def ANDCF_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "ANDCF", n, insn.lastmem
     return ANDCF_N_mem
@@ -510,6 +524,7 @@ def ORCF_A_r(insn):
     return "ORCF", A, insn.lastr
 def ORCF_X3_mem(n):
     def ORCF_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "ORCF", n, insn.lastmem
     return ORCF_N_mem
@@ -526,6 +541,7 @@ def XORCF_A_r(insn):
     return "XORCF", A, insn.lastr
 def XORCF_X3_mem(n):
     def XORCF_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "XORCF", n, insn.lastmem
     return XORCF_N_mem
@@ -545,6 +561,7 @@ def BIT_X_r(insn):
     return "BIT", (insn.pop() & 0xF), insn.lastr
 def BIT_X3_mem(n):
     def BIT_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "BIT", n, insn.lastmem
     return BIT_N_mem
@@ -555,6 +572,7 @@ def RES_X_r(insn):
     return "RES", (insn.pop() & 0xF), insn.lastr
 def RES_X3_mem(n):
     def RES_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "RES", n, insn.lastmem
     return RES_N_mem
@@ -565,6 +583,7 @@ def SET_X_r(insn):
     return "SET", (insn.pop() & 0xF), insn.lastr
 def SET_X3_mem(n):
     def SET_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "SET", n, insn.lastmem
     return SET_N_mem
@@ -575,6 +594,7 @@ def CHG_X_r(insn):
     return "CHG", (insn.pop() & 0xF), insn.lastr
 def CHG_X3_mem(n):
     def CHG_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "CHG", n, insn.lastmem
     return CHG_N_mem
@@ -585,6 +605,7 @@ def TSET_X_r(insn):
     return "TSET", (insn.pop() & 0xF), insn.lastr
 def TSET_X3_mem(n):
     def TSET_N_mem(insn):
+        insn.lastsize = BYTE
         insn.pop()
         return "TSET", n, insn.lastmem
     return TSET_N_mem
@@ -799,6 +820,7 @@ def JP_cc_mem(insn):
     cc = cctable[popcc(insn)]
     if cc == "T": insn.kill()
 
+    insn.lastsize = None
     lastmem = insn.lastmem
     lastmem.plain_addr = True
     if not isinstance(lastmem, MemReg):
@@ -845,6 +867,7 @@ def CALL_cc_mem(insn):
     cc = cctable[popcc(insn)]
     if cc == "T": insn.kill()
 
+    insn.lastsize = None
     lastmem = insn.lastmem
     lastmem.plain_addr = True
     if not isinstance(lastmem, MemReg):
