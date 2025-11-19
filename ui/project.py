@@ -604,8 +604,8 @@ class Project:
         self.ob: OutputBuffer
         self.pool: InsnPool
         self.file_len = 0
-        self.functions: dict[int, Function] | None = None
         self.addresses: list[MemoryRegion] = []
+        self.functions = cast(dict[int, Function], None)
 
     def rename_label(self, ep: int, name: str):
         label = self.ob.label(ep)

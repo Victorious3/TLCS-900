@@ -268,8 +268,13 @@ class DisApp(App):
             tab.add_widget(self.dis_panel)
             self.main_dock.add_tab(tab)
 
+        Clock.schedule_once(lambda dt: self.on_post(), 0)
         return self.window
-    
+
+    def on_post(self):
+        if not self.project.functions:
+            self.analyze_functions(lambda: None)
+
     def load_ui_state(self) -> bool:
         file = self.get_project_ui_file()
         if not file.exists(): return False
@@ -460,18 +465,12 @@ class DisApp(App):
             self.find_main_panel().select()
     
     def open_function_graph_from_label(self, ep: int):
-        if not self.project.functions:
-            self.analyze_functions(lambda: self.open_function_graph_from_label(ep))
-            return
         for fun in self.project.functions.values():
             if ep in fun.blocks:
                 self.open_function_graph(fun.ep, callback=lambda panel: panel.content.move_to_location(ep))
                 return
             
     def open_function_listing_from_label(self, ep: int):
-        if not self.project.functions:
-            self.analyze_functions(lambda: self.open_function_listing_from_label(ep))
-            return
         for fun in self.project.functions.values():
             if ep in fun.blocks:
                 self.open_function_listing(fun.ep)
@@ -485,10 +484,6 @@ class DisApp(App):
             return next(filter(lambda f: f.name == fun_name, self.project.functions.values()), None)
 
     def open_function_listing(self, ep: int, highlight_callee: int | None = None, highlight_caller: int | None = None):
-        if not self.project.functions:
-            self.analyze_functions(lambda: self.open_function_listing(ep, highlight_callee, highlight_caller))
-            return
-        
         if highlight_caller is not None:
             # Callers require going over multiple functions so we can't open them in a function listing
             main_panel = self.find_main_panel()
@@ -521,10 +516,6 @@ class DisApp(App):
         app().update_position_history(NavigationListing(panel.listing, fun.ep))
     
     def open_function_graph(self, ep: int, rescale=True, callback: Callable[[GraphTab], None] | None = None):
-        if not self.project.functions:
-            self.analyze_functions(lambda: self.open_function_graph(ep, rescale, callback))
-            return
-
         fun = self.find_function(ep)
         if not fun: return
 
@@ -546,10 +537,6 @@ class DisApp(App):
         Clock.schedule_once(after, 0)
 
     def open_call_graph(self, ep: int):
-        if not self.project.functions:
-            self.analyze_functions(lambda: self.open_call_graph(ep))
-            return
-
         fun = self.find_function(ep)
         if not fun: return
 

@@ -556,6 +556,7 @@ class Dock(KWidget, BaseDock):
         self.first_panel = None
         self.second_panel = None
         self.splitter = None
+        self.panel = None
 
     def draw_dragged_panel(self):
         self.canvas.after.clear()
