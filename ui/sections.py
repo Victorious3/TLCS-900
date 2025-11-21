@@ -65,8 +65,11 @@ class RV(KWidget, RecycleView):
             Window.set_system_cursor("hand")
             app().set_hover()
 
-    def on_xoffset(self, instance, value: int):
+    def redraw_arrows(self):
         self.parent.arrows.redraw()
+
+    def on_xoffset(self, instance, value: int):
+        self.redraw_arrows()
         def post(dt):
             for data in iter_all_children_of_type(self.children[0], SectionColumn):
                 data.redraw()
@@ -111,7 +114,7 @@ class RV(KWidget, RecycleView):
     def update_from_scroll(self, *largs):
         super().update_from_scroll(*largs)
         Clock.schedule_once(lambda dt: self.redraw_children(), 0)
-        self.parent.arrows.redraw()
+        self.redraw_arrows()
 
     def get_visible_range(self):
         content_height = self.children[0].height - self.height
@@ -185,9 +188,8 @@ class RV(KWidget, RecycleView):
         if touch.button != "left": return
         tx, ty = touch.x, touch.y
 
-        mx, my = self.parent.minimap.to_window(*self.parent.minimap.pos)
         sx, sy = self.to_window(*self.pos)
-        self.outside_bounds = not (sx < tx < mx and sy < ty < sy + self.height)
+        self.outside_bounds = not (sx < tx < self.parent.right - dp(15) and sy < ty < sy + self.height)
 
         if isinstance(self.parent, main.FunctionListing): # TODO Hack here, find a better way
             parent = self.parent.parent
@@ -403,7 +405,7 @@ class SectionData(KWidget, ContextMenuBehavior, SectionColumn):
 
                 start_x = start_column * 3 * FONT_WIDTH
                 end_x = end_column * 3 * FONT_WIDTH
-                width = self.rv.width - self.rv.parent.minimap.width
+                width = self.rv.width - dp(15)
 
                 if self.section.offset <= start < self.section.offset + self.section.length and row_start - 1 == row_end and end_column < end_length:
                     if start_column == 0:
@@ -429,7 +431,7 @@ class SectionData(KWidget, ContextMenuBehavior, SectionColumn):
 
     def trigger_context_menu(self, touch):
         if not self.collide_point(touch.x, touch.y): return
-        if (touch.x < self.rv.width - self.rv.parent.minimap.width):
+        if (touch.x < self.rv.width - dp(15)):
             rv = self.rv
             class Handler(MenuHandler):
                 def on_select(self, item):
@@ -656,7 +658,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
         if keycode == 227 and sys.platform == "darwin" or keycode == 224: 
             self._on_update()
 
-class SectionPanel(RecycleDataViewBehavior, StencilView, BoxLayout):
+class SectionBase(RecycleDataViewBehavior, StencilView, BoxLayout):
     section = ObjectProperty(None)
     xoffset = NumericProperty(0)
     rv: RV = ObjectProperty(None, allownone=True)
@@ -684,8 +686,5 @@ class SectionPanel(RecycleDataViewBehavior, StencilView, BoxLayout):
         self.ids["data"].section = section
         self.ids["addresses"].section = section
         self.ids["mnemonics"].section = section
-        
-    def is_visible(self):
-        visible_range = app().rv.get_visible_range()   
-        window = MAX_SECTION_LENGTH * FONT_HEIGHT     
-        return self.y + self.height >= visible_range[0] - window and self.y <= visible_range[1] + window
+
+class SectionPanel(SectionBase): pass

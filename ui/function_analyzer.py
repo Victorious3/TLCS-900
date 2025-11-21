@@ -13,8 +13,7 @@ from tcls_900.tlcs_900 import Reg
 from .sections import EditableLabel
 from .project import Function
 from .main import HideableTextInput, EscapeTrigger, app, iter_all_children_of_type
-from .main_menu import MenuHandler, MenuItem
-from .context_menu import show_context_menu, ContextMenuBehavior
+from .context_menu import ContextMenuBehavior
 from .table.table import DataTableRow, ResizableRecycleTable
 from .dock.dock import DockTab, SerializableTab
 

@@ -3,7 +3,7 @@ import dataclasses
 from hashlib import md5
 import os, json
 from threading import Thread
-from typing import Callable, cast
+from typing import Callable, cast, overload
 from pytreemap import TreeMap
 from abc import ABC
 from functools import reduce
@@ -20,12 +20,43 @@ DATA_PER_ROW = 7
 MAX_SECTION_LENGTH = DATA_PER_ROW * 40
 FUN_SECTION_LENGTH = 0x8000
 
+class VirtualByteArray:
+    def __init__(self, size, value=0):
+        if not 0 <= value <= 255:
+            raise ValueError("value must be a byte (0-255)")
+        self.size = size
+        self.value = value
+
+    def __len__(self) -> int:
+        return self.size
+    
+    @overload
+    def __getitem__(self, index: int) -> int: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> "VirtualByteArray": ...
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            start, stop, step = index.indices(self.size)
+            length = max(0, (stop - start + (step - 1)) // step)
+            return VirtualByteArray(length, self.value)
+        if not 0 <= index < self.size:
+            raise IndexError("index out of range")
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"VirtualByteArray(size={self.size}, value={self.value})"
+    
+    def __str__(self) -> str:
+        return '"' + ''.join([f'\\x{self.value:02X}'] * self.size) + '"'
+
 class Instruction:
     def __init__(self, entry: InsnEntry):
         self.entry = entry
 
 class Section(ABC):
-    def __init__(self, offset: int, length: int, labels: list[Label], data: bytearray, instructions: list[Instruction]):
+    def __init__(self, offset: int, length: int, labels: list[Label], data: bytearray | VirtualByteArray, instructions: list[Instruction]):
         self.offset = offset
         self.length = length
         self.labels = labels
@@ -635,7 +666,7 @@ class Project:
             if l.callers:
                 label["callers"] = list(l.callers)
             if l.kind == LabelKind.DATA:
-                label["size"] = l.size
+                label["type"] = l.type
 
             labels[ep] = label
 
@@ -709,7 +740,7 @@ class Project:
             if kind == LabelKind.FUNCTION: project.ob.calls.add(ep)
             l = Label(ep, count, name, kind)
             l.callers = set(label.get("callers", []))
-            l.size = label.get("size", None)
+            l.type = label.get("type", None)
             project.ob.labels[ep] = l
 
         project_eps = project.ep if isinstance(project.ep, list) else [project.ep]

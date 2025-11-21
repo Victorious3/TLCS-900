@@ -122,12 +122,12 @@ def POPW_mem(insn):
 
 #LDA
 def LDAW_R_mem(insn): 
-    insn.lastsize = WORD
+    insn.lastsize = None
     lastmem = insn.lastmem
     lastmem.plain_addr = True
     return "LDA", popR(insn, '?', WORD), lastmem
 def LDAL_R_mem(insn):
-    insn.lastsize = LWORD
+    insn.lastsize = None
     lastmem = insn.lastmem
     lastmem.plain_addr = True
     return "LDA", popR(insn, '?', LWORD), lastmem

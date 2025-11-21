@@ -21,3 +21,7 @@ Data icons created by Nixxdsgn - Flaticon
 expand.png, contract.png
 https://www.flaticon.com/free-icons/next
 Next icons created by meaicon - Flaticon
+
+memory.png
+https://www.flaticon.com/free-icons/micro-sd-card
+Micro sd card icons created by Iconpro86 - Flaticon

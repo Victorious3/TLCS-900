@@ -31,7 +31,8 @@ main_menu = [
         MenuItem("exit", "Close Window")
     ]),
     MenuItem(None, "Analyze", [
-        MenuItem("functions", "Functions")
+        MenuItem("functions", "Functions"),
+        MenuItem("memory", "Memory View")
     ])
 ]
 
@@ -42,6 +43,8 @@ class MainMenuHandler(MenuHandler):
                 app().analyze_functions(lambda: app().open_function_list())
 
             else: app().open_function_list()
+        elif item == "memory":
+            app().open_memory_view()
         elif item == "save":
             app().project.write_to_file(Path("el9900.disproj"))
         elif item == "open":

@@ -58,7 +58,7 @@ class LabelKind(Enum):
     DATA = 3
 
 class Label:
-    def __init__(self, location, count = 1, name = None, kind = LabelKind.LABEL, size = None):
+    def __init__(self, location, count = 1, name = None, kind = LabelKind.LABEL, type = None):
         self.location = location
         self.count = count
         if name is None:
@@ -70,7 +70,7 @@ class Label:
         self.name = name
         self.kind = kind
         self.callers = set()
-        self.size = size
+        self.type = type
 
     def __str__(self):
         return self.name
@@ -98,14 +98,14 @@ class OutputBuffer:
         if ep in self.labels:
             label = self.labels[ep]
         else: 
-            label = Label(ep, kind=LabelKind.DATA, size=size)
+            label = Label(ep, kind=LabelKind.DATA, type=size)
             self.labels[ep] = label
         
         if caller is not None:
             label.callers.add(caller)
         label.count = len(label.callers)
         if size is not None:
-            label.size = max(label.size or 0, size) # Pick the bigger size always
+            label.type = max(label.type or 0, size) # Pick the bigger size always
 
         return label
 

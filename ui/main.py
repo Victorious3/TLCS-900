@@ -19,7 +19,6 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.event import EventDispatcher
 from kivy.utils import get_color_from_hex
 
-
 # Patch widget class TODO Handle on_leave when children move out of view
 def on_mouse_move(self: Widget, pos):
     hovered = getattr(self, "_hovered", False)
@@ -117,12 +116,13 @@ from .main_menu import build_menu
 from .sections import RV
 from .function_graph import GraphTab, FunctionPanel
 from .buttons import IconButton
-from .analyzer import AnalyzerPanel, AnalyzerFilter, AnalyzerTab
+from .function_analyzer import AnalyzerPanel, AnalyzerFilter, AnalyzerTab
 from .context_menu import ContextMenuBehavior
 from .popup import FunctionAnalyzerPopup
 from .dock.dock import BaseDock, Dock, Orientation, SerializableTab, DockSplitter, DockPanel
 from .call_graph import CallGraphPanel, CallGraphTab
 from .function_listing import FunctionListingContainer, FunctionListing, ListingPanel, ListingTab
+from .memory_view import MemoryViewTab
 
 class RenameInput(BoxLayout, EscapeTrigger):
     input: TextInput
@@ -656,6 +656,16 @@ class DisApp(App):
         
         tab.add_widget(self.analyzer_panel)
         self.main_dock.split(tab, Orientation.VERTICAL)
+        tab.select()
+
+    def open_memory_view(self):
+        for tab in self.main_dock.iterate_panels():
+            if isinstance(tab, MemoryViewTab):
+                tab.select()
+                return
+        
+        tab = MemoryViewTab()
+        self.main_dock.add_tab(tab)
         tab.select()
 
     

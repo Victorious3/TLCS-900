@@ -206,7 +206,6 @@
     pos_hint: { "right": 1, "top": 1 }
 
 <RV>:
-    id: disassembler_view
     size_hint: 1, 1
     bar_width: dp(15)
     scroll_wheel_distance: 50
@@ -225,6 +224,8 @@
     LabelRow:
         rv: root.rv
         id: label
+        # TODO using padding here makes the layout slower, 
+        # this should really be x but its not working properly somehow
         padding: dp(250) + root.xoffset, 0, 0, 0
 
     RelativeLayout:
@@ -308,3 +309,78 @@
     halign: "left"
     padding: dp(5), dp(5), dp(22.5), dp(5)
     width: self.texture_size[0] + dp(15)
+
+<MemoryView>:
+    size_hint: 1, 1
+    MemoryMinimap:
+        id: minimap
+    MemoryRV:
+        id: rv
+    ScrollBar:
+        id: scrollbar
+        pos_hint: { "left": 1, "bottom": 1 }
+
+<MemoryRV>:
+    viewclass: 'MemorySection'
+
+<MemorySection>:
+    orientation: 'vertical'
+    width: self.parent.width - dp(15) if self.parent else 0
+    
+    RelativeLayout:
+        id: header
+        size_hint: 1, None
+        height: dp(20) if self.display else 0
+        display: True
+        disabled: not self.display
+        opacity: 1 if self.display else 0
+
+        Label:
+            id: type
+            size_hint: None, 1
+            width: self.texture_size[0]
+            x: dp(240) + root.xoffset - self.width
+            font_name: "ui/resources/RobotoMono"
+            font_size: dp(15)
+            color: 0.337, 0.612, 0.839, 1
+        MemoryLabel:
+            size_hint: None, 1
+            rv: root.rv
+            id: label
+            x: dp(250) + root.xoffset
+
+    RelativeLayout:
+        size_hint: 1, 1
+        MemorySectionData:
+            rv: root.rv
+            halign: "left"
+            pos: dp(270) + root.xoffset, 0
+            text_size: self.width, self.height
+            height: self.parent.height
+            id: data
+        SectionAddresses:
+            rv: root.rv
+            width: dp(240)
+            pos: root.xoffset, 0
+            halign: "right"
+            text_size: self.width, self.height
+            height: self.parent.height
+            id: addresses
+        SectionMnemonic:
+            rv: root.rv
+            pos: dp(550) + root.xoffset, 0
+            size_hint: None, 1
+            halign: "left"
+            markup: True
+
+            text_size: self.width, self.height
+            height: self.parent.height
+            id: mnemonics
+            
+    MemorySnip:
+        id: snip
+        size_hint: 1, None
+        disabled: False
+        opacity: 1
+        height: dp(20)
+        xoffset: root.xoffset
