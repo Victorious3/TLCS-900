@@ -112,6 +112,8 @@ class MemorySection(SectionBase):
 
         if "collapsed_sections" in data:
             snip.collapsed_sections = data["collapsed_sections"]
+            snip.collapse = -1
+            snip.collapse_size = 0
             snip.index = index
         elif "collapse" in data:
             snip.collapse = data["collapse"]
@@ -122,6 +124,8 @@ class MemorySection(SectionBase):
             snip.opacity = 0
             snip.height = 0
             snip.collapsed_sections = None
+            snip.collapse = -1
+            snip.collapse_size = 0
             snip.index = -1
 
         if len(section.labels) > 0:
