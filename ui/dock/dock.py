@@ -55,7 +55,8 @@ class DockSplitter(Splitter, Child):
         return self.dock.iterate_panels()
     
     def on_touch_down(self, touch):
-        if touch.is_double_tap:
+        assert self._strip
+        if self._strip.collide_point(*touch.pos) and touch.is_double_tap:
             return False
         return super().on_touch_down(touch)
 
