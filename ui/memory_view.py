@@ -63,8 +63,26 @@ class MemoryView(RelativeLayout):
         data["scroll_y"] = self.rv.scroll_y
         data["selection_start"] = self.rv.selection_start
         data["selection_end"] = self.rv.selection_end
-    
+
+        expanded_sections: list[int] = []
+        for d in self.rv.data:
+            if "collapse" in d:
+                expanded_sections.append(d["collapse"])
+        data["expanded_sections"] = expanded_sections
+
     def deserialize_post(self, data: dict):
+        if "expanded_sections" in data:
+            expanded_sections: list[int] = data["expanded_sections"]
+            for collapse_index in expanded_sections:
+                collapsed_sections = self.rv.data[collapse_index-1]["collapsed_sections"]
+                if collapsed_sections is not None:
+                    del self.rv.data[collapse_index-1]["collapsed_sections"]
+                    collapsed_sections[-1]["collapse"] = collapse_index
+                    collapsed_sections[-1]["collapse_size"] = len(collapsed_sections)
+                    self.rv.data[collapse_index:collapse_index] = collapsed_sections
+            self.rv.recalculate_height()
+            self.rv.refresh_from_data()
+
         if "scroll_y" in data:
             self.rv.scroll_y = data["scroll_y"]
         if "scroll_x" in data:
@@ -73,7 +91,6 @@ class MemoryView(RelativeLayout):
             self.rv.selection_start = data["selection_start"]
         if "selection_end" in data:
             self.rv.selection_end = data["selection_end"]
-    
 
 class MemorySectionData(SectionData):
     def trigger_context_menu(self, touch): return False
@@ -172,6 +189,12 @@ class MemorySnip(KWidget, Widget):
             del self.parent.rv.data[self.collapse:self.collapse+self.collapse_size]
             last = self.parent.rv.data[self.collapse-1]
             last["collapsed_sections"] = collapsed_sections
+
+            # Subtract from all following collapse indices
+            for d in self.parent.rv.data[self.collapse:]:
+                if "collapse" in d:
+                    d["collapse"] -= self.collapse_size
+
             self.parent.rv.recalculate_height()
             self.parent.rv.refresh_from_data()
             section: Section = last["section"]
@@ -182,6 +205,12 @@ class MemorySnip(KWidget, Widget):
             self.collapsed_sections[-1]["collapse"] = self.index + 1
             self.collapsed_sections[-1]["collapse_size"] = len(self.collapsed_sections)
             self.parent.rv.data[self.index+1:self.index+1] = self.collapsed_sections
+            
+            # Add to all following collapse indices
+            for d in self.parent.rv.data[self.index + 1 + len(self.collapsed_sections):]:
+                if "collapse" in d:
+                    d["collapse"] += len(self.collapsed_sections)
+
             self.parent.rv.recalculate_height()
             self.parent.rv.refresh_from_data()
             section: Section = self.collapsed_sections[-1]["section"]
@@ -213,11 +242,9 @@ class MemoryRV(RV):
                                     "rv": self})
                         if section.length - offset > 0:
                             rest_section = DataSection(section.offset + offset, section.length - offset, [], section.data[offset:])
-                            columns = len(rest_section.instructions)
                             data.append({"section": rest_section, 
                                         "rv": self})
                     else:
-                        columns = len(section.instructions)
                         data.append({"section": section, 
                                     "rv": self})
             else:
