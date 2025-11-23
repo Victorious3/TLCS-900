@@ -312,10 +312,17 @@
 
 <MemoryView>:
     size_hint: 1, 1
-    MemoryMinimap:
-        id: minimap
     MemoryRV:
         id: rv
+    MemoryMinimap:
+        id: minimap
+        size_hint: None, 1
+        width: dp(15)
+        pos_hint: { "right": 1, "top": 1 }
+    MemoryOverlaps:
+        size_hint: None, 1
+        width: dp(180)
+        id: overlaps
     ScrollBar:
         id: scrollbar
         pos_hint: { "left": 1, "bottom": 1 }

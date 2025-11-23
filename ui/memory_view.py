@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from functools import cache
+
 import math
 from typing import cast
 from kivy.uix.widget import Widget
@@ -8,6 +11,8 @@ from kivy.graphics import Rectangle
 from kivy.metrics import dp
 from kivy.utils import get_color_from_hex
 from kivy.clock import Clock
+from kivy.graphics import StencilPush, StencilPop, StencilUse, StencilUnUse, Color, Line
+from kivy.uix.recycleboxlayout import RecycleBoxLayout
 
 from ui.kivytypes import KWidget
 
@@ -15,6 +20,7 @@ from .project import DATA_PER_ROW, MAX_SECTION_LENGTH, CodeSection, DataSection,
 from .main import FONT_HEIGHT, app
 from .sections import RV, EditableLabel, ScrollBar, SectionBase, SectionData, FONT_SIZE, FONT_NAME, LABEL_HEIGHT
 from .dock.dock import SerializableTab
+from .arrow import COLORS
 
 from disapi import InsnEntry, Label, LabelKind
 from tcls_900.tlcs_900 import BYTE, LWORD, WORD
@@ -42,13 +48,22 @@ class MemoryViewTab(SerializableTab):
 class MemoryView(RelativeLayout):
     def __init__(self, **kwargs):
         self.rv = cast(MemoryRV, None)
+        self.overlaps = cast(MemoryOverlaps, None)
         self.scrollbar: ScrollBar
         self.highlighted_list = []
         super().__init__(**kwargs)
 
+    def recalculate(self):
+        self.rv.recalculate_height()
+        self.rv.refresh_from_data()
+        self.overlaps.recalculate_overlaps()
+        self.overlaps.redraw()
+
     def on_kv_post(self, base_widget):
         self.rv = self.ids["rv"]
+        self.overlaps = self.ids["overlaps"]
         self.scrollbar = self.ids["scrollbar"]
+        self.recalculate()
 
     def on_touch_down(self, touch):
         if super().on_touch_down(touch): return True
@@ -80,8 +95,7 @@ class MemoryView(RelativeLayout):
                     collapsed_sections[-1]["collapse"] = collapse_index
                     collapsed_sections[-1]["collapse_size"] = len(collapsed_sections)
                     self.rv.data[collapse_index:collapse_index] = collapsed_sections
-            self.rv.recalculate_height()
-            self.rv.refresh_from_data()
+            self.recalculate()
 
         if "scroll_y" in data:
             self.rv.scroll_y = data["scroll_y"]
@@ -95,19 +109,19 @@ class MemoryView(RelativeLayout):
 class MemorySectionData(SectionData):
     def trigger_context_menu(self, touch): return False
 
-def typename_from_label(type: int) -> str:
+def typename_from_label(type: int | None) -> str:
     if type == BYTE: return "byte"
     if type == WORD: return "short"
     if type == LWORD: return "int"
     return "unknown"
 
-def size_from_label(type: int) -> int:
+def size_from_label(type: int | None) -> int:
     if type == BYTE: return 1
     if type == WORD: return 2
     if type == LWORD: return 4
     return 1
 
-def directive_from_label(type: int) -> str:
+def directive_from_label(type: int | None) -> str:
     if type == BYTE: return ".db"
     if type == WORD: return ".dw"
     if type == LWORD: return ".dd"
@@ -116,10 +130,12 @@ def directive_from_label(type: int) -> str:
 class MemorySection(SectionBase):
     rv: "MemoryRV"
 
-    def refresh_view_attrs(self, rv: RV, index, data):
+    def refresh_view_attrs(self, rv: "MemoryRV", index, data):
+        self.rv = rv
         super().refresh_view_attrs(rv, index, data)
         section: Section = data["section"]
         self.ids["header"].display = len(section.labels) > 0
+        self.ids["snip"].view = rv.parent
 
         snip: MemorySnip = self.ids["snip"]
 
@@ -153,6 +169,7 @@ class MemorySection(SectionBase):
 
 class MemorySnip(KWidget, Widget):
     parent: MemorySection
+    view: MemoryView
     collapsed_sections: list[dict] | None = ObjectProperty(None, allownone=True)
     xoffset: int = NumericProperty(0)
 
@@ -195,8 +212,7 @@ class MemorySnip(KWidget, Widget):
                 if "collapse" in d:
                     d["collapse"] -= self.collapse_size
 
-            self.parent.rv.recalculate_height()
-            self.parent.rv.refresh_from_data()
+            self.view.recalculate()
             section: Section = last["section"]
             Clock.schedule_once(lambda dt: self.parent.rv.scroll_to_offset(section.offset + section.length - 1))
         elif self.collapsed_sections is not None:
@@ -211,8 +227,7 @@ class MemorySnip(KWidget, Widget):
                 if "collapse" in d:
                     d["collapse"] += len(self.collapsed_sections)
 
-            self.parent.rv.recalculate_height()
-            self.parent.rv.refresh_from_data()
+            self.view.recalculate()
             section: Section = self.collapsed_sections[-1]["section"]
             Clock.schedule_once(lambda dt: self.parent.rv.scroll_to_offset(section.offset + section.length - 1))
         return True
@@ -220,9 +235,22 @@ class MemorySnip(KWidget, Widget):
 MIN_COLLAPSE_SIZE = DATA_PER_ROW * 5
 
 class MemoryRV(RV):
+    parent: MemoryView
 
-    # We don't have arrows
-    def redraw_arrows(self): pass
+    def __init__(self, **kwargs):
+        self.hovered: int | None = None
+        super().__init__(**kwargs)
+
+    # We don't have arrows, but overlaps need to be redrawn on scroll
+    def redraw_arrows(self):
+        self.parent.overlaps.redraw()
+
+    def on_mouse_move(self, pos):
+        was_hovered = self.hovered
+        self.hovered = None
+        super().on_mouse_move(pos)  # type: ignore
+        if self.hovered != was_hovered:
+            self.parent.overlaps.redraw()
 
     def update_data(self):
         data = []
@@ -313,8 +341,6 @@ class MemoryRV(RV):
 
         self.data = new_data
 
-        self.recalculate_height()
-
     def recalculate_height(self):
         for data in self.data:
             section: Section = data["section"]
@@ -326,11 +352,124 @@ class MemoryRV(RV):
                 height += dp(20)
             data["height"] = height
 
+@dataclass
+class Overlap:
+    start_offset: int
+    end_offset: int
+    displacement: int
+
+class MemoryOverlaps(KWidget, Widget):
+    parent: MemoryView
+
+    def __init__(self, **kwargs):
+        self.overlaps: dict[int, Overlap] = {}
+        super().__init__(**kwargs)
+
+    def recalculate_overlaps(self):
+        MemoryOverlaps.get_offset.cache_clear()
+
+        data = self.parent.rv.data
+        self.overlaps = {}
+        active_overlaps: list[Overlap] = []
+        for d in data:
+            section: Section = d["section"]
+            if len(section.labels) == 0:
+                continue
+            label: Label = section.labels[0]
+            if label.kind != LabelKind.DATA:
+                continue
+
+            size = size_from_label(label.type)
+            overlap = Overlap(section.offset, section.offset + size, 0)
+            self.overlaps[section.offset] = overlap
+            active_overlaps = [o for o in active_overlaps if o.start_offset < section.offset and o.end_offset > section.offset]
+            active_overlaps.sort(key=lambda o: o.displacement)
+
+            for ov in active_overlaps:
+                if ov.end_offset > overlap.end_offset:
+                    for ov2 in active_overlaps:
+                        if ov != ov2 and ov2.displacement == ov.displacement:
+                            ov.displacement += 1
+                            
+                if ov.displacement == overlap.displacement:
+                    overlap.displacement += 1
+
+            active_overlaps.append(overlap)
+
+    # TODO This is the same as in arrow renderer, refactor
+    @cache
+    def get_offset(self, pc: int):
+        offset = 0
+        for data in self.parent.rv.data:
+            section: Section = data["section"]
+            if section.offset <= pc < section.length + section.offset:
+                if section.labels: 
+                    offset += LABEL_HEIGHT
+                for i in section.instructions:
+                    if i.entry.pc <= pc < i.entry.pc + i.entry.length:
+                        return offset
+                    offset += FONT_HEIGHT
+
+            offset += data["height"]
+        return offset
+
+    def redraw(self):
+        rv = self.parent.rv
+        layout_manager = cast(RecycleBoxLayout, rv.layout_manager)
+        vstart, vend = rv.get_visible_range()
+
+        if len(layout_manager.children) == 0: return
+
+        start_index = min(layout_manager.get_view_index_at((0, vstart)) + 1, len(rv.data) - 1)
+        end_index = max(layout_manager.get_view_index_at((0, vend)) - 1, 0)
+
+        vstart = rv.children[0].height - vstart
+        vend = rv.children[0].height - vend
+
+        first: Section = rv.data[end_index]["section"]
+        last: Section = rv.data[start_index]["section"]
+
+        self.canvas.after.clear()
+
+        with self.canvas.after:
+            StencilPush()
+            Rectangle(pos=self.parent.to_window(0, 0), size=(self.parent.width - dp(15), self.parent.height)) # Leave space for scrollbar
+            StencilUse()
+
+            overlaps_to_render: list[Overlap] = []
+            for overlap in self.overlaps.values():
+                if overlap.start_offset > first.length + last.offset: continue
+                if overlap.end_offset < first.offset: continue
+                overlaps_to_render.append(overlap)
+        
+            def calc_offset(x):
+                e = self.height - self.get_offset(x) + (vstart - self.height)
+                return e
+            
+            for overlap in overlaps_to_render:
+                y_start = calc_offset(overlap.start_offset)
+                y_end = calc_offset(overlap.end_offset - 1) - FONT_HEIGHT
+
+                color = COLORS[overlap.displacement % len(COLORS)]
+                if rv.hovered is not None:
+                    if overlap.start_offset != rv.hovered:
+                        color = [c * 0.5 for c in color]
+
+
+                Color(*color)
+                x = self.x + self.width - dp(10) - overlap.displacement * dp(6)
+                Line(points=[x, self.y + y_start,
+                             x, self.y + y_end], width=dp(2))
+            
+            StencilUnUse()
+            StencilPop()
+
 class MemoryMinimap(Widget): pass
 
 class MemoryLabel(EditableLabel):
     section: Section = ObjectProperty(None)
-    rv: RV = ObjectProperty(None, allownone=True)
+    rv: MemoryRV = ObjectProperty(None, allownone=True)
+    _hovered: bool
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -339,6 +478,13 @@ class MemoryLabel(EditableLabel):
         self.font_name = FONT_NAME
         self.padding = (0, 0, 0, 0)
         self.height = LABEL_HEIGHT
+
+    def on_mouse_move(self, pos):
+        super().on_mouse_move(pos) # type: ignore
+        
+        text_width = self._get_text_width(self.text, self.tab_width, self._label_cached)
+        if self._hovered and pos[0] - self.x < text_width and not app().any_hovered:
+            self.rv.hovered = self.section.offset
 
     def on_section(self, instance, value: Section):
         self.refresh()
