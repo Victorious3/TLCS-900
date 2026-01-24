@@ -57,9 +57,11 @@ class MemoryView(RelativeLayout):
     def recalculate(self):
         self.rv.recalculate_height()
         self.rv.refresh_from_data()
-        self.overlaps.recalculate_overlaps()
-        self.overlaps.redraw()
-        self.minimap.redraw()
+        def after(dt):
+            self.overlaps.recalculate_overlaps()
+            self.overlaps.redraw()
+            self.minimap.redraw()
+        Clock.schedule_once(after)
 
     def on_kv_post(self, base_widget):
         self.rv = self.ids["rv"]
@@ -474,8 +476,7 @@ class MemoryMinimap(KWidget, Widget):
 
     def redraw(self):
         data = self.parent.rv.data
-        total_height = sum(d["height"] for d in data)
-        scale = 1 / FONT_HEIGHT
+        scale = 1 / FONT_HEIGHT * 3
         scroll_offset = 1 - self.parent.rv.scroll_y
         scroll_pos = scroll_offset * scale * (self.parent.rv.children[0].height - self.parent.rv.height)
         s_height = self.height / scale
