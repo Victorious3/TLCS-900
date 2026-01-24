@@ -49,6 +49,7 @@ class MemoryView(RelativeLayout):
     def __init__(self, **kwargs):
         self.rv = cast(MemoryRV, None)
         self.overlaps = cast(MemoryOverlaps, None)
+        self.minimap = cast(MemoryMinimap, None)
         self.scrollbar: ScrollBar
         self.highlighted_list = []
         super().__init__(**kwargs)
@@ -58,11 +59,13 @@ class MemoryView(RelativeLayout):
         self.rv.refresh_from_data()
         self.overlaps.recalculate_overlaps()
         self.overlaps.redraw()
+        self.minimap.redraw()
 
     def on_kv_post(self, base_widget):
         self.rv = self.ids["rv"]
         self.overlaps = self.ids["overlaps"]
         self.scrollbar = self.ids["scrollbar"]
+        self.minimap = self.ids["minimap"]
         self.recalculate()
 
     def on_touch_down(self, touch):
@@ -236,6 +239,7 @@ MIN_COLLAPSE_SIZE = DATA_PER_ROW * 5
 
 class MemoryRV(RV):
     parent: MemoryView
+    data: list[dict]
 
     def __init__(self, **kwargs):
         self.hovered: int | None = None
@@ -244,6 +248,7 @@ class MemoryRV(RV):
     # We don't have arrows, but overlaps need to be redrawn on scroll
     def redraw_arrows(self):
         self.parent.overlaps.redraw()
+        self.parent.minimap.redraw()
 
     def on_mouse_move(self, pos):
         was_hovered = self.hovered
@@ -464,7 +469,42 @@ class MemoryOverlaps(KWidget, Widget):
             StencilUnUse()
             StencilPop()
 
-class MemoryMinimap(Widget): pass
+class MemoryMinimap(KWidget, Widget):
+    parent: MemoryView
+
+    def redraw(self):
+        data = self.parent.rv.data
+        total_height = sum(d["height"] for d in data)
+        scale = 1 / FONT_HEIGHT
+        scroll_offset = 1 - self.parent.rv.scroll_y
+        scroll_pos = scroll_offset * scale * (self.parent.rv.children[0].height - self.parent.rv.height)
+        s_height = self.height / scale
+
+        self.canvas.clear()
+        with self.canvas:
+            s_offset = self.height * scroll_offset - self.height * scale * scroll_offset
+
+            for overlap in self.parent.overlaps.overlaps.values():
+                start_offset = self.parent.overlaps.get_offset(overlap.start_offset)
+                end_offset = self.parent.overlaps.get_offset(overlap.end_offset)
+
+                if start_offset * scale - s_offset <= scroll_pos + s_height and end_offset * scale + s_offset >= scroll_pos:
+                    y = self.height - (self.y + start_offset * scale - scroll_pos) - self.height * scroll_offset + self.height * scale * scroll_offset
+                    color = COLORS[(overlap.start_offset - overlap.end_offset) % len(COLORS)]
+                    h = max(1, (end_offset - start_offset) * scale)
+                    Color(*color)
+                    Rectangle(pos=(self.x, y - h), size=(dp(40), h))
+
+            # Draw vieqw rectangle
+            Color(1, 1, 1, 0.5)
+            v_height = self.height * scale
+            Rectangle(pos=(self.x, self.y - s_offset + self.height - v_height), size=(dp(40), v_height))
+
+    def on_touch_down(self, touch):
+        return super().on_touch_down(touch)
+    
+    def on_touch_move(self, touch):
+        return super().on_touch_move(touch)
 
 class MemoryLabel(EditableLabel):
     section: Section = ObjectProperty(None)
