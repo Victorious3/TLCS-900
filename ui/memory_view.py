@@ -370,6 +370,7 @@ class MemoryOverlaps(KWidget, Widget):
 
     def __init__(self, **kwargs):
         self.overlaps: dict[int, Overlap] = {}
+        self.dragging = False
         super().__init__(**kwargs)
 
     def recalculate_overlaps(self):
@@ -473,16 +474,20 @@ class MemoryOverlaps(KWidget, Widget):
 
 class MemoryMinimap(KWidget, Widget):
     parent: MemoryView
+    scale = 1 / FONT_HEIGHT * 2
 
     def redraw(self):
-        data = self.parent.rv.data
-        scale = 1 / FONT_HEIGHT * 3
+        scale = MemoryMinimap.scale
         scroll_offset = 1 - self.parent.rv.scroll_y
         scroll_pos = scroll_offset * scale * (self.parent.rv.children[0].height - self.parent.rv.height)
         s_height = self.height / scale
 
         self.canvas.clear()
         with self.canvas:
+            StencilPush()
+            Rectangle(pos=self.pos, size=self.size)
+            StencilUse()
+
             s_offset = self.height * scroll_offset - self.height * scale * scroll_offset
 
             for overlap in self.parent.overlaps.overlaps.values():
@@ -494,17 +499,56 @@ class MemoryMinimap(KWidget, Widget):
                     color = COLORS[(overlap.start_offset - overlap.end_offset) % len(COLORS)]
                     h = max(1, (end_offset - start_offset) * scale)
                     Color(*color)
-                    Rectangle(pos=(self.x, y - h), size=(dp(40), h))
+                    Rectangle(pos=(self.x + dp(30) - overlap.displacement * dp(10), y - h), size=(dp(10), h))
 
-            # Draw vieqw rectangle
+            # Draw view rectangle
             Color(1, 1, 1, 0.5)
             v_height = self.height * scale
             Rectangle(pos=(self.x, self.y - s_offset + self.height - v_height), size=(dp(40), v_height))
+            
+            StencilUnUse()
+            StencilPop()
 
     def on_touch_down(self, touch):
+        if touch.button != "left": 
+            return super().on_touch_down(touch)
+        
+        self.dragging = False
+        
+        x, y = touch.pos
+        if self.x <= x <= self.right - dp(15) and self.y <= y <= self.top:
+            scale = MemoryMinimap.scale
+            
+            scroll_offset = 1 - self.parent.rv.scroll_y
+            scroll_pos = scroll_offset * scale * (self.parent.rv.children[0].height - self.parent.rv.height)
+            start_offset = (self.height + scroll_pos - self.height * scroll_offset + self.height * scale * scroll_offset - y) / scale
+            self.parent.rv.scroll_y = 1 - start_offset / (self.parent.rv.children[0].height - self.parent.rv.height)
+
+            v_height = self.height * scale
+            s_offset = self.height * scroll_offset - self.height * scale * scroll_offset
+
+            base = self.y - s_offset + self.height - v_height
+            if base <= y <= base + v_height:
+                self.dragging = True
+            
+            return True
         return super().on_touch_down(touch)
+
+    def on_touch_up(self, touch):
+        self.dragging = False
+        return super().on_touch_up(touch)
     
     def on_touch_move(self, touch):
+        if self.dragging:
+            dy = touch.dy / (self.height - self.height * MemoryMinimap.scale)
+            new_scroll = min(1, max(0, self.parent.rv.scroll_y + dy))
+            self.parent.rv.scroll_y = new_scroll
+
+            return True
+        
+        if self.x <= touch.x <= self.right - dp(15) and self.y <= touch.y <= self.top:
+            return True
+        
         return super().on_touch_move(touch)
 
 class MemoryLabel(EditableLabel):
