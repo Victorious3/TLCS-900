@@ -17,7 +17,7 @@ from kivy.uix.recycleboxlayout import RecycleBoxLayout
 from ui.kivytypes import KWidget
 
 from .project import DATA_PER_ROW, MAX_SECTION_LENGTH, CodeSection, DataSection, Instruction, Section, VirtualByteArray
-from .main import FONT_HEIGHT, app
+from .main import BG_COLOR, FONT_HEIGHT, app
 from .sections import RV, EditableLabel, ScrollBar, SectionBase, SectionData, FONT_SIZE, FONT_NAME, LABEL_HEIGHT
 from .dock.dock import SerializableTab
 from .arrow import COLORS
@@ -247,6 +247,9 @@ class MemoryRV(RV):
         self.hovered: int | None = None
         super().__init__(**kwargs)
 
+    def _get_scrollbar_width(self):
+        return dp(15) + dp(40)
+
     # We don't have arrows, but overlaps need to be redrawn on scroll
     def redraw_arrows(self):
         self.parent.overlaps.redraw()
@@ -465,7 +468,7 @@ class MemoryOverlaps(KWidget, Widget):
 
 
                 Color(*color)
-                x = self.x + self.width - dp(10) - overlap.displacement * dp(6)
+                x = rv.xoffset + self.x + self.width - dp(10) - overlap.displacement * dp(6)
                 Line(points=[x, self.y + y_start,
                              x, self.y + y_end], width=dp(2))
             
@@ -484,6 +487,9 @@ class MemoryMinimap(KWidget, Widget):
 
         self.canvas.clear()
         with self.canvas:
+            Color(*BG_COLOR)
+            Rectangle(pos=self.pos, size=(self.width - dp(15), self.height)) # Leave space for scrollbar
+
             StencilPush()
             Rectangle(pos=self.pos, size=self.size)
             StencilUse()

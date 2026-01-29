@@ -436,6 +436,7 @@ class Function:
         self.underflow = False
         self.callers: list[tuple[int, int]]
         self.callees: list[tuple[int, int]]
+        self.text: dict[int, str] | None = None
 
     def __gt__(self, other: "Function") -> bool:
         return self.ep > other.ep
@@ -643,6 +644,54 @@ class Project:
         self.file_len = 0
         self.addresses: list[MemoryRegion] = []
         self.functions = cast(dict[int, Function], None)
+        self.text: dict[int, str] | None = None
+
+    def invalidate(self):
+        self.text = None
+
+    def _load_text(self):
+        self.text = {}
+        section: Section
+        for section in self.sections.values():
+            for insn in section.instructions:
+                self.text[insn.entry.pc] = insnentry_to_str(insn.entry, self.ob)
+
+    def search_in_mnemonic(self, search: str, fun: Function | None = None) -> list[tuple[int, str]]:
+        text = self.get_text(fun)
+
+        res = []
+        for pc, line in text.items():
+            if search.upper() in line.upper():
+                res.append((pc, line))
+        return res
+    
+    def search_in_data(self, search: bytearray, fun: Function | None = None) -> list[int]:
+        res = []
+        index = 0
+        while (index := self.ib.buffer.find(search, index)) != -1:
+            res.append(index + self.org)
+        
+        return res
+
+    def get_text(self, fun: Function | None = None) -> dict[int, str]:
+        if self.text is None:
+            self._load_text()
+            if fun is not None:
+                fun.text = None
+
+        assert self.text
+
+        if fun is not None:
+            if fun.text: return fun.text
+
+            res = {}
+            for block in fun.blocks.values():
+                for insn in block.insn:
+                    res[insn.entry.pc] = self.text[insn.entry.pc]
+            fun.text = res
+            return res
+        
+        else: return self.text
 
     def rename_label(self, ep: int, name: str):
         label = self.ob.label(ep)
@@ -650,6 +699,7 @@ class Project:
             if label.name == name: return # No change
             label.name = name
             app().main_dock.refresh(ep = ep)
+            self.invalidate()
 
     def get_project_id(self) -> str:
         return md5(str(self.path).encode()).hexdigest()
@@ -770,6 +820,7 @@ class Project:
         return ep in self.ob.calls
 
     def disassemble(self, ep: int, callback):
+        self.invalidate()
         clear_cache()
         # TODO make this part of the API instead of messing with the internals manually
         old_map = self.ob.insnmap

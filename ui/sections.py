@@ -55,6 +55,9 @@ class RV(KWidget, RecycleView):
     def on_kv_post(self, base_widget):
         self.update_data()
 
+    def _get_scrollbar_width(self):
+        return dp(15)
+
     @classmethod 
     def global_mouse_move(cls, window, pos):
         cls.any_hovered = False
@@ -157,7 +160,7 @@ class RV(KWidget, RecycleView):
 
         max_width = 0
         for data in iter_all_children_of_type(self.children[0], SectionMnemonic):
-            max_width = max(max_width, data.width + dp(550) + dp(15))
+            max_width = max(max_width, data.width + dp(550) + self._get_scrollbar_width())
 
         scrollbar = self.parent.scrollbar
         scrollbar.base_width = max_width
@@ -189,7 +192,7 @@ class RV(KWidget, RecycleView):
         tx, ty = touch.x, touch.y
 
         sx, sy = self.to_window(*self.pos)
-        self.outside_bounds = not (sx < tx < self.parent.right - dp(15) and sy < ty < sy + self.height)
+        self.outside_bounds = not (sx < tx < self.parent.right - self._get_scrollbar_width() and sy < ty < sy + self.height)
 
         if isinstance(self.parent, main.FunctionListing): # TODO Hack here, find a better way
             parent = self.parent.parent
@@ -405,7 +408,7 @@ class SectionData(KWidget, ContextMenuBehavior, SectionColumn):
 
                 start_x = start_column * 3 * FONT_WIDTH
                 end_x = end_column * 3 * FONT_WIDTH
-                width = self.rv.width - dp(15)
+                width = self.rv.width - self.rv._get_scrollbar_width()
 
                 if self.section.offset <= start < self.section.offset + self.section.length and row_start - 1 == row_end and end_column < end_length:
                     if start_column == 0:
@@ -431,7 +434,7 @@ class SectionData(KWidget, ContextMenuBehavior, SectionColumn):
 
     def trigger_context_menu(self, touch):
         if not self.collide_point(touch.x, touch.y): return
-        if (touch.x < self.rv.width - dp(15)):
+        if (touch.x < self.rv.width - self.rv._get_scrollbar_width()):
             rv = self.rv
             class Handler(MenuHandler):
                 def on_select(self, item):
