@@ -55,10 +55,9 @@ class AnalyzerTab(SerializableTab):
 
 class AnalyzerFilter(HideableTextInput, EscapeTrigger):
     def on_escape(self, obj):
-        if app().analyzer_panel and app().main_dock.active_content == app().analyzer_panel:
+        panel = app().analyzer_panel
+        if panel and app().main_dock.is_active(panel):
             self.hide()
-            panel = app().analyzer_panel
-            assert panel
             panel.ids["analyzer_table"].filter()
 
     def keyboard_on_key_down(self, window, keycode, text, modifiers):

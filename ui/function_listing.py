@@ -14,6 +14,7 @@ from kivy.uix.treeview import TreeView, TreeViewLabel
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.spinner import Spinner
 from kivy.properties import BooleanProperty, ObjectProperty
+from kivy.clock import Clock
 
 from disapi import insnentry_to_str
 from tcls_900.tlcs_900 import Mem, Reg
@@ -52,6 +53,9 @@ class ListingPanelBase(Widget):
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
         if self.get_root_window() is None:
+            return
+        if keycode == 9 and "ctrl" in modifiers and app().main_dock.is_active(self):  # Ctrl+F
+            self.search_input.show()
             return
 
         if not self.highlighted: return
@@ -105,7 +109,12 @@ class ListingPanelBase(Widget):
         for i in self.highlighted_list:
             self.highlighted_set.add(i)
 
-        self.highlight_index = 0
+        if self.rv.selection_start:
+            # Find the next highlight after the current selection
+            next_highlight = self.highlighted_set.ceiling(self.rv.selection_start)
+            self.highlight_index = self.highlighted_list.index(next_highlight) if next_highlight is not None else 0
+        else:
+            self.highlight_index = 0
         self.rv.selection_start = self.rv.selection_end = self.highlighted_list[self.highlight_index]
         self._set_selection_end()
         
@@ -157,6 +166,13 @@ class ListingPanelBase(Widget):
         data["scroll_y"] = self.rv.scroll_y
         data["selection_start"] = self.rv.selection_start
         data["selection_end"] = self.rv.selection_end
+        data["search_type"] = self.search_spinner.values.index(self.search_spinner.text)
+        data["search_text"] = self.search_input.text
+        data["search_disabled"] = self.search_input.disabled
+        
+        if self.highlighted is not None:
+            data["highlighted"] = self.highlighted
+            data["highlight_index"] = self.highlight_index
     
     def deserialize_post(self, data: dict):
         if "scroll_y" in data:
@@ -167,8 +183,29 @@ class ListingPanelBase(Widget):
             self.rv.selection_start = data["selection_start"]
         if "selection_end" in data:
             self.rv.selection_end = data["selection_end"]
-
+        if "search_disabled" in data:
+            disabled = data["search_disabled"]
+            if disabled: self.search_input.hide()
+            else: self.search_input.show()
+        if "search_type" in data:
+            self.search_spinner.text = self.search_spinner.values[data["search_type"]]
+        if "search_text" in data:
+            self.search_input.text = data["search_text"]
+            
         self.rv.redraw_children()
+
+        def after(dt):
+            self.search_input.search()
+            if "highlighted" in data:
+                self.highlighted = data["highlighted"]
+                self.highlight_index = data.get("highlight_index", 0)
+                self.select_next_highlight(0)
+
+                if "scroll_y" in data: # Restore scroll after highlight
+                    self.rv.scroll_y = data["scroll_y"]
+
+        if not self.search_input.disabled:
+            Clock.schedule_once(after, 0)
 
 class ListingPanel(ListingPanelBase, RelativeLayout):
     minimap: Minimap = ObjectProperty(None)

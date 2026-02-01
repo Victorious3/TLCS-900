@@ -712,6 +712,10 @@ class SearchInput(HideableTextInput, EscapeTrigger):
         super().__init__(**kwargs)
         self.last_text = ""
 
+    def on_escape(self, obj):
+        if app().main_dock.is_active(self.rv.listing_panel):
+            self.hide()
+
     def on_touch_move(self, touch):
         touch.grab_current = self #TODO This is a hack, make an issue
         return super().on_touch_move(touch)
@@ -723,32 +727,34 @@ class SearchInput(HideableTextInput, EscapeTrigger):
                 return
             
             self.last_text = self.text
-            if self.text == "": return
-
-            panel = self.rv.listing_panel
-            option = panel.search_spinner.text
-
-            fun = None
-            if isinstance(panel, main.FunctionListing):
-                fun = panel.fun
-
-            if option == "Code":
-                res = app().project.search_in_mnemonic(self.text, fun)
-                panel.highlight_list([i for i, _ in res], self.text)
-            elif option == "Data":
-                try:
-                    search_bytes = bytearray(int(x, base=16) for x in self.text.split(" "))
-                except ValueError:
-                    return
-                res = app().project.search_in_data(search_bytes, fun)
-                panel.highlight_list(res, search_bytes)
-            elif option == "Text":
-                search_bytes = bytearray(self.text.encode())
-                res = app().project.search_in_data(search_bytes, fun)
-                panel.highlight_list(res, search_bytes)
-
+            self.search()
         else:
             super().keyboard_on_key_down(window, keycode, text, modifiers)
+
+    def search(self):
+        if self.text == "": return
+
+        panel = self.rv.listing_panel
+        option = panel.search_spinner.text
+
+        fun = None
+        if isinstance(panel, main.FunctionListing):
+            fun = panel.fun
+
+        if option == "Code":
+            res = app().project.search_in_mnemonic(self.text, fun)
+            panel.highlight_list([i for i, _ in res], self.text)
+        elif option == "Data":
+            try:
+                search_bytes = bytearray(int(x, base=16) for x in self.text.split(" "))
+            except ValueError:
+                return
+            res = app().project.search_in_data(search_bytes, fun)
+            panel.highlight_list(res, search_bytes)
+        elif option == "Text":
+            search_bytes = bytearray(self.text.encode())
+            res = app().project.search_in_data(search_bytes, fun)
+            panel.highlight_list(res, search_bytes)
 
     def previous(self):
         self.rv.listing_panel.select_next_highlight(-1)
