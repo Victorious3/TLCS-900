@@ -666,12 +666,27 @@ class Project:
         return res
     
     def search_in_data(self, search: bytearray, fun: Function | None = None) -> list[int]:
-        res = []
-        index = 0
-        while (index := self.ib.buffer.find(search, index)) != -1:
-            res.append(index + self.org)
-        
-        return res
+        if fun is not None:
+            res = []
+            for block in fun.blocks.values():
+                section = block.to_section()
+                data = section.data
+                if isinstance(data, VirtualByteArray): continue
+
+                index = 0
+                while (index := data.find(search, index)) != -1:
+                    res.append(index + section.offset)
+                    index += len(search)
+            
+            return res
+        else: 
+            res = []
+            index = 0
+            while (index := self.ib.buffer.find(search, index)) != -1:
+                res.append(index + self.org)
+                index += len(search)
+            
+            return res
 
     def get_text(self, fun: Function | None = None) -> dict[int, str]:
         if self.text is None:

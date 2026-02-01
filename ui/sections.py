@@ -1,6 +1,8 @@
 import math
 import sys
 
+from pytreemap import TreeSet
+
 from kivy.uix.textinput import TextInput
 from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
@@ -21,7 +23,7 @@ from kivy.core.clipboard import Clipboard
 from . import main
 from .kivytypes import KWidget
 from .project import Section, DATA_PER_ROW, Instruction, MAX_SECTION_LENGTH
-from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, NavigationListing, app, iter_all_children_of_type
+from .main import LABEL_HEIGHT, FONT_HEIGHT, FONT_SIZE, FONT_NAME, FONT_WIDTH, EscapeTrigger, HideableTextInput, NavigationListing, app, iter_all_children_of_type
 from .context_menu import ContextMenuBehavior, show_context_menu, MenuHandler, MenuItem
 from disapi import Loc
 
@@ -591,12 +593,29 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
 
         self.text = "\n".join(text)
 
+        mnemonics = app().project.get_text()
+
         self.canvas.before.clear()
-        with self.canvas.before:
-            for i, insn in enumerate(self.section.instructions):
-                if insn.entry.pc in self.rv.parent.highlighted_list:
-                    Color(*get_color_from_hex("#E695337A"))
-                    Rectangle(pos=(self.x, self.y + self.height - ((i + 1) * FONT_HEIGHT)), size=(widths[i] * FONT_WIDTH, FONT_HEIGHT))
+        if self.rv.parent.highlighted is not None:
+            highlighted = self.rv.parent.highlighted_set
+            search_item = self.rv.parent.search_item
+            with self.canvas.before:
+                for i, insn in enumerate(self.section.instructions):
+                    if isinstance(search_item, str):
+                        floor_key = highlighted.floor(insn.entry.pc + insn.entry.length)
+                        if floor_key is not None and (insn.entry.pc <= floor_key <= insn.entry.pc + insn.entry.length):
+                            Color(*get_color_from_hex("#E695337A"))
+                            insn_text = mnemonics[insn.entry.pc]
+                            index = 0
+                            while (index := insn_text.find(search_item, index)) != -1:
+                                Rectangle(pos=(self.x + index * FONT_WIDTH, self.y + self.height - ((i + 1) * FONT_HEIGHT)), size=(len(search_item) * FONT_WIDTH, FONT_HEIGHT))
+                                index += len(search_item)
+
+                    elif isinstance(search_item, bytearray):
+                        pass
+                    elif insn.entry.pc in highlighted:
+                        Color(*get_color_from_hex("#E695337A"))
+                        Rectangle(pos=(self.x, self.y + self.height - ((i + 1) * FONT_HEIGHT)), size=(widths[i] * FONT_WIDTH, FONT_HEIGHT))
 
     def on_section(self, instance, section: Section):
         self.redraw()
@@ -691,3 +710,58 @@ class SectionBase(RecycleDataViewBehavior, StencilView, BoxLayout):
         self.ids["mnemonics"].section = section
 
 class SectionPanel(SectionBase): pass
+
+class SearchInput(HideableTextInput, EscapeTrigger):
+    rv: RV = ObjectProperty(None)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.last_text = ""
+
+    def on_touch_move(self, touch):
+        touch.grab_current = self #TODO This is a hack, make an issue
+        return super().on_touch_move(touch)
+    
+    def keyboard_on_key_down(self, window, keycode, text, modifiers):
+        if keycode[0] == 13:
+            if self.last_text == self.text:
+                self.rv.parent.select_next_highlight(1)
+                return
+            
+            self.last_text = self.text
+            if self.text == "": return
+
+            panel = self.rv.parent
+            option = panel.search_spinner.text
+
+            fun = None
+            if isinstance(panel, main.FunctionListing):
+                fun = panel.fun
+
+            if option == "Code":
+                res = app().project.search_in_mnemonic(self.text, fun)
+                panel.highlight_list([i for i, _ in res], self.text)
+            elif option == "Data":
+                try:
+                    search_bytes = bytearray(int(x, base=16) for x in self.text.split(" "))
+                except ValueError:
+                    return
+                res = app().project.search_in_data(search_bytes, fun)
+                panel.highlight_list(res, search_bytes)
+            elif option == "Text":
+                search_bytes = bytearray(self.text.encode())
+                res = app().project.search_in_data(search_bytes, fun)
+                panel.highlight_list(res, search_bytes)
+
+        else:
+            super().keyboard_on_key_down(window, keycode, text, modifiers)
+
+    def previous(self):
+        self.rv.parent.select_next_highlight(-1)
+
+    def next(self):
+        self.rv.parent.select_next_highlight(1)
+
+    def clear(self):
+        self.text = ""
+        self.last_text = ""

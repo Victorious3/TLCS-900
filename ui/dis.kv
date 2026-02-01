@@ -119,6 +119,67 @@
         pos_hint: {"left": 1, "top": 1}
         on_press: root.toggle()
 
+    SectionSearch:
+        id: search_container
+        rv: rv
+
+<SectionSearch@BoxLayout>:
+    rv: None
+    padding: 0, dp(5), dp(20), 0
+    width: dp(300)
+    size_hint: None, None
+    height: search_input.height + dp(10)
+    pos_hint: { "right": 1, "top": 1 }
+
+    BoxLayout:
+        opacity: search_input.opacity
+        size_hint: 1, 1
+        spacing: dp(5)
+        alignment: "center"
+        
+        canvas.before:
+            Color:
+                rgba: 0.18, 0.18, 0.18, 1.0
+            RoundedRectangle:
+                pos: self.x - dp(5), self.y - dp(5)
+                size: self.width + dp(10), self.height + dp(10)
+                radius: [dp(5)]
+
+        Spinner:
+            id: search_spinner
+            text: "Code"
+            values: ["Code", "Data", "Text"]
+            size_hint: None, None
+            size: dp(50), dp(30)
+            option_cls: "SearchOption"
+            on_text: search_input.clear()
+
+        SearchInput:
+            rv: root.rv
+            multiline: False
+            id: search_input
+            opacity: 1
+            disabled: False
+            hint_text: "Find"
+            size_hint: 1, None
+            height: self.minimum_height
+
+        IconButton:
+            source: "ui/resources/up_arrow.png"
+            size_hint: None, None
+            size: dp(20), dp(30)
+            on_press: search_input.previous()
+        
+        IconButton:
+            source: "ui/resources/down_arrow.png"
+            size_hint: None, None
+            size: dp(20), dp(30)
+            on_press: search_input.next()
+
+
+<SearchOption@SpinnerOption>:
+    height: dp(30)
+
 <AnalyzerLabel>:
     size_hint: None, 1
     width: self.parent.column_widths[0] + dp(5) if self.parent else dp(100)

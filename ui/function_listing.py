@@ -1,5 +1,6 @@
 from typing import Iterable, Union, cast
 from itertools import groupby
+from pytreemap import TreeSet
 import logging
 
 from kivy.metrics import dp
@@ -10,6 +11,7 @@ from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.treeview import TreeView, TreeViewLabel
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.spinner import Spinner
 from kivy.properties import BooleanProperty
 
 from disapi import insnentry_to_str
@@ -18,7 +20,7 @@ from tcls_900.tlcs_900 import Mem, Reg
 from .kivytypes import KWidget
 from .minimap import Minimap
 from .project import Function, Section, Instruction
-from .sections import RV, ScrollBar
+from .sections import RV, ScrollBar, SearchInput
 from .main import app, FONT_NAME, iter_all_children_of_type
 from .arrow import ArrowRenderer
 
@@ -32,8 +34,13 @@ class ListingPanel(RelativeLayout):
         self.minimap: Minimap = cast(Minimap, None)
         self.arrows: ArrowRenderer = cast(ArrowRenderer, None)
         self.scrollbar: ScrollBar = cast(ScrollBar, None)
+        self.search_input: SearchInput = cast(SearchInput, None)
+        self.search_spinner: Spinner = cast(Spinner, None)
+
+        self.search_item: str | bytes | None = None
         self.highlighted: int | None = None
-        self.highlighted_list = []
+        self.highlighted_list: list[int] = []
+        self.highlighted_set: TreeSet = TreeSet()
         self.highlight_index = -1
 
         Window.bind(on_key_down=self._keydown)
@@ -54,26 +61,47 @@ class ListingPanel(RelativeLayout):
             self.end_highlight()
 
     def _set_selection_end(self):
-        sections = self.get_sections()
-        for s in sections: 
-            for insn in s.instructions:
-                if insn.entry.pc == self.rv.selection_start:
-                    self.rv.selection_end = insn.entry.pc + insn.entry.length - 1
-                    break
+        if isinstance(self.search_item, bytearray):
+            self.rv.selection_end = self.rv.selection_start + len(self.search_item) - 1
+        else:
+            sections = self.get_sections()
+            for s in sections: 
+                for insn in s.instructions:
+                    if insn.entry.pc == self.rv.selection_start:
+                        self.rv.selection_end = insn.entry.pc + insn.entry.length - 1
+                        break
+
+    def highlight_list(self, highlights: list[int], search_string: str | bytearray):
+        if len(highlights) == 0:
+            self.end_highlight()
+            return
+
+        self.highlighted = highlights[0]
+        self.highlighted_list = highlights
+        self.search_item = search_string
+        self._highlight_post()
 
     def highlight(self, fun: Function, callee: int | None = None, caller: int | None = None):
+        self.search_item = None
         self.highlighted = callee if callee is not None else caller
         if callee:
             self.highlighted_list = list(set([index for index, callee in fun.callees if callee == self.highlighted]))
         elif caller:
             self.highlighted_list = list(set([index for index, _ in fun.callers]))
-        
+
         logging.info("Highlighting %d occurrences of %s of function %s", len(self.highlighted_list), 
                      "callee" if callee is not None else "caller", fun.name)
+        self._highlight_post()
+        
+    def _highlight_post(self):
+        self.highlighted_set = TreeSet()
         self.highlighted_list.sort()
         if len(self.highlighted_list) == 0:
             self.highlighted = None
             return
+        
+        for i in self.highlighted_list:
+            self.highlighted_set.add(i)
 
         self.highlight_index = 0
         self.rv.selection_start = self.rv.selection_end = self.highlighted_list[self.highlight_index]
@@ -84,9 +112,11 @@ class ListingPanel(RelativeLayout):
         self.rv.redraw_children()
 
     def end_highlight(self):
+        self.search_item = None
         self.highlighted = None
         self.highlight_index = -1
         self.highlighted_list = []
+        self.highlighted_set.clear()
         self.minimap.redraw()
         self.rv.reset_selection()
         self.rv.redraw_children()
@@ -105,6 +135,10 @@ class ListingPanel(RelativeLayout):
         self.minimap = self.ids["minimap"]
         self.arrows = self.ids["arrows"]
         self.scrollbar = self.ids["scrollbar"]
+
+        search = self.ids["search_container"]
+        self.search_input = search.ids["search_input"]
+        self.search_spinner = search.ids["search_spinner"]
 
     def on_touch_down(self, touch):
         if super().on_touch_down(touch): return True

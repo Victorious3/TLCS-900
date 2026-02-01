@@ -32,6 +32,9 @@ class Minimap(KWidget, Widget):
         def section_height(section: Section): 
             return len(section.instructions) * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0)
         
+        if self.parent.highlighted is not None:
+            highlighted_set = self.parent.highlighted_set
+
         self.canvas.after.clear()
         with self.canvas.after:
             Color(*BG_COLOR)
@@ -49,7 +52,7 @@ class Minimap(KWidget, Widget):
                     offset_in_group = 0
                     for section in group:
                         for insn in section.instructions:
-                            if insn.entry.pc in self.parent.highlighted_list:
+                            if insn.entry.pc in highlighted_set:
                                 Color(*get_color_from_hex("#EF5350"))
                                 Rectangle(pos=(self.x, self.y + (1 - ((offset + offset_in_group) / total_height)) * self.height), size=(self.width, max(dp(1), FONT_HEIGHT / total_height * self.height)))
                             offset_in_group += FONT_HEIGHT
