@@ -43,7 +43,7 @@ class ScrollBar(BoxLayout):
 class RV(KWidget, RecycleView):
     xoffset: float = NumericProperty(0)
 
-    parent: "main.ListingPanel"
+    listing_panel: "main.ListingPanelBase" = ObjectProperty(None)
     any_hovered = False
 
     def __init__(self, **kwargs):
@@ -71,7 +71,7 @@ class RV(KWidget, RecycleView):
             app().set_hover()
 
     def redraw_arrows(self):
-        self.parent.arrows.redraw()
+        self.listing_panel.arrows.redraw()
 
     def on_xoffset(self, instance, value: int):
         self.redraw_arrows()
@@ -84,7 +84,7 @@ class RV(KWidget, RecycleView):
     def update_data(self):
         data = []
         section: Section
-        for section in self.parent.get_sections():
+        for section in self.listing_panel.get_sections():
             columns = len(section.instructions)
             data.append({"section": section, 
                          "height": columns * FONT_HEIGHT + (LABEL_HEIGHT if section.labels else 0),
@@ -108,7 +108,7 @@ class RV(KWidget, RecycleView):
                 
                 scroll_pos += last_insn * FONT_HEIGHT
                 self.scroll_y = 1 - (scroll_pos / total_height) + (self.height / total_height / 2)             
-                if history: app().update_position_history(NavigationListing(self.parent, offset))
+                if history: app().update_position_history(NavigationListing(self.listing_panel, offset))
                 app().last_position = offset
                 return True
 
@@ -164,16 +164,12 @@ class RV(KWidget, RecycleView):
         for data in iter_all_children_of_type(self.children[0], SectionMnemonic):
             max_width = max(max_width, data.width + dp(550) + self._get_scrollbar_width())
 
-        scrollbar = self.parent.scrollbar
+        scrollbar = self.listing_panel.scrollbar
         scrollbar.base_width = max_width
         scrollbar.on_scroll_move()
 
     def on_touch_move_section(self, touch):
-        if isinstance(self.parent, main.FunctionListing): # TODO Hack here, find a better way
-            parent = self.parent.parent
-        else: parent = self.parent
-        
-        if self.outside_bounds or app().main_dock.active_content != parent: return
+        if self.outside_bounds or not app().main_dock.is_active(self.listing_panel): return
         if touch.button != "left": return
         tx, ty = touch.x, touch.y
 
@@ -194,13 +190,11 @@ class RV(KWidget, RecycleView):
         tx, ty = touch.x, touch.y
 
         sx, sy = self.to_window(*self.pos)
-        self.outside_bounds = not (sx < tx < self.parent.right - self._get_scrollbar_width() and sy < ty < sy + self.height)
+        self.outside_bounds = not (sx < tx < self.listing_panel.right - self._get_scrollbar_width() and sy < ty < sy + self.height)
 
-        if isinstance(self.parent, main.FunctionListing): # TODO Hack here, find a better way
-            parent = self.parent.parent
-        else: parent = self.parent
+        parent = self.listing_panel
 
-        if self.outside_bounds or app().main_dock.active_content != parent: 
+        if self.outside_bounds or not app().main_dock.is_active(parent): 
             self.reset_selection()
             return
 
@@ -445,7 +439,7 @@ class SectionData(KWidget, ContextMenuBehavior, SectionColumn):
                         def callback():
                             # FIXME
                             a.dis_panel.rv.update_data()
-                            a.dis_panel.minimap.redraw()
+                            a.dis_panel.minimap.update()
                             a.dis_panel.arrows.recompute_arrows()
                             a.dis_panel.arrows.redraw()
                             Clock.schedule_once(lambda dt: a.scroll_to_offset(rv.selection_start), 0)
@@ -464,7 +458,7 @@ class SectionData(KWidget, ContextMenuBehavior, SectionColumn):
                 MenuItem("dis", "Disassemble from here"),
                 MenuItem("dis_oneshot", "Disassemble oneshot"),
                 MenuItem("dis_selected", "Disassemble selected"),
-            ] if not isinstance(self.rv.parent, main.FunctionListing) else []))
+            ] if not isinstance(self.rv.listing_panel, main.FunctionListing) else []))
 
             return True
 
@@ -596,9 +590,9 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
         mnemonics = app().project.get_text()
 
         self.canvas.before.clear()
-        if self.rv.parent.highlighted is not None:
-            highlighted = self.rv.parent.highlighted_set
-            search_item = self.rv.parent.search_item
+        if self.rv.listing_panel is not None and self.rv.listing_panel.highlighted is not None:
+            highlighted = self.rv.listing_panel.highlighted_set
+            search_item = self.rv.listing_panel.search_item
             with self.canvas.before:
                 for i, insn in enumerate(self.section.instructions):
                     if isinstance(search_item, str):
@@ -638,7 +632,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
     def trigger_context_menu(self, touch):
         for label in self.labels:
             if label.hovered and app().ctrl_down:
-                open_context_menu(label.ep, label.is_fun, touch, self.rv.parent)
+                open_context_menu(label.ep, label.is_fun, touch, self.rv.listing_panel)
                 return True
             
         return False
@@ -650,7 +644,7 @@ class SectionMnemonic(KWidget, ContextMenuBehavior, SectionColumn):
                 if label.hovered:
                     try:
                         self.rv.reset_selection()
-                        app().scroll_to_label(label.ep, self.rv.parent)
+                        app().scroll_to_label(label.ep, self.rv.listing_panel)
                         return True
                     except ValueError: pass
 
@@ -725,13 +719,13 @@ class SearchInput(HideableTextInput, EscapeTrigger):
     def keyboard_on_key_down(self, window, keycode, text, modifiers):
         if keycode[0] == 13:
             if self.last_text == self.text:
-                self.rv.parent.select_next_highlight(1)
+                self.rv.listing_panel.select_next_highlight(1)
                 return
             
             self.last_text = self.text
             if self.text == "": return
 
-            panel = self.rv.parent
+            panel = self.rv.listing_panel
             option = panel.search_spinner.text
 
             fun = None
@@ -757,10 +751,10 @@ class SearchInput(HideableTextInput, EscapeTrigger):
             super().keyboard_on_key_down(window, keycode, text, modifiers)
 
     def previous(self):
-        self.rv.parent.select_next_highlight(-1)
+        self.rv.listing_panel.select_next_highlight(-1)
 
     def next(self):
-        self.rv.parent.select_next_highlight(1)
+        self.rv.listing_panel.select_next_highlight(1)
 
     def clear(self):
         self.text = ""

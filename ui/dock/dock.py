@@ -594,6 +594,14 @@ class Dock(KWidget, BaseDock):
     def active_content(self) -> Widget | None:
         if self._active_panel: return self._active_panel._content
         return None
+    
+    def is_active(self, panel: Widget) -> bool:
+        active = self.active_content
+        if active is None: return False
+        while panel and not isinstance(panel, type(Window)):
+            if active == panel: return True
+            panel = panel.parent
+        return False
 
     @active_panel.setter
     def active_panel(self, value: DockTab | None):

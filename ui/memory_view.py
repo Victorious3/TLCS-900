@@ -19,6 +19,7 @@ from ui.kivytypes import KWidget
 from .project import DATA_PER_ROW, MAX_SECTION_LENGTH, CodeSection, DataSection, Instruction, Section, VirtualByteArray
 from .main import BG_COLOR, FONT_HEIGHT, app
 from .sections import RV, EditableLabel, ScrollBar, SectionBase, SectionData, FONT_SIZE, FONT_NAME, LABEL_HEIGHT
+from .function_listing import ListingPanelBase
 from .dock.dock import SerializableTab
 from .arrow import COLORS
 
@@ -45,7 +46,9 @@ class MemoryViewTab(SerializableTab):
     def deserialize_post(self, data: dict):
         self.content.deserialize_post(data)
     
-class MemoryView(RelativeLayout):
+class MemoryView(ListingPanelBase, RelativeLayout):
+    rv: "MemoryRV"
+
     def __init__(self, **kwargs):
         self.rv = cast(MemoryRV, None)
         self.overlaps = cast(MemoryOverlaps, None)
@@ -53,6 +56,9 @@ class MemoryView(RelativeLayout):
         self.scrollbar: ScrollBar
         self.highlighted_list = []
         super().__init__(**kwargs)
+
+    def update(self):
+        self.minimap.redraw()
 
     def recalculate(self):
         self.rv.recalculate_height()

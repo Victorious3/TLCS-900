@@ -100,7 +100,7 @@ class EscapeTrigger:
         pass
 
 class NavigationListing(NavigationAction):
-    def __init__(self, panel: "ListingPanel | None", offset: int):
+    def __init__(self, panel: "ListingPanelBase | None", offset: int):
         self.offset = offset
         self.panel = panel
 
@@ -121,7 +121,7 @@ from .context_menu import ContextMenuBehavior
 from .popup import FunctionAnalyzerPopup
 from .dock.dock import BaseDock, Dock, Orientation, SerializableTab, DockSplitter, DockPanel
 from .call_graph import CallGraphPanel, CallGraphTab
-from .function_listing import FunctionListingContainer, FunctionListing, ListingPanel, ListingTab
+from .function_listing import FunctionListingContainer, FunctionListing, ListingPanel, ListingPanelBase, ListingTab
 from .memory_view import MemoryViewTab
 
 class RenameInput(BoxLayout, EscapeTrigger):
@@ -362,7 +362,7 @@ class DisApp(App):
                 for tab in panel.panel.iterate_panels():
                     if isinstance(tab, SerializableTab):
                         data = tab.serialize()
-                        if tab.root and tab.root.active_panel == tab:
+                        if tab.root and tab.root.is_active(tab):
                             data["active"] = True
                         tabs.append(data)
                 res["tab"] = tabs
@@ -390,7 +390,7 @@ class DisApp(App):
     def get_project_ui_file(self) -> Path:
         return dirs.user_config_path / self.project.get_project_id() / "ui_state.json"
     
-    def scroll_to_label(self, label: int | str, main_panel: ListingPanel | None = None):
+    def scroll_to_label(self, label: int | str, main_panel: ListingPanelBase | None = None):
         sections = self.project.sections.values()
         section: Section
         for section in sections:
@@ -430,7 +430,7 @@ class DisApp(App):
         position.navigate()
         self.update_position_buttons()
     
-    def scroll_to_offset(self, offset: int, main_panel: ListingPanel | None = None, history = True):
+    def scroll_to_offset(self, offset: int, main_panel: ListingPanelBase | None = None, history = True):
         rv = main_panel.rv if main_panel else self.dis_panel.rv
 
         self.switch_to_listing(main_panel)
@@ -450,7 +450,7 @@ class DisApp(App):
                 return tab
         assert False, "No main panel found"
         
-    def switch_to_listing(self, main_panel: ListingPanel | None = None):
+    def switch_to_listing(self, main_panel: ListingPanelBase | None = None):
         if main_panel:
             for tab in self.main_dock.iterate_panels():
                 if tab.content == main_panel:
@@ -614,7 +614,7 @@ class DisApp(App):
         self.dis_panel.rv.update_data()
         self.dis_panel.arrows.recompute_arrows()
         self.dis_panel.arrows.redraw()
-        self.dis_panel.minimap.redraw()
+        self.dis_panel.minimap.update()
         
     def analyze_functions(self, callback):
         wait: ClockEvent = None

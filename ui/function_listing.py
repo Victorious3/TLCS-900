@@ -5,6 +5,7 @@ import logging
 
 from kivy.metrics import dp
 from kivy.core.window import Window
+from kivy.uix.widget import Widget
 from kivy.uix.splitter import Splitter
 from kivy.uix.textinput import TextInput
 from kivy.uix.relativelayout import RelativeLayout
@@ -12,7 +13,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.treeview import TreeView, TreeViewLabel
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.spinner import Spinner
-from kivy.properties import BooleanProperty
+from kivy.properties import BooleanProperty, ObjectProperty
 
 from disapi import insnentry_to_str
 from tcls_900.tlcs_900 import Mem, Reg
@@ -26,12 +27,11 @@ from .arrow import ArrowRenderer
 
 from .dock.dock import SerializableTab
 
-class ListingPanel(RelativeLayout):
+class ListingPanelBase(Widget):
     is_root: bool = BooleanProperty(False)
 
     def __init__(self, **kw):
         self.rv: RV = cast(RV, None)
-        self.minimap: Minimap = cast(Minimap, None)
         self.arrows: ArrowRenderer = cast(ArrowRenderer, None)
         self.scrollbar: ScrollBar = cast(ScrollBar, None)
         self.search_input: SearchInput = cast(SearchInput, None)
@@ -47,6 +47,8 @@ class ListingPanel(RelativeLayout):
         super().__init__(**kw)
 
     def toggle(self): pass
+
+    def update(self): pass
 
     def _keydown(self, window, keyboard: int, keycode: int, text: str, modifiers: list[str]):
         if self.get_root_window() is None:
@@ -108,7 +110,7 @@ class ListingPanel(RelativeLayout):
         self._set_selection_end()
         
         self.rv.scroll_to_offset(self.rv.selection_start)
-        self.minimap.redraw()
+        self.update()
         self.rv.redraw_children()
 
     def end_highlight(self):
@@ -117,7 +119,7 @@ class ListingPanel(RelativeLayout):
         self.highlight_index = -1
         self.highlighted_list = []
         self.highlighted_set.clear()
-        self.minimap.redraw()
+        self.update()
         self.rv.reset_selection()
         self.rv.redraw_children()
 
@@ -132,7 +134,6 @@ class ListingPanel(RelativeLayout):
 
     def on_kv_post(self, base_widget):
         self.rv = self.ids["rv"]
-        self.minimap = self.ids["minimap"]
         self.arrows = self.ids["arrows"]
         self.scrollbar = self.ids["scrollbar"]
 
@@ -168,6 +169,19 @@ class ListingPanel(RelativeLayout):
             self.rv.selection_end = data["selection_end"]
 
         self.rv.redraw_children()
+
+class ListingPanel(ListingPanelBase, RelativeLayout):
+    minimap: Minimap = ObjectProperty(None)
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+
+    def on_kv_post(self, base_widget):
+        super().on_kv_post(base_widget)
+        self.minimap = self.ids["minimap"]
+
+    def update(self):
+        self.minimap.update()
 
 class ListingViewLabel(TreeViewLabel):
     parent: "FunctionListingDetails"
